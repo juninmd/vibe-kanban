@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vibe Kanban — Orquestrador de Agentes</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <h1>Vibe Kanban • Time de Agentes</h1>
+      <div class="topbar-actions">
+        <button id="toggleViewBtn">Alternar 2D / 3D</button>
+        <button id="seedTasksBtn">Gerar tarefas exemplo</button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <aside class="sidebar">
+        <section>
+          <h2>Criar tarefa</h2>
+          <form id="taskForm">
+            <label>
+              Fonte
+              <select id="taskSource">
+                <option value="product_manager">Product Manager</option>
+                <option value="usuario">Usuário</option>
+              </select>
+            </label>
+            <label>
+              Título
+              <input id="taskTitle" required placeholder="Ex: implementar autenticação" />
+            </label>
+            <label>
+              Categoria
+              <select id="taskCategory">
+                <option value="roadmap">Roadmap</option>
+                <option value="seguranca">Segurança</option>
+                <option value="performance">Performance</option>
+                <option value="funcionalidades">Funcionalidades</option>
+                <option value="testes">Testes</option>
+                <option value="features">Features</option>
+              </select>
+            </label>
+            <label>
+              Prioridade
+              <select id="taskPriority">
+                <option value="alta">Alta</option>
+                <option value="media" selected>Média</option>
+                <option value="baixa">Baixa</option>
+              </select>
+            </label>
+            <button type="submit">Adicionar card</button>
+          </form>
+        </section>
+
+        <section>
+          <h2>Agentes</h2>
+          <div id="agentsList" class="agents-list"></div>
+        </section>
+
+        <section>
+          <h2>Eventos</h2>
+          <ul id="eventLog" class="event-log"></ul>
+        </section>
+      </aside>
+
+      <section class="workspace">
+        <div id="view3d" class="view view-3d active">
+          <canvas id="sceneCanvas"></canvas>
+          <p class="hint">Visão 3D da sala (inspiração: hubzz demo)</p>
+        </div>
+
+        <div id="view2d" class="view view-2d">
+          <div class="kanban" id="kanbanBoard"></div>
+        </div>
+      </section>
+    </main>
+
+    <script type="module" src="app.js"></script>
+  </body>
+</html>
