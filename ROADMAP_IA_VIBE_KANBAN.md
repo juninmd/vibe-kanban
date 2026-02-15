@@ -1,178 +1,176 @@
-# Roadmap de Desenvolvimento Contínuo com IA (Vibe Kanban)
+# Vibe Kanban 3D — Visão do Time de Agentes
 
-## 1) Objetivo
-Construir um **gerenciador de tarefas “vibe code”** com fluxo de entrega contínua, usando IA para:
-- planejamento automático;
-- geração de tarefas técnicas;
-- implementação assistida;
-- revisão/qualidade;
-- priorização do backlog baseada em feedback.
+## 1. Missão do produto
+Criar uma **sala 3D de operação de software** onde agentes de IA aparecem como bonecos (avatares), escolhem cards de um Kanban e executam tarefas de ponta a ponta. A experiência precisa funcionar em dois modos:
 
----
+- **Modo 3D (sala imersiva):** visão espacial da operação, com agentes se movendo entre Kanban, mesas e computadores.
+- **Modo 2D Fullscreen:** visão de gestão em tela cheia para acompanhamento do fluxo, prioridades e bloqueios.
 
-## 2) Estratégia multi-agente (quem faz o quê)
-
-### Papéis sugeridos por ferramenta
-- **Jules / Gemini CLI**: descoberta, ideação de features e refinamento de requisitos.
-- **Codex SDK**: implementação orientada a tarefas, refactors e automações de código.
-- **GitHub Copilot SDK**: produtividade no editor, testes e documentação no dia a dia.
-- **Ollama**: modelos locais para privacidade/custos previsíveis (resumos, classificação, triagem).
-
-### Princípio de orquestração
-1. IA de planejamento cria e prioriza backlog.
-2. IA de execução abre/atualiza tarefas técnicas.
-3. IA de codificação implementa em branch curta.
-4. IA de QA valida testes, lint, segurança.
-5. IA de produto consolida métricas e replaneja sprint.
+A inspiração visual é o estilo da referência (`demo.hubzz.com`), com foco em legibilidade, status em tempo real e sensação de “time vivo”.
 
 ---
 
-## 3) Arquitetura operacional do fluxo contínuo
+## 2. Time de agentes (personas + responsabilidades)
+Cada agente possui:
+- **Nome do papel** (ex.: Product Manager);
+- **Skin com nome do modelo LLM** visível no avatar (ex.: `GPT-5.2-Codex`, `Claude`, `Gemini`, `Llama`);
+- **Tags de especialidade** para filtrar e atribuir cards automaticamente.
 
-## Entrada
-- Ideias de produto, feedback de usuários, bugs, métricas (uso/erro/performance).
+### 2.1 Agente Product Manager
+- **Responsável por:** roadmap, definição de novas features, priorização por impacto x esforço.
+- **Cria cards de:** iniciativa, épicos, histórias de usuário, refinamento.
+- **Pode receber tarefas de:** usuário e sistema.
 
-## Pipeline
-1. **Ingestão**: coletar sinais (issues, analytics, suporte).
-2. **Triagem IA**: classificar em bug/feature/dívida técnica.
-3. **Planejamento IA**: gerar roadmap quinzenal + sprint semanal.
-4. **Execução**: tarefas pequenas (1 a 2 dias), PRs curtos.
-5. **Qualidade**: testes automáticos, análise estática, checklist de segurança.
-6. **Release**: deploy incremental (feature flags).
-7. **Aprendizado**: retro com dados e ajuste automático de priorização.
+### 2.2 Agente de Segurança
+- **Responsável por:** vulnerabilidades, hardening, políticas de acesso, segredos, compliance.
+- **Cria cards de:** correções de risco, auditorias, requisitos não-funcionais de segurança.
 
-## Saída
-- backlog atualizado;
-- quadro kanban com WIP controlado;
-- releases frequentes com risco menor.
+### 2.3 Agente de Performance
+- **Responsável por:** latência, consumo de recursos, otimização de consultas/render.
+- **Cria cards de:** profiling, melhoria de throughput, tuning de cache.
 
----
+### 2.4 Agente de Funcionalidades (Feature Builder)
+- **Responsável por:** implementação de novas funcionalidades de produto.
+- **Cria cards de:** sub-tarefas técnicas quando detectar dependências.
 
-## 4) Roadmap por fases (90 dias)
+### 2.5 Agente de Testes / QA
+- **Responsável por:** testes automatizados, regressão, critérios de aceite, qualidade de release.
+- **Cria cards de:** cenários faltantes, bugs encontrados, cobertura crítica.
 
-## Fase 0 (Semana 1): Fundação
-- Definir stack, convenções e “Definition of Done”.
-- Criar templates:
-  - issue (feature/bug);
-  - PR com critérios de aceite;
-  - checklist de QA.
-- Configurar CI mínimo: lint + testes + build.
+### 2.6 Agente de Correções / Bugs
+- **Responsável por:** investigação, reprodução e resolução de defeitos em produção.
+- **Cria cards de:** incidentes, hotfix, pós-mortem e ações preventivas.
 
-**Entregáveis**
-- Repositório com automações básicas.
-- Backlog inicial priorizado por valor x esforço.
-
-## Fase 1 (Semanas 2–4): MVP funcional
-- Módulos essenciais:
-  - autenticação;
-  - CRUD de tarefas;
-  - colunas do kanban;
-  - etiquetas/prioridade;
-  - histórico simples de alterações.
-- IA gera histórias e critérios de aceite por épico.
-
-**Entregáveis**
-- MVP usável por equipe piloto.
-- Métricas iniciais de uso e erros.
-
-## Fase 2 (Semanas 5–8): Inteligência de produto
-- Priorização automática (score com impacto, urgência, esforço, risco).
-- Sugestões de próxima tarefa por contexto do usuário.
-- Resumos automáticos de sprint/board.
-- Copiloto de planning: converte objetivo em tarefas técnicas.
-
-**Entregáveis**
-- Roadmap assistido por IA em produção interna.
-- Dashboard de throughput, lead time e taxa de retrabalho.
-
-## Fase 3 (Semanas 9–12): Escala e confiabilidade
-- Feature flags e experimentos A/B.
-- Hardening de segurança (segredos, permissões, auditoria).
-- Estratégia de custos de IA (roteamento local/nuvem).
-- SLOs de serviço + alertas.
-
-**Entregáveis**
-- Fluxo contínuo previsível.
-- Redução de ciclo e melhoria de qualidade.
+> Observação: como você pediu dois perfis voltados a “novas features”, dividimos em **Product Manager (estratégia e roadmap)** e **Feature Builder (execução técnica)** para evitar sobreposição.
 
 ---
 
-## 5) Cadência recomendada (contínua)
+## 3. Modelo de cards e taxonomia
+Todo card no Kanban deve ter:
 
-## Ritual semanal
-- **Segunda**: IA atualiza roadmap e prioridades da semana.
-- **Diário**: IA resume bloqueios e sugere realocação de capacidade.
-- **Sexta**: IA gera retro com ações de melhoria.
+- `id`, `titulo`, `descricao`
+- `origem` (`user`, `product_manager`, `agent`, `system`)
+- `categoria` (`roadmap`, `security`, `performance`, `feature`, `test`, `bug`)
+- `prioridade` (`P0`, `P1`, `P2`, `P3`)
+- `status` (`backlog`, `todo`, `in_progress`, `review`, `done`, `blocked`)
+- `owner_agent` (opcional)
+- `interruption_policy` (se pode ser pausado/preemptado)
+- `created_by_agent` (quando derivado de outro card)
+- `links` (dependências e cards filhos)
 
-## Ritual por PR
-1. IA descreve mudança e riscos.
-2. IA propõe testes obrigatórios.
-3. CI executa gates.
-4. IA revisora aponta gaps e regressões possíveis.
-
----
-
-## 6) Backlog inicial (sugestão prática)
-
-### Épico A — Núcleo Kanban
-- A1: criar board e colunas customizáveis
-- A2: mover cartão por drag-and-drop
-- A3: filtros por responsável, prioridade, label
-
-### Épico B — Colaboração
-- B1: comentários em cartão
-- B2: menções e notificações
-- B3: trilha de auditoria por tarefa
-
-### Épico C — IA aplicada
-- C1: gerar tarefas a partir de objetivo textual
-- C2: estimar esforço (XS/S/M/L) com confiança
-- C3: sugerir prioridade automaticamente
-- C4: resumo diário do progresso
-
-### Épico D — Qualidade e Operação
-- D1: suíte de testes de regressão
-- D2: observabilidade (logs, métricas, tracing)
-- D3: governança de prompts e versionamento
+### Regras centrais
+1. **Cards podem ser criados pelo Product Manager e pelo usuário.**
+2. **Qualquer agente pode criar novos cards** ao encontrar bug/bloqueio durante desenvolvimento.
+3. **Cards são tagueados por categoria** para roteamento automático ao agente mais apto.
+4. **Prioridade é reordenável em tempo real** sem reiniciar a sessão dos agentes.
 
 ---
 
-## 7) Métricas de sucesso
-- **Lead time** médio por tarefa.
-- **Cycle time** por coluna do kanban.
-- **Deployment frequency** semanal.
-- **Change failure rate**.
-- **Retrabalho** (% de tarefas reabertas).
-- **Aderência ao roadmap** (planejado x entregue).
-- **Custo de IA por feature entregue**.
+## 4. Comportamento dos agentes na sala 3D
+Fluxo visual esperado:
+
+1. Agente idle observa o Kanban (estado “Aguardando tarefa”).
+2. Ao ser atribuído, o agente **caminha até o quadro**, destaca o card e o “pega”.
+3. O agente se move até um **computador da sala** e entra em estado “Executando”.
+4. Durante execução:
+   - exibe progresso;
+   - publica logs resumidos;
+   - atualiza checklist do card.
+5. Se houver interrupção (preempção por prioridade maior), o agente:
+   - salva contexto;
+   - devolve o card ao estado apropriado;
+   - troca para o novo card prioritário.
+6. Ao concluir, agente retorna ao Kanban, move card para `review`/`done` e libera capacidade.
 
 ---
 
-## 8) Guardrails essenciais
-- Dados sensíveis: anonimização e política de retenção.
-- Logs de prompts/respostas com mascaramento.
-- Fallback humano para decisões críticas.
-- “Human-in-the-loop” para mudanças de alto impacto.
-- Regras de qualidade: sem merge com testes/lint quebrados.
+## 5. Interrupção, preempção e repriorização
+Para suportar mudanças a qualquer momento:
+
+- **Fila global de prioridade** com ordenação por `P0 > P1 > P2 > P3` + SLA.
+- **Preempção segura:** tarefas com `interruption_policy=allowed` podem ser pausadas.
+- **Checkpoint automático:** snapshot de contexto técnico e próximos passos.
+- **Rebalanceamento:** se um agente ficar bloqueado, card pode ser realocado.
 
 ---
 
-## 9) Plano de adoção das ferramentas (objetivo)
-- **Jules/Gemini CLI**: discovery e decomposição de iniciativas.
-- **Codex SDK**: execução de tarefas técnicas com foco em PRs pequenos.
-- **Copilot SDK**: aceleração de coding no editor e geração de testes.
-- **Ollama**: tarefas locais repetitivas (resumo/classificação) com menor custo.
+## 6. Experiência 2D fullscreen (modo gestão)
+A visão 2D deve espelhar o estado do mundo 3D, com:
 
-**Recomendação de começo (simples e eficaz)**
-1. Iniciar com 1 agente de planejamento + 1 agente de execução.
-2. Definir 3 gates obrigatórios: testes, lint e revisão de risco.
-3. Medir por 2 sprints e só então ampliar número de agentes.
+- Kanban completo em tela cheia;
+- filtros por agente/categoria/prioridade;
+- painel lateral com logs e eventos;
+- heatmap de gargalos por coluna;
+- botão de “Foco em Incidentes” (mostra apenas bugs/performance/security).
 
 ---
 
-## 10) Próximos passos imediatos (7 dias)
-1. Fechar stack e arquitetura do MVP.
-2. Criar backlog detalhado da Fase 1 (15–25 tarefas pequenas).
-3. Implementar pipeline de CI/CD e templates de issue/PR.
-4. Rodar primeira sprint com roadmap assistido por IA.
-5. Revisar métricas e ajustar pesos de priorização.
+## 7. Arquitetura proposta
+
+### Front-end
+- **3D:** `Three.js` + `React Three Fiber` para sala, avatares e animações de navegação.
+- **2D:** React com painel Kanban e timeline de eventos.
+- **Sincronização:** estado compartilhado em tempo real (WebSocket).
+
+### Back-end de orquestração
+- Serviço de filas + scheduler para atribuição de cards.
+- Motor de regras de prioridade/interrupção.
+- Event sourcing leve para auditar mudanças de estado.
+
+### Camada de agentes
+- **OpenAI Codex (`openai/codex`):** execução técnica, geração/edição de código e automação de tarefas de desenvolvimento.
+- **Anomaly OpenCode (`anomalyco/opencode`):** integração no fluxo de engenharia para produtividade e suporte operacional dos agentes.
+
+---
+
+## 8. Fluxo operacional fim a fim
+1. Usuário ou PM cria card.
+2. Orquestrador classifica categoria e prioridade.
+3. Scheduler atribui ao agente correto.
+4. Avatar executa ciclo visual (Kanban → computador → Kanban).
+5. Se encontrar problema, agente cria card derivado (bug, dívida, bloqueio).
+6. QA valida e fecha.
+7. Métricas atualizam roadmap continuamente.
+
+---
+
+## 9. MVP sugerido (4 semanas)
+
+### Semana 1 — Base visual e dados
+- Sala 3D simples com 6 avatares e labels dos modelos.
+- Kanban 2D/3D com criação manual de cards.
+- Modelo de dados com categorias e prioridade.
+
+### Semana 2 — Orquestração inicial
+- Atribuição automática por categoria.
+- Movimento do agente ao pegar card e ir ao computador.
+- Logs de execução por card.
+
+### Semana 3 — Interrupção e repriorização
+- Preempção de cards em andamento.
+- Reordenação dinâmica de backlog.
+- Checkpoint e retomada de contexto.
+
+### Semana 4 — Qualidade e demonstração
+- Criação de cards derivados por bugs/bloqueios.
+- Métricas básicas (lead time, WIP, throughput).
+- Demo integrada 3D + 2D fullscreen.
+
+---
+
+## 10. Critérios de sucesso
+- Cards criados por usuário e PM aparecem em tempo real.
+- Agente correto é selecionado automaticamente por categoria.
+- Repriorização interrompe e realoca trabalho sem perda de contexto.
+- Bugs encontrados durante execução geram novos cards rastreáveis.
+- Visualização 3D e 2D sempre consistentes entre si.
+
+---
+
+## 11. Próximo passo objetivo
+Implementar o **MVP da semana 1** e validar a experiência visual com 1 cenário completo:
+- criar card de feature;
+- agente pegar card no Kanban;
+- ir ao computador;
+- atualizar status;
+- concluir e refletir no modo 2D fullscreen.
