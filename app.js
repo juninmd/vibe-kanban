@@ -18,8 +18,29 @@ const agents = [
 ];
 
 let taskId = 1;
-const tasks = [];
-const eventLog = [];
+let tasks = [];
+let eventLog = [];
+
+function saveState() {
+  localStorage.setItem("vibe_kanban_tasks", JSON.stringify(tasks));
+  localStorage.setItem("vibe_kanban_events", JSON.stringify(eventLog));
+}
+
+function loadState() {
+  const t = localStorage.getItem("vibe_kanban_tasks");
+  const e = localStorage.getItem("vibe_kanban_events");
+  if (t) {
+    tasks = JSON.parse(t);
+    taskId = tasks.reduce((max, t) => Math.max(max, t.id), 0) + 1;
+    tasks.forEach((task) => {
+      if (task.lane === "in_progress" && task.assignedTo) {
+        const agent = agents.find((a) => a.id === task.assignedTo);
+        if (agent) agent.status = "working";
+      }
+    });
+  }
+  if (e) eventLog = JSON.parse(e);
+}
 
 const els = {
   form: document.getElementById("taskForm"),
@@ -34,6 +55,7 @@ const els = {
   view2d: document.getElementById("view2d"),
   toggleViewBtn: document.getElementById("toggleViewBtn"),
   seedTasksBtn: document.getElementById("seedTasksBtn"),
+  resetDataBtn: document.getElementById("resetDataBtn"),
 };
 
 function addEvent(text) {
@@ -53,6 +75,7 @@ function createTask({ title, source, category, priority }) {
     interrupted: false,
   });
   addEvent(`Novo card criado por ${source}: ${title}`);
+  saveState();
   render();
 }
 
@@ -60,6 +83,7 @@ function pickTask(task) {
   const agent = agents.find((a) => a.category === task.category && a.status === "idle");
   if (!agent) {
     addEvent(`Sem agente livre para categoria ${task.category}.`);
+    saveState();
     render();
     return;
   }
@@ -67,6 +91,7 @@ function pickTask(task) {
   task.assignedTo = agent.id;
   agent.status = "working";
   addEvent(`${agent.role} (${agent.model}) pegou card #${task.id} e foi ao computador.`);
+  saveState();
   render();
 }
 
@@ -78,6 +103,7 @@ function interruptTask(task) {
   task.assignedTo = null;
   task.lane = "backlog";
   addEvent(`Card #${task.id} interrompido e devolvido ao backlog.`);
+  saveState();
   render();
 }
 
@@ -94,6 +120,7 @@ function moveTask(task, dir) {
 
   task.lane = lanes[next];
   addEvent(`Card #${task.id} movido para ${laneLabels[task.lane]}.`);
+  saveState();
   render();
 }
 
@@ -108,6 +135,7 @@ function reprioritize(task, direction) {
   const swapPos = tasks.findIndex((t) => t.id === swapWithId);
   [tasks[currentTaskPos], tasks[swapPos]] = [tasks[swapPos], tasks[currentTaskPos]];
   addEvent(`Prioridade reordenada no card #${task.id}.`);
+  saveState();
   render();
 }
 
@@ -223,6 +251,14 @@ els.seedTasksBtn.addEventListener("click", () => {
   ].forEach(([title, source, category, priority]) => createTask({ title, source, category, priority }));
 });
 
+els.resetDataBtn.addEventListener("click", () => {
+  if (confirm("Tem certeza que deseja apagar todos os dados e recarregar?")) {
+    localStorage.removeItem("vibe_kanban_tasks");
+    localStorage.removeItem("vibe_kanban_events");
+    location.reload();
+  }
+});
+
 // 3D scene
 const canvas = document.getElementById("sceneCanvas");
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -322,4 +358,5 @@ function tick() {
 }
 
 tick();
+loadState();
 render();
