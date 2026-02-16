@@ -1,18 +1,52 @@
 import { createServer } from "http";
+import { Task, Agent, State, EventLog, LLMDriver } from "./types.js";
+import { MockDriver } from "./drivers/MockDriver.js";
+import { GeminiDriver } from "./drivers/GeminiDriver.js";
+import { CopilotDriver } from "./drivers/CopilotDriver.js";
+import { OpenCodeDriver } from "./drivers/OpenCodeDriver.js";
 
-type Agent = {
-  id: string;
-  role: string;
-  model: string;
-  category: string;
-  status: "idle" | "working";
-  assignedTask?: number | null;
+const PORT = process.env.PORT ? Number(process.env.PORT) : 5174;
+
+// --- State ---
+let taskIdCounter = 1;
+const state: State = {
+  tasks: [],
+  agents: [
+    { id: "pm", role: "Roadmap", model: "gpt-4.1", category: "roadmap", status: "idle", assignedTask: null },
+    { id: "sec", role: "Segurança", model: "o3-mini", category: "seguranca", status: "idle", assignedTask: null },
+    { id: "perf", role: "Performance", model: "gpt-4o", category: "performance", status: "idle", assignedTask: null },
+    { id: "func", role: "Funcionalidades", model: "gpt-4.1-mini", category: "funcionalidades", status: "idle", assignedTask: null },
+    { id: "tests", role: "Testes", model: "o1", category: "testes", status: "idle", assignedTask: null },
+    { id: "feat", role: "Features", model: "codex-mini", category: "features", status: "idle", assignedTask: null },
+  ],
+  events: []
 };
 
-const agents: Agent[] = [];
+// Driver selection
+const drivers: Record<string, LLMDriver> = {
+  mock: new MockDriver(),
+  gemini: new GeminiDriver(),
+  copilot: new CopilotDriver(),
+  opencode: new OpenCodeDriver(),
+};
+let currentDriver: LLMDriver = drivers.mock;
 
+function addEvent(text: string) {
+  state.events.unshift({ timestamp: new Date().toLocaleTimeString("pt-BR"), text });
+  if (state.events.length > 50) state.events.pop();
+}
+
+function getTask(id: number) { return state.tasks.find(t => t.id === id); }
+function getAgent(id: string) { return state.agents.find(a => a.id === id); }
+
+// --- Helpers ---
 function jsonResponse(res: any, status: number, body: any) {
-  res.writeHead(status, { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET,POST,OPTIONS,DELETE", "Access-Control-Allow-Headers": "Content-Type" });
+  res.writeHead(status, {
+    "Content-Type": "application/json",
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET,POST,OPTIONS,DELETE",
+    "Access-Control-Allow-Headers": "Content-Type"
+  });
   res.end(JSON.stringify(body));
 }
 
@@ -21,69 +55,181 @@ function parseBody(req: any): Promise<any> {
     let data = "";
     req.on("data", (chunk: any) => (data += chunk));
     req.on("end", () => {
-      try {
-        resolve(data ? JSON.parse(data) : {});
-      } catch (e) {
-        resolve({});
-      }
+      try { resolve(data ? JSON.parse(data) : {}); } catch (e) { resolve({}); }
     });
   });
 }
 
+// --- Server ---
 const server = createServer(async (req, res) => {
   const { method, url } = req as any;
+
   if (method === "OPTIONS") return jsonResponse(res, 200, { ok: true });
 
-  if (url === "/api/agents" && method === "GET") {
-    return jsonResponse(res, 200, { agents });
+  // GET /api/state
+  if (url === "/api/state" && method === "GET") {
+    return jsonResponse(res, 200, state);
   }
 
-  if (url === "/api/agents" && method === "POST") {
+  // POST /api/tasks (Create task)
+  if (url === "/api/tasks" && method === "POST") {
     const body = await parseBody(req);
-    if (!body?.id) return jsonResponse(res, 400, { error: "missing id" });
-    const found = agents.find((a) => a.id === body.id);
-    if (found) return jsonResponse(res, 409, { error: "agent exists" });
-    const a: Agent = { id: body.id, role: body.role || "agent", model: body.model || "unknown", category: body.category || "misc", status: "idle", assignedTask: null };
-    agents.push(a);
-    return jsonResponse(res, 201, { agent: a });
+    const task: Task = {
+      id: taskIdCounter++,
+      title: body.title,
+      source: body.source || "user",
+      category: body.category || "misc",
+      priority: body.priority || "media",
+      lane: "backlog",
+      assignedTo: null,
+      interrupted: false,
+      logs: [],
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
+    state.tasks.push(task);
+    addEvent(`Novo card criado: ${task.title} (${task.source})`);
+    return jsonResponse(res, 201, { task });
   }
 
+  // POST /api/assign (Assign task to agent)
   if (url === "/api/assign" && method === "POST") {
     const body = await parseBody(req);
-    const { taskId, category } = body || {};
-    if (!taskId || !category) return jsonResponse(res, 400, { error: "missing taskId or category" });
-    // find idle agent of category
-    const agent = agents.find((a) => a.category === category && a.status === "idle");
-    if (!agent) return jsonResponse(res, 404, { error: "no-agent-available" });
+    const { taskId, agentId } = body;
+    const task = getTask(taskId);
+    const agent = agentId ? getAgent(agentId) : state.agents.find(a => a.category === task?.category && a.status === "idle");
+
+    if (!task) return jsonResponse(res, 404, { error: "Task not found" });
+    if (!agent) return jsonResponse(res, 404, { error: "No available agent" });
+
+    // Update state
+    task.assignedTo = agent.id;
+    task.lane = "in_progress";
+    task.interrupted = false;
     agent.status = "working";
-    agent.assignedTask = taskId;
-    return jsonResponse(res, 200, { agent });
+    agent.assignedTask = task.id;
+    addEvent(`${agent.role} iniciou a tarefa #${task.id}`);
+
+    // Execute via Driver
+    currentDriver.executeTask(task, agent, {
+      onLog: (tid, msg) => {
+        const t = getTask(tid);
+        if (t) {
+           t.logs.push(msg);
+           // Only log important steps to global event log to avoid spam
+           if (msg.includes("Error") || msg.includes("Completed")) addEvent(`#${tid}: ${msg}`);
+        }
+      },
+      onComplete: (tid) => {
+        const t = getTask(tid);
+        if (t && t.assignedTo) {
+          const a = getAgent(t.assignedTo);
+          if (a) { a.status = "idle"; a.assignedTask = null; }
+          t.assignedTo = null;
+          t.lane = "done"; // simplified workflow
+          addEvent(`Tarefa #${tid} concluída!`);
+        }
+      },
+      onBugFound: (tid, desc) => {
+        const t = getTask(tid);
+        if (t) {
+          addEvent(`BUG encontrado em #${tid}: ${desc}`);
+          // Create bug task
+          const bugTask: Task = {
+            id: taskIdCounter++,
+            title: `Bug: ${desc}`,
+            source: "system",
+            category: "testes",
+            priority: "alta",
+            lane: "backlog",
+            assignedTo: null,
+            interrupted: false,
+            logs: [],
+            createdAt: Date.now(),
+            updatedAt: Date.now()
+          };
+          state.tasks.push(bugTask);
+          // For now, interrupt original task
+          if (t.assignedTo) {
+             const a = getAgent(t.assignedTo);
+             if (a) { a.status = "idle"; a.assignedTask = null; }
+             t.assignedTo = null;
+             t.lane = "backlog"; // Return to backlog to retry later
+             t.interrupted = true;
+          }
+        }
+      },
+      onInterrupt: (tid) => {
+        // Handled by interrupt endpoint logic mainly
+      }
+    });
+
+    return jsonResponse(res, 200, { task, agent });
   }
 
-  if (url && url.startsWith("/api/agents/") && method === "POST") {
-    // e.g. /api/agents/{id}/complete
-    const parts = url.split("/").filter(Boolean);
-    if (parts.length >= 3 && parts[2] === "complete") {
-      const id = parts[1];
-      const a = agents.find((x) => x.id === id);
-      if (!a) return jsonResponse(res, 404, { error: "agent-not-found" });
-      a.status = "idle";
-      a.assignedTask = null;
-      return jsonResponse(res, 200, { ok: true });
+  // POST /api/interrupt
+  if (url === "/api/interrupt" && method === "POST") {
+    const { taskId } = await parseBody(req);
+    const task = getTask(taskId);
+    if (!task) return jsonResponse(res, 404, { error: "Task not found" });
+
+    if (task.assignedTo) {
+      const agent = getAgent(task.assignedTo);
+      if (agent) {
+        agent.status = "idle";
+        agent.assignedTask = null;
+      }
+      // Stop driver
+      currentDriver.interruptTask(task);
+      task.assignedTo = null;
+      task.lane = "backlog";
+      task.interrupted = true;
+      addEvent(`Tarefa #${taskId} interrompida.`);
     }
+    return jsonResponse(res, 200, { task });
   }
 
-  if (url && url.startsWith("/api/agents/") && method === "DELETE") {
-    const parts = url.split("/").filter(Boolean);
-    const id = parts[1];
-    const idx = agents.findIndex((x) => x.id === id);
-    if (idx === -1) return jsonResponse(res, 404, { error: "agent-not-found" });
-    agents.splice(idx, 1);
+  // POST /api/move
+  if (url === "/api/move" && method === "POST") {
+    const { taskId, lane } = await parseBody(req);
+    const task = getTask(taskId);
+    if (!task) return jsonResponse(res, 404, { error: "Task not found" });
+
+    // If moving out of in_progress, interrupt/finish logic
+    if (task.lane === "in_progress" && lane !== "in_progress") {
+       if (task.assignedTo) {
+         const agent = getAgent(task.assignedTo);
+         if (agent) { agent.status = "idle"; agent.assignedTask = null; }
+         currentDriver.interruptTask(task);
+         task.assignedTo = null;
+       }
+    }
+    task.lane = lane;
+    return jsonResponse(res, 200, { task });
+  }
+
+  // POST /api/config
+  if (url === "/api/config" && method === "POST") {
+    const { driver } = await parseBody(req);
+    if (drivers[driver]) {
+      currentDriver = drivers[driver];
+      addEvent(`Driver alterado para: ${currentDriver.name}`);
+      return jsonResponse(res, 200, { driver: currentDriver.name });
+    }
+    return jsonResponse(res, 400, { error: "Invalid driver" });
+  }
+
+  // Reset
+  if (url === "/api/reset" && method === "POST") {
+    state.tasks = [];
+    state.events = [];
+    state.agents.forEach(a => { a.status = "idle"; a.assignedTask = null; });
+    taskIdCounter = 1;
+    addEvent("Sistema resetado.");
     return jsonResponse(res, 200, { ok: true });
   }
 
-  jsonResponse(res, 404, { error: "not-found" });
+  jsonResponse(res, 404, { error: "Not found" });
 });
 
-const PORT = process.env.PORT ? Number(process.env.PORT) : 5174;
-server.listen(PORT, () => console.log(`Agent manager listening on http://localhost:${PORT}`));
+server.listen(PORT, () => console.log(`Server listening on http://localhost:${PORT}`));
