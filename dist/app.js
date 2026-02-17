@@ -1,3 +1,4 @@
+// @ts-nocheck
 import * as THREE from "https://unpkg.com/three@0.161.0/build/three.module.js";
 const lanes = ["backlog", "in_progress", "review", "done"];
 const laneLabels = {
@@ -45,6 +46,7 @@ const els = {
     title: document.getElementById("taskTitle"),
     category: document.getElementById("taskCategory"),
     priority: document.getElementById("taskPriority"),
+    driverSelect: document.getElementById("driverSelect"),
     kanban: document.getElementById("kanbanBoard"),
     agentsList: document.getElementById("agentsList"),
     eventLog: document.getElementById("eventLog"),
@@ -244,6 +246,7 @@ function render() {
     renderEvents();
     updateAgents3D();
 }
+els.driverSelect?.addEventListener("change", async () => { const driver = els.driverSelect.value; await fetch("/api/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ driver }) }); addEvent("Driver alterado: " + driver); renderEvents(); });
 els.form.addEventListener("submit", (e) => {
     e.preventDefault();
     createTask({
