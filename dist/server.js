@@ -60,6 +60,83 @@ function parseBody(req) {
         });
     });
 }
+// --- Auto-Pilot Logic ---
+function autoAssign() {
+    const backlogTasks = state.tasks.filter(t => t.lane === "backlog" && !t.assignedTo);
+    if (backlogTasks.length === 0)
+        return;
+    backlogTasks.forEach(task => {
+        // Basic heuristic: match category.
+        // PM can also assign generic tasks or 'roadmap' tasks.
+        const agent = state.agents.find(a => a.status === "idle" && (a.category === task.category));
+        if (agent) {
+            // Assign
+            task.assignedTo = agent.id;
+            task.lane = "in_progress";
+            task.interrupted = false;
+            agent.status = "working";
+            agent.assignedTask = task.id;
+            addEvent(`[AutoPilot] ${agent.role} iniciou a tarefa #${task.id}`);
+            // Execute via Driver
+            currentDriver.executeTask(task, agent, {
+                onLog: (tid, msg) => {
+                    const t = getTask(tid);
+                    if (t) {
+                        t.logs.push(msg);
+                        if (msg.includes("Error") || msg.includes("Completed"))
+                            addEvent(`#${tid}: ${msg}`);
+                    }
+                },
+                onComplete: (tid) => {
+                    const t = getTask(tid);
+                    if (t && t.assignedTo) {
+                        const a = getAgent(t.assignedTo);
+                        if (a) {
+                            a.status = "idle";
+                            a.assignedTask = null;
+                        }
+                        t.assignedTo = null;
+                        t.lane = "done";
+                        addEvent(`Tarefa #${tid} concluída!`);
+                    }
+                },
+                onBugFound: (tid, desc) => {
+                    const t = getTask(tid);
+                    if (t) {
+                        addEvent(`BUG encontrado em #${tid}: ${desc}`);
+                        const bugTask = {
+                            id: taskIdCounter++,
+                            title: `Bug: ${desc}`,
+                            source: "system",
+                            category: "testes",
+                            priority: "alta",
+                            lane: "backlog",
+                            assignedTo: null,
+                            interrupted: false,
+                            logs: [],
+                            createdAt: Date.now(),
+                            updatedAt: Date.now()
+                        };
+                        state.tasks.push(bugTask);
+                        if (t.assignedTo) {
+                            const a = getAgent(t.assignedTo);
+                            if (a) {
+                                a.status = "idle";
+                                a.assignedTask = null;
+                            }
+                            t.assignedTo = null;
+                            t.lane = "backlog";
+                            t.interrupted = true;
+                        }
+                    }
+                },
+                onInterrupt: (tid) => { }
+            });
+        }
+    });
+}
+// Start Auto-Pilot loop (every 3 seconds)
+setInterval(autoAssign, 3000);
 // --- Server ---
 const server = createServer(async (req, res) => {
     const { method, url } = req;

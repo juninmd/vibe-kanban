@@ -12,6 +12,7 @@ const laneLabels = {
 let agents = [];
 let tasks = [];
 let eventLog = [];
+let previousTasks = []; // To track changes
 const els = {
     form: document.getElementById("taskForm"),
     source: document.getElementById("taskSource"),
@@ -28,13 +29,25 @@ const els = {
     seedTasksBtn: document.getElementById("seedTasksBtn"),
     resetDataBtn: document.getElementById("resetDataBtn"),
 };
+// Confetti State
+const confettiParticles = [];
 async function fetchState() {
     try {
         const res = await fetch(`${API_URL}/api/state`);
         if (!res.ok)
             return;
         const data = await res.json();
-        tasks = data.tasks || [];
+        // Detect completions for celebration
+        const newTasks = data.tasks || [];
+        newTasks.forEach((t) => {
+            const old = previousTasks.find((pt) => pt.id === t.id);
+            if (old && old.lane !== "done" && t.lane === "done") {
+                spawnConfetti();
+                // Visual feedback in UI isn't needed as the kanban updates, but confetti is the key.
+            }
+        });
+        previousTasks = JSON.parse(JSON.stringify(newTasks));
+        tasks = newTasks;
         agents = data.agents || [];
         eventLog = data.events || [];
         render();
@@ -99,6 +112,8 @@ function renderKanban() {
             const assigned = task.assignedTo ? agents.find((a) => a.id === task.assignedTo)?.role : "-";
             // Logs preview
             const lastLog = task.logs && task.logs.length > 0 ? task.logs[task.logs.length - 1] : "";
+            // Highlight auto-assigned tasks
+            const isAuto = task.source === "system" || (!task.source && task.assignedTo);
             card.innerHTML = `
           <strong>#${task.id} ${task.title}</strong>
           <div class="task-meta">
@@ -206,7 +221,7 @@ scene.add(floor);
 const grid = new THREE.GridHelper(24, 24, 0x30385f, 0x1b2241);
 grid.position.y = 0.01;
 scene.add(grid);
-// Particles
+// Ambient Particles
 const pGeo = new THREE.BufferGeometry();
 const pPos = new Float32Array(600);
 for (let i = 0; i < 600; i++)
@@ -215,6 +230,53 @@ pGeo.setAttribute("position", new THREE.BufferAttribute(pPos, 3));
 const pMat = new THREE.PointsMaterial({ color: 0x88ccff, size: 0.05, transparent: true, opacity: 0.4 });
 const particles = new THREE.Points(pGeo, pMat);
 scene.add(particles);
+// Confetti System
+function spawnConfetti() {
+    const geometry = new THREE.BufferGeometry();
+    const count = 150;
+    const positions = new Float32Array(count * 3);
+    const colors = new Float32Array(count * 3);
+    const velocities = [];
+    for (let i = 0; i < count; i++) {
+        positions[i * 3] = 0; // x (center)
+        positions[i * 3 + 1] = 5; // y (high up)
+        positions[i * 3 + 2] = -4; // z (near board)
+        const color = new THREE.Color().setHSL(Math.random(), 0.9, 0.6);
+        colors[i * 3] = color.r;
+        colors[i * 3 + 1] = color.g;
+        colors[i * 3 + 2] = color.b;
+        velocities.push({
+            x: (Math.random() - 0.5) * 0.3,
+            y: (Math.random() * 0.3) + 0.1,
+            z: (Math.random() - 0.5) * 0.3
+        });
+    }
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    const material = new THREE.PointsMaterial({ size: 0.15, vertexColors: true, transparent: true });
+    const points = new THREE.Points(geometry, material);
+    scene.add(points);
+    confettiParticles.push({ mesh: points, velocities, age: 0 });
+}
+function updateConfetti() {
+    for (let i = confettiParticles.length - 1; i >= 0; i--) {
+        const p = confettiParticles[i];
+        p.age++;
+        const positions = p.mesh.geometry.attributes.position.array;
+        for (let j = 0; j < p.velocities.length; j++) {
+            p.velocities[j].y -= 0.005; // Gravity
+            positions[j * 3] += p.velocities[j].x;
+            positions[j * 3 + 1] += p.velocities[j].y;
+            positions[j * 3 + 2] += p.velocities[j].z;
+        }
+        p.mesh.geometry.attributes.position.needsUpdate = true;
+        if (p.age > 200) {
+            scene.remove(p.mesh);
+            p.mesh.geometry.dispose();
+            confettiParticles.splice(i, 1);
+        }
+    }
+}
 const controls = new OrbitControls(camera, canvas);
 controls.enableDamping = true;
 controls.dampingFactor = 0.05;
@@ -300,10 +362,10 @@ function tick() {
     agentMeshes.forEach((item) => {
         item.group.position.lerp(item.target, 0.08);
     });
-    particles.rotation.y += 0.0005;
-    controls.update();
     if (typeof particles !== "undefined")
         particles.rotation.y += 0.0005;
+    updateConfetti();
+    controls.update();
     renderer.render(scene, camera);
     requestAnimationFrame(tick);
 }
