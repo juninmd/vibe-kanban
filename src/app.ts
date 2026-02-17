@@ -1,7 +1,18 @@
 // @ts-nocheck
-import * as THREE from "https://unpkg.com/three@0.161.0/build/three.module.js";
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
 const API_URL = "http://localhost:5174";
+
+const ROLE_COLORS = {
+  roadmap: 0x4dabf7,
+  seguranca: 0xff6b6b,
+  performance: 0xfcc419,
+  funcionalidades: 0x51cf66,
+  testes: 0xcc5de8,
+  features: 0x20c997
+};
+const DEFAULT_COLOR = 0x5f78ea;
 
 type Agent = {
   id: string;
@@ -18,42 +29,36 @@ type Task = {
   source: string;
   category: string;
   priority: string;
-  lane: string;
+  lane: "backlog" | "in_progress" | "done";
   assignedTo: string | null;
+  logs: string[];
   interrupted?: boolean;
-  logs?: string[];
 };
 
-type EventLog = {
-  timestamp: string;
-  text: string;
-};
+let tasks: Task[] = [];
+let agents: Agent[] = [];
+let eventLog: { timestamp: string; text: string }[] = [];
 
-const lanes = ["backlog", "in_progress", "review", "done"];
-const laneLabels: Record<string, string> = {
+const lanes = ["backlog", "in_progress", "done"];
+const laneLabels = {
   backlog: "Backlog",
-  in_progress: "Em progresso",
-  review: "Review",
+  in_progress: "Em Progresso",
   done: "Concluído",
 };
 
-let agents: Agent[] = [];
-let tasks: Task[] = [];
-let eventLog: EventLog[] = [];
-
 const els = {
+  kanban: document.getElementById("kanbanBoard") as HTMLDivElement,
+  agentsList: document.getElementById("agentsList") as HTMLDivElement,
+  eventLog: document.getElementById("eventLog") as HTMLUListElement,
   form: document.getElementById("taskForm") as HTMLFormElement,
-  source: document.getElementById("taskSource") as HTMLSelectElement,
   title: document.getElementById("taskTitle") as HTMLInputElement,
+  source: document.getElementById("taskSource") as HTMLSelectElement,
   category: document.getElementById("taskCategory") as HTMLSelectElement,
   priority: document.getElementById("taskPriority") as HTMLSelectElement,
   driverSelect: document.getElementById("driverSelect") as HTMLSelectElement,
-  kanban: document.getElementById("kanbanBoard") as HTMLElement,
-  agentsList: document.getElementById("agentsList") as HTMLElement,
-  eventLog: document.getElementById("eventLog") as HTMLElement,
-  view3d: document.getElementById("view3d") as HTMLElement,
-  view2d: document.getElementById("view2d") as HTMLElement,
   toggleViewBtn: document.getElementById("toggleViewBtn") as HTMLButtonElement,
+  view3d: document.getElementById("view3d") as HTMLDivElement,
+  view2d: document.getElementById("view2d") as HTMLDivElement,
   seedTasksBtn: document.getElementById("seedTasksBtn") as HTMLButtonElement,
   resetDataBtn: document.getElementById("resetDataBtn") as HTMLButtonElement,
 };
@@ -104,6 +109,9 @@ function moveTask(task: Task, dir: number) {
   const next = idx + dir;
   if (next < 0 || next >= lanes.length) return;
   apiCall("/api/move", "POST", { taskId: task.id, lane: lanes[next] });
+  if (lanes[next] === "done") {
+    spawnConfetti(new THREE.Vector3(0, 5, -4));
+  }
 }
 
 function reprioritize(task: Task, direction: number) {
@@ -179,7 +187,7 @@ function renderKanban() {
 function renderAgents() {
   els.agentsList.innerHTML = agents
     .map((a) => `
-      <div class="agent-item">
+      <div class="agent-item ${a.status === 'working' ? 'active-agent' : ''}">
         <strong>${a.role}</strong>
         <span>Modelo: ${a.model}</span>
         <span>Categoria: ${a.category}</span>
@@ -201,7 +209,7 @@ function render() {
   updateAgents3D();
 }
 
-els.driverSelect?.addEventListener("change", async () => { const driver = els.driverSelect.value; await fetch("/api/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ driver }) }); addEvent("Driver alterado: " + driver); renderEvents(); });
+els.driverSelect?.addEventListener("change", async () => { const driver = els.driverSelect.value; await fetch("/api/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ driver }) }); });
 els.form.addEventListener("submit", (e) => {
   e.preventDefault();
   createTask({
@@ -237,26 +245,39 @@ els.resetDataBtn.addEventListener("click", () => {
 
 // --- 3D Scene ---
 const canvas = document.getElementById("sceneCanvas") as HTMLCanvasElement;
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color("#0b1022");
+// scene.fog = new THREE.FogExp2(0x0b1022, 0.02);
 
 const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 100);
 camera.position.set(0, 7, 12);
 camera.lookAt(0, 0, 0);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.05;
 
-scene.add(new THREE.AmbientLight("#ffffff", 0.75));
-const dir = new THREE.DirectionalLight("#b7c6ff", 1.2);
+scene.add(new THREE.AmbientLight("#ffffff", 0.6));
+const dir = new THREE.DirectionalLight("#b7c6ff", 1.5);
 dir.position.set(5, 8, 3);
 scene.add(dir);
 
-const floor = new THREE.Mesh(new THREE.PlaneGeometry(24, 14), new THREE.MeshStandardMaterial({ color: "#141c3f" }));
+const pointLight = new THREE.PointLight(0x7c95ff, 1, 20);
+pointLight.position.set(0, 5, 0);
+scene.add(pointLight);
+
+// Grid
+const grid = new THREE.GridHelper(40, 40, 0x30385f, 0x1f2540);
+grid.position.y = 0.01;
+scene.add(grid);
+
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), new THREE.MeshStandardMaterial({ color: "#141c3f", roughness: 0.8, metalness: 0.2 }));
 floor.rotation.x = -Math.PI / 2;
 scene.add(floor);
 
-const kanbanMesh = new THREE.Mesh(new THREE.BoxGeometry(8, 4, 0.2), new THREE.MeshStandardMaterial({ color: "#2a376f" }));
+const kanbanMesh = new THREE.Mesh(new THREE.BoxGeometry(8, 4, 0.2), new THREE.MeshStandardMaterial({ color: "#2a376f", emissive: 0x1a2140, emissiveIntensity: 0.5 }));
 kanbanMesh.position.set(0, 2, -4.2);
 scene.add(kanbanMesh);
 
@@ -268,12 +289,26 @@ for (let i = 0; i < 4; i++) {
   computers.push(desk.position.clone());
 }
 
-const agentMeshes = new Map<string, { group: any; label?: any; target: any }>();
+// Particles
+const particlesGeo = new THREE.BufferGeometry();
+const particlesCount = 200;
+const posArray = new Float32Array(particlesCount * 3);
+for(let i=0; i<particlesCount*3; i++) {
+  posArray[i] = (Math.random() - 0.5) * 30;
+  if (i % 3 === 1) posArray[i] = Math.random() * 10; // Y
+}
+particlesGeo.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+const particlesMat = new THREE.PointsMaterial({ size: 0.05, color: 0x7c95ff, transparent: true, opacity: 0.5 });
+const particlesMesh = new THREE.Points(particlesGeo, particlesMat);
+scene.add(particlesMesh);
+
+const agentMeshes = new Map<string, { group: any; label?: any; target: any, body: any }>();
 
 function createAgentMesh(agent: Agent, index: number) {
   const group = new THREE.Group();
 
-  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.35, 0.9, 4, 8), new THREE.MeshStandardMaterial({ color: ["#5f78ea", "#e07a5f", "#7bd389", "#f2c94c", "#9b7cff", "#5fc3d3"][index % 6] }));
+  const color = ROLE_COLORS[agent.category] || DEFAULT_COLOR;
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.35, 0.9, 4, 8), new THREE.MeshStandardMaterial({ color: color }));
   body.position.y = 1;
   group.add(body);
 
@@ -290,16 +325,16 @@ function createAgentMesh(agent: Agent, index: number) {
     canvas.width = size;
     canvas.height = 64;
     const ctx = canvas.getContext("2d")!;
-    ctx.fillStyle = "rgba(20,24,38,0.9)";
+    ctx.fillStyle = "rgba(20,24,38,0.8)";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.font = "28px Inter, sans-serif";
+    ctx.font = "bold 28px Inter, sans-serif";
     ctx.fillStyle = "#e6e9ff";
     ctx.textAlign = "center";
     ctx.fillText(text, canvas.width / 2, 42);
     return canvas;
   }
 
-  const labelCanvas = makeLabelCanvas(`${agent.model}`);
+  const labelCanvas = makeLabelCanvas(`${agent.role}`);
   const labelTex = new THREE.CanvasTexture(labelCanvas);
   labelTex.encoding = THREE.sRGBEncoding;
   const labelMat = new THREE.SpriteMaterial({ map: labelTex, transparent: true });
@@ -308,11 +343,10 @@ function createAgentMesh(agent: Agent, index: number) {
   label.position.set(0, 2.7, 0);
   group.add(label);
 
-  return { group, label, target: group.position.clone() };
+  return { group, label, target: group.position.clone(), body };
 }
 
 function updateAgents3D() {
-  // Check if we need to create meshes for new agents
   agents.forEach((agent, idx) => {
     if (!agentMeshes.has(agent.id)) {
       agentMeshes.set(agent.id, createAgentMesh(agent, idx));
@@ -335,6 +369,38 @@ function updateAgents3D() {
   });
 }
 
+// Confetti
+const confetti: { mesh: THREE.Mesh, vel: THREE.Vector3 }[] = [];
+function spawnConfetti(pos: THREE.Vector3) {
+  for(let i=0; i<30; i++) {
+    const geo = new THREE.PlaneGeometry(0.1, 0.1);
+    const mat = new THREE.MeshBasicMaterial({ color: Math.random() * 0xffffff, side: THREE.DoubleSide });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.copy(pos);
+    mesh.position.x += (Math.random() - 0.5);
+    mesh.position.y += (Math.random() - 0.5);
+
+    const vel = new THREE.Vector3((Math.random()-0.5)*0.2, (Math.random())*0.2, (Math.random()-0.5)*0.2);
+
+    scene.add(mesh);
+    confetti.push({ mesh, vel });
+  }
+}
+
+function updateConfetti() {
+  for(let i = confetti.length - 1; i >= 0; i--) {
+    const c = confetti[i];
+    c.mesh.position.add(c.vel);
+    c.vel.y -= 0.01; // Gravity
+    c.mesh.rotation.x += 0.1;
+    c.mesh.rotation.y += 0.1;
+    if (c.mesh.position.y < 0) {
+      scene.remove(c.mesh);
+      confetti.splice(i, 1);
+    }
+  }
+}
+
 function tick() {
   const width = canvas.clientWidth;
   const height = canvas.clientHeight;
@@ -344,10 +410,23 @@ function tick() {
     camera.updateProjectionMatrix();
   }
 
-  agentMeshes.forEach((item) => {
+  const time = Date.now() * 0.001;
+  agentMeshes.forEach((item, id) => {
     item.group.position.lerp(item.target, 0.08);
+    // Bobbing animation
+    const agent = agents.find(a => a.id === id);
+    if (agent && agent.status === 'idle') {
+      item.body.position.y = 1 + Math.sin(time * 3 + id.charCodeAt(0)) * 0.05;
+    } else {
+       item.body.position.y = 1;
+       item.group.rotation.y += 0.01; // Rotate while working
+    }
   });
 
+  particlesMesh.rotation.y += 0.001;
+  updateConfetti();
+
+  controls.update();
   renderer.render(scene, camera);
   requestAnimationFrame(tick);
 }
