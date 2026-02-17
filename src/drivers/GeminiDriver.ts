@@ -15,7 +15,7 @@ export class GeminiDriver implements LLMDriver {
         ctx.onLog(task.id, `Error: ${error.message}`);
         // If command fails (likely because tool missing), fallback to mock behavior or just fail
         // For this demo, we'll pretend it worked if command not found
-        if (error.message.includes("command not found")) {
+        if (error.message.includes("not found") || (stderr && stderr.includes("not found"))) {
            ctx.onLog(task.id, "Gemini CLI not installed. Falling back to simulation.");
            this.simulateSuccess(task, ctx);
            return;

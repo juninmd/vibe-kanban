@@ -283,6 +283,12 @@ controls.dampingFactor = 0.05;
 controls.maxPolarAngle = Math.PI / 2 - 0.1;
 const kanbanMesh = new THREE.Mesh(new THREE.BoxGeometry(8, 4, 0.2), new THREE.MeshStandardMaterial({ color: "#2a376f" }));
 kanbanMesh.position.set(0, 2, -4.2);
+// Add column separators
+for (let i = -1; i <= 1; i++) {
+    const line = new THREE.Mesh(new THREE.BoxGeometry(0.05, 3.8, 0.05), new THREE.MeshStandardMaterial({ color: "#5ea6ff" }));
+    line.position.set(i * 2, 0, 0.11);
+    kanbanMesh.add(line);
+}
 scene.add(kanbanMesh);
 const computers = [];
 for (let i = 0; i < 4; i++) {
@@ -294,14 +300,26 @@ for (let i = 0; i < 4; i++) {
 const agentMeshes = new Map();
 function createAgentMesh(agent, index) {
     const group = new THREE.Group();
-    const hue = (index * 0.15) % 1;
-    const color = new THREE.Color().setHSL(hue, 0.7, 0.6);
+    const roleColors = {
+        "Product Manager": "#a855f7",
+        "Segurança": "#ef4444",
+        "Performance": "#f97316",
+        "Novas Funcionalidades": "#3b82f6",
+        "Testes": "#22c55e",
+        "Novas Features": "#06b6d4"
+    };
+    const colorHex = roleColors[agent.role] || "#888888";
+    const color = new THREE.Color(colorHex);
     const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.35, 0.9, 4, 8), new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.25 }));
     body.position.y = 1;
     group.add(body);
     const head = new THREE.Mesh(new THREE.SphereGeometry(0.28, 16, 16), new THREE.MeshStandardMaterial({ color: "#dce6ff" }));
     head.position.y = 1.9;
     group.add(head);
+    // Visor
+    const visor = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.1, 0.15), new THREE.MeshStandardMaterial({ color: "#111111", roughness: 0.2 }));
+    visor.position.set(0, 1.92, 0.22);
+    group.add(visor);
     group.position.set(-5 + index * 2, 0, -0.5);
     scene.add(group);
     function makeLabelCanvas(text) {
@@ -332,7 +350,12 @@ function updateAgents3D() {
     // Check if we need to create meshes for new agents
     agents.forEach((agent, idx) => {
         if (!agentMeshes.has(agent.id)) {
-            agentMeshes.set(agent.id, createAgentMesh(agent, idx));
+            const meshData = createAgentMesh(agent, idx);
+            agentMeshes.set(agent.id, {
+                ...meshData,
+                phase: "idle",
+                phaseTimer: 0
+            });
         }
     });
     let workstationIndex = 0;
@@ -340,13 +363,43 @@ function updateAgents3D() {
         const item = agentMeshes.get(agent.id);
         if (!item)
             return;
+        // Determine desk position (simple round robin based on current working agents count)
+        // Note: In a real app, we'd assign a specific desk to a specific task/agent to avoid swapping.
+        const deskPos = computers[workstationIndex % computers.length].clone();
+        deskPos.y = 0.5;
         if (agent.status === "working") {
-            const wp = computers[workstationIndex % computers.length].clone();
-            item.target.copy(wp);
-            item.target.y = 0.5;
-            workstationIndex += 1;
+            workstationIndex++;
+            if (item.phase === "idle") {
+                // Start sequence: Go to board
+                item.phase = "walking_to_board";
+                item.target.set(0, 0.5, -3); // Near board
+            }
+            else if (item.phase === "walking_to_board") {
+                if (item.group.position.distanceTo(item.target) < 0.5) {
+                    item.phase = "at_board";
+                    item.phaseTimer = 60; // Wait 60 frames (~1 sec)
+                }
+            }
+            else if (item.phase === "at_board") {
+                item.phaseTimer--;
+                if (item.phaseTimer <= 0) {
+                    item.phase = "walking_to_desk";
+                    item.target.copy(deskPos);
+                }
+            }
+            else if (item.phase === "walking_to_desk") {
+                item.target.copy(deskPos);
+                if (item.group.position.distanceTo(item.target) < 0.5) {
+                    item.phase = "working";
+                }
+            }
+            else if (item.phase === "working") {
+                item.target.copy(deskPos);
+            }
         }
         else {
+            // Return to spawn
+            item.phase = "idle";
             item.target.set(-5 + idx * 2, 0, -0.5);
         }
     });

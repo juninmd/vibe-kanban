@@ -11,7 +11,8 @@ export class CopilotDriver implements LLMDriver {
 
     const child = exec(cmd, (error, stdout, stderr) => {
       if (error) {
-         if (error.message.includes("command not found")) {
+         // More robust check
+         if (error.message.includes("not found") || (stderr && stderr.includes("not found"))) {
             ctx.onLog(task.id, "Copilot CLI not installed. Falling back to simulation.");
             this.simulateSuccess(task, ctx);
             return;
