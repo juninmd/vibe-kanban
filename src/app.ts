@@ -1,5 +1,8 @@
 // @ts-nocheck
-import * as THREE from "https://unpkg.com/three@0.161.0/build/three.module.js";
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+const API_URL = "http://localhost:5174";
 
 type Agent = {
   id: string;
@@ -7,6 +10,7 @@ type Agent = {
   model: string;
   category: string;
   status: "idle" | "working";
+  assignedTask: number | null;
 };
 
 type Task = {
@@ -18,6 +22,12 @@ type Task = {
   lane: string;
   assignedTo: string | null;
   interrupted?: boolean;
+  logs?: string[];
+};
+
+type EventLog = {
+  timestamp: string;
+  text: string;
 };
 
 const lanes = ["backlog", "in_progress", "review", "done"];
@@ -28,40 +38,10 @@ const laneLabels: Record<string, string> = {
   done: "Concluído",
 };
 
-const agents: Agent[] = [
-  { id: "pm", role: "Roadmap", model: "gpt-4.1", category: "roadmap", status: "idle" },
-  { id: "sec", role: "Segurança", model: "o3-mini", category: "seguranca", status: "idle" },
-  { id: "perf", role: "Performance", model: "gpt-4o", category: "performance", status: "idle" },
-  { id: "func", role: "Funcionalidades", model: "gpt-4.1-mini", category: "funcionalidades", status: "idle" },
-  { id: "tests", role: "Testes", model: "o1", category: "testes", status: "idle" },
-  { id: "feat", role: "Features", model: "codex-mini", category: "features", status: "idle" },
-];
-
-let taskId = 1;
+let agents: Agent[] = [];
 let tasks: Task[] = [];
-let eventLog: string[] = [];
-const workTimers = new Map<number, number | NodeJS.Timeout>();
-
-function saveState() {
-  localStorage.setItem("vibe_kanban_tasks", JSON.stringify(tasks));
-  localStorage.setItem("vibe_kanban_events", JSON.stringify(eventLog));
-}
-
-function loadState() {
-  const t = localStorage.getItem("vibe_kanban_tasks");
-  const e = localStorage.getItem("vibe_kanban_events");
-  if (t) {
-    tasks = JSON.parse(t) as Task[];
-    taskId = tasks.reduce((max, tt) => Math.max(max, tt.id), 0) + 1;
-    tasks.forEach((task) => {
-      if (task.lane === "in_progress" && task.assignedTo) {
-        const agent = agents.find((a) => a.id === task.assignedTo);
-        if (agent) agent.status = "working";
-      }
-    });
-  }
-  if (e) eventLog = JSON.parse(e) as string[];
-}
+let eventLog: EventLog[] = [];
+let previousTasks: Task[] = []; // To track changes
 
 const els = {
   form: document.getElementById("taskForm") as HTMLFormElement,
@@ -69,6 +49,7 @@ const els = {
   title: document.getElementById("taskTitle") as HTMLInputElement,
   category: document.getElementById("taskCategory") as HTMLSelectElement,
   priority: document.getElementById("taskPriority") as HTMLSelectElement,
+  driverSelect: document.getElementById("driverSelect") as HTMLSelectElement,
   kanban: document.getElementById("kanbanBoard") as HTMLElement,
   agentsList: document.getElementById("agentsList") as HTMLElement,
   eventLog: document.getElementById("eventLog") as HTMLElement,
@@ -79,127 +60,76 @@ const els = {
   resetDataBtn: document.getElementById("resetDataBtn") as HTMLButtonElement,
 };
 
-function addEvent(text: string) {
-  eventLog.unshift(`${new Date().toLocaleTimeString("pt-BR")} — ${text}`);
-  if (eventLog.length > 25) eventLog.pop();
+// Confetti State
+const confettiParticles: any[] = [];
+
+async function fetchState() {
+  try {
+    const res = await fetch(`${API_URL}/api/state`);
+    if (!res.ok) return;
+    const data = await res.json();
+
+    // Detect completions for celebration
+    const newTasks = data.tasks || [];
+    newTasks.forEach((t: Task) => {
+      const old = previousTasks.find((pt) => pt.id === t.id);
+      if (old && old.lane !== "done" && t.lane === "done") {
+        spawnConfetti();
+        // Visual feedback in UI isn't needed as the kanban updates, but confetti is the key.
+      }
+    });
+    previousTasks = JSON.parse(JSON.stringify(newTasks));
+
+    tasks = newTasks;
+    agents = data.agents || [];
+    eventLog = data.events || [];
+    render();
+  } catch (e) {
+    console.error("Failed to fetch state:", e);
+  }
+}
+
+async function apiCall(endpoint: string, method: string, body: any) {
+  try {
+    const res = await fetch(`${API_URL}${endpoint}`, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    // Immediately fetch state to update UI
+    await fetchState();
+    return await res.json();
+  } catch (e) {
+    console.error(`API call failed ${endpoint}:`, e);
+  }
 }
 
 function createTask({ title, source, category, priority }: { title: string; source: string; category: string; priority: string; }) {
-  tasks.push({
-    id: taskId++,
-    title,
-    source,
-    category,
-    priority,
-    lane: "backlog",
-    assignedTo: null,
-    interrupted: false,
-  });
-  addEvent(`Novo card criado por ${source}: ${title}`);
-  saveState();
-  render();
+  apiCall("/api/tasks", "POST", { title, source, category, priority });
 }
 
-async function pickTask(task: Task) {
-  // try to ask central agent-manager to assign an agent
-  try {
-    const resp = await fetch("/api/assign", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ taskId: task.id, category: task.category }),
-    });
-    if (resp.ok) {
-      const data = await resp.json();
-      const a = data.agent as Agent;
-      // ensure local list contains the agent
-      let local = agents.find((x) => x.id === a.id);
-      if (!local) {
-        local = { id: a.id, role: a.role, model: a.model, category: a.category, status: "working" };
-        agents.push(local);
-      } else {
-        local.status = "working";
-      }
-      task.lane = "in_progress";
-      task.assignedTo = a.id;
-      addEvent(`${local.role} (${local.model}) (via manager) pegou card #${task.id} e foi ao computador.`);
-      saveState();
-      render();
-      startWorkSimulation(task, local);
-      return;
-    }
-  } catch (e) {
-    // network failure or no server — fallback to local assignment
-  }
-
-  // fallback: local-only agent selection
-  const agent = agents.find((a) => a.category === task.category && a.status === "idle");
-  if (!agent) {
-    addEvent(`Sem agente livre para categoria ${task.category}.`);
-    saveState();
-    render();
-    return;
-  }
-  task.lane = "in_progress";
-  task.assignedTo = agent.id;
-  agent.status = "working";
-  addEvent(`${agent.role} (${agent.model}) pegou card #${task.id} e foi ao computador.`);
-  saveState();
-  render();
-  startWorkSimulation(task, agent);
+function pickTask(task: Task) {
+  apiCall("/api/assign", "POST", { taskId: task.id, category: task.category });
 }
 
 function interruptTask(task: Task) {
-  if (task.lane !== "in_progress" || !task.assignedTo) return;
-  const agent = agents.find((a) => a.id === task.assignedTo);
-  if (agent) agent.status = "idle";
-  task.interrupted = true;
-  task.assignedTo = null;
-  task.lane = "backlog";
-  addEvent(`Card #${task.id} interrompido e devolvido ao backlog.`);
-  const timer = workTimers.get(task.id);
-  if (timer) {
-    clearTimeout(timer as any);
-    workTimers.delete(task.id);
-  }
-  saveState();
-  render();
+  apiCall("/api/interrupt", "POST", { taskId: task.id });
 }
 
 function moveTask(task: Task, dir: number) {
   const idx = lanes.indexOf(task.lane);
   const next = idx + dir;
   if (next < 0 || next >= lanes.length) return;
-
-  if (task.lane === "in_progress" && lanes[next] !== "in_progress" && task.assignedTo) {
-    const agent = agents.find((a) => a.id === task.assignedTo);
-    if (agent) agent.status = "idle";
-    task.assignedTo = null;
-  }
-
-  task.lane = lanes[next];
-  addEvent(`Card #${task.id} movido para ${laneLabels[task.lane]}.`);
-  saveState();
-  render();
+  apiCall("/api/move", "POST", { taskId: task.id, lane: lanes[next] });
 }
 
 function reprioritize(task: Task, direction: number) {
-  const laneTasks = tasks.filter((t) => t.lane === task.lane);
-  const currentIndex = laneTasks.findIndex((t) => t.id === task.id);
-  const targetIndex = currentIndex + direction;
-  if (targetIndex < 0 || targetIndex >= laneTasks.length) return;
-
-  const currentTaskPos = tasks.findIndex((t) => t.id === task.id);
-  const swapWithId = laneTasks[targetIndex].id;
-  const swapPos = tasks.findIndex((t) => t.id === swapWithId);
-  [tasks[currentTaskPos], tasks[swapPos]] = [tasks[swapPos], tasks[currentTaskPos]];
-  addEvent(`Prioridade reordenada no card #${task.id}.`);
-  saveState();
-  render();
+  apiCall("/api/reorder", "POST", { taskId: task.id, direction });
 }
 
 function bugFromTask(task: Task) {
   createTask({
-    title: `Bug detectado durante: ${task.title}`,
+    title: `Bug reportado em: ${task.title}`,
     source: "agente",
     category: "testes",
     priority: "alta",
@@ -220,6 +150,13 @@ function renderKanban() {
         const card = document.createElement("article");
         card.className = `task-card priority-${task.priority}`;
         const assigned = task.assignedTo ? agents.find((a) => a.id === task.assignedTo)?.role : "-";
+
+        // Logs preview
+        const lastLog = task.logs && task.logs.length > 0 ? task.logs[task.logs.length - 1] : "";
+
+        // Highlight auto-assigned tasks
+        const isAuto = task.source === "system" || (!task.source && task.assignedTo);
+
         card.innerHTML = `
           <strong>#${task.id} ${task.title}</strong>
           <div class="task-meta">
@@ -229,6 +166,7 @@ function renderKanban() {
             <span class="tag">agente: ${assigned}</span>
             ${task.interrupted ? '<span class="tag">interrompido</span>' : ""}
           </div>
+          ${lastLog ? `<div style="font-size:0.8em; margin-top:5px; color:#aaa;">> ${lastLog}</div>` : ""}
         `;
 
         const actions = document.createElement("div");
@@ -246,8 +184,8 @@ function renderKanban() {
 
         actions.append(makeBtn("←", () => moveTask(task, -1)));
         actions.append(makeBtn("→", () => moveTask(task, +1)));
-        actions.append(makeBtn("↑ prioridade", () => reprioritize(task, -1)));
-        actions.append(makeBtn("↓ prioridade", () => reprioritize(task, +1)));
+        actions.append(makeBtn("↑", () => reprioritize(task, -1)));
+        actions.append(makeBtn("↓", () => reprioritize(task, +1)));
         actions.append(makeBtn("+ bug", () => bugFromTask(task)));
 
         card.append(actions);
@@ -266,13 +204,18 @@ function renderAgents() {
         <span>Modelo: ${a.model}</span>
         <span>Categoria: ${a.category}</span>
         <span>Status: ${a.status === "idle" ? "Livre" : "Trabalhando"}</span>
+        ${a.assignedTask ? `<span>Task: #${a.assignedTask}</span>` : ""}
       </div>
     `)
     .join("");
 }
 
+function addEvent(text: string) {
+  eventLog.unshift({ timestamp: new Date().toLocaleTimeString(), text });
+  renderEvents();
+}
 function renderEvents() {
-  els.eventLog.innerHTML = eventLog.map((e) => `<li>${e}</li>`).join("");
+  els.eventLog.innerHTML = eventLog.map((e) => `<li>${e.timestamp} — ${e.text}</li>`).join("");
 }
 
 function render() {
@@ -282,6 +225,7 @@ function render() {
   updateAgents3D();
 }
 
+els.driverSelect?.addEventListener("change", async () => { const driver = els.driverSelect.value; await fetch("/api/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ driver }) }); addEvent("Driver alterado: " + driver); renderEvents(); });
 els.form.addEventListener("submit", (e) => {
   e.preventDefault();
   createTask({
@@ -299,23 +243,23 @@ els.toggleViewBtn.addEventListener("click", () => {
 });
 
 els.seedTasksBtn.addEventListener("click", () => {
-  [["Planejar sprint de IA colaborativa", "product_manager", "roadmap", "alta"],
-  ["Auditar permissões do backend", "product_manager", "seguranca", "alta"],
-  ["Otimizar render do quadro 3D", "usuario", "performance", "media"],
-  ["Criar painel de métricas de agente", "usuario", "funcionalidades", "media"]].forEach(([title, source, category, priority]) =>
+  [
+    ["Planejar sprint de IA colaborativa", "product_manager", "roadmap", "alta"],
+    ["Auditar permissões do backend", "product_manager", "seguranca", "alta"],
+    ["Otimizar render do quadro 3D", "usuario", "performance", "media"],
+    ["Criar painel de métricas de agente", "usuario", "funcionalidades", "media"]
+  ].forEach(([title, source, category, priority]) =>
     createTask({ title: title as string, source: source as string, category: category as string, priority: priority as string }),
   );
 });
 
 els.resetDataBtn.addEventListener("click", () => {
-  if (confirm("Tem certeza que deseja apagar todos os dados e recarregar?")) {
-    localStorage.removeItem("vibe_kanban_tasks");
-    localStorage.removeItem("vibe_kanban_events");
-    location.reload();
+  if (confirm("Tem certeza que deseja apagar todos os dados do servidor?")) {
+    apiCall("/api/reset", "POST", {});
   }
 });
 
-// 3D scene
+// --- 3D Scene ---
 const canvas = document.getElementById("sceneCanvas") as HTMLCanvasElement;
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -336,6 +280,81 @@ const floor = new THREE.Mesh(new THREE.PlaneGeometry(24, 14), new THREE.MeshStan
 floor.rotation.x = -Math.PI / 2;
 scene.add(floor);
 
+const grid = new THREE.GridHelper(24, 24, 0x30385f, 0x1b2241);
+grid.position.y = 0.01;
+scene.add(grid);
+
+// Ambient Particles
+const pGeo = new THREE.BufferGeometry();
+const pPos = new Float32Array(600);
+for(let i=0; i<600; i++) pPos[i] = (Math.random() - 0.5) * 20;
+pGeo.setAttribute("position", new THREE.BufferAttribute(pPos, 3));
+const pMat = new THREE.PointsMaterial({ color: 0x88ccff, size: 0.05, transparent: true, opacity: 0.4 });
+const particles = new THREE.Points(pGeo, pMat);
+scene.add(particles);
+
+// Confetti System
+function spawnConfetti() {
+  const geometry = new THREE.BufferGeometry();
+  const count = 150;
+  const positions = new Float32Array(count * 3);
+  const colors = new Float32Array(count * 3);
+  const velocities = [];
+
+  for(let i=0; i<count; i++) {
+    positions[i*3] = 0; // x (center)
+    positions[i*3+1] = 5; // y (high up)
+    positions[i*3+2] = -4; // z (near board)
+
+    const color = new THREE.Color().setHSL(Math.random(), 0.9, 0.6);
+    colors[i*3] = color.r;
+    colors[i*3+1] = color.g;
+    colors[i*3+2] = color.b;
+
+    velocities.push({
+      x: (Math.random() - 0.5) * 0.3,
+      y: (Math.random() * 0.3) + 0.1,
+      z: (Math.random() - 0.5) * 0.3
+    });
+  }
+
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+  const material = new THREE.PointsMaterial({ size: 0.15, vertexColors: true, transparent: true });
+  const points = new THREE.Points(geometry, material);
+  scene.add(points);
+
+  confettiParticles.push({ mesh: points, velocities, age: 0 });
+}
+
+function updateConfetti() {
+  for(let i=confettiParticles.length-1; i>=0; i--) {
+     const p = confettiParticles[i];
+     p.age++;
+     const positions = p.mesh.geometry.attributes.position.array;
+
+     for(let j=0; j<p.velocities.length; j++) {
+        p.velocities[j].y -= 0.005; // Gravity
+        positions[j*3] += p.velocities[j].x;
+        positions[j*3+1] += p.velocities[j].y;
+        positions[j*3+2] += p.velocities[j].z;
+     }
+     p.mesh.geometry.attributes.position.needsUpdate = true;
+
+     if(p.age > 200) {
+        scene.remove(p.mesh);
+        p.mesh.geometry.dispose();
+        confettiParticles.splice(i, 1);
+     }
+  }
+}
+
+const controls = new OrbitControls(camera, canvas);
+controls.enableDamping = true;
+controls.dampingFactor = 0.05;
+controls.maxPolarAngle = Math.PI / 2 - 0.1;
+
 const kanbanMesh = new THREE.Mesh(new THREE.BoxGeometry(8, 4, 0.2), new THREE.MeshStandardMaterial({ color: "#2a376f" }));
 kanbanMesh.position.set(0, 2, -4.2);
 scene.add(kanbanMesh);
@@ -349,10 +368,11 @@ for (let i = 0; i < 4; i++) {
 }
 
 const agentMeshes = new Map<string, { group: any; label?: any; target: any }>();
-agents.forEach((agent, index) => {
+
+function createAgentMesh(agent: Agent, index: number) {
   const group = new THREE.Group();
 
-  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.35, 0.9, 4, 8), new THREE.MeshStandardMaterial({ color: ["#5f78ea", "#e07a5f", "#7bd389", "#f2c94c", "#9b7cff", "#5fc3d3"][index % 6] }));
+  const hue = (index * 0.15) % 1; const color = new THREE.Color().setHSL(hue, 0.7, 0.6); const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.35, 0.9, 4, 8), new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.25 }));
   body.position.y = 1;
   group.add(body);
 
@@ -387,10 +407,17 @@ agents.forEach((agent, index) => {
   label.position.set(0, 2.7, 0);
   group.add(label);
 
-  agentMeshes.set(agent.id, { group, label, target: group.position.clone() });
-});
+  return { group, label, target: group.position.clone() };
+}
 
 function updateAgents3D() {
+  // Check if we need to create meshes for new agents
+  agents.forEach((agent, idx) => {
+    if (!agentMeshes.has(agent.id)) {
+      agentMeshes.set(agent.id, createAgentMesh(agent, idx));
+    }
+  });
+
   let workstationIndex = 0;
   agents.forEach((agent, idx) => {
     const item = agentMeshes.get(agent.id);
@@ -420,37 +447,16 @@ function tick() {
     item.group.position.lerp(item.target, 0.08);
   });
 
+  if(typeof particles !== "undefined") particles.rotation.y += 0.0005;
+
+  updateConfetti();
+  controls.update();
   renderer.render(scene, camera);
   requestAnimationFrame(tick);
 }
 
-tick();
-loadState();
-render();
+// Initial fetch and polling
+fetchState();
+setInterval(fetchState, 1000);
 
-function startWorkSimulation(task: Task, agent: Agent) {
-  const base = task.priority === "alta" ? 6000 : task.priority === "media" ? 10000 : 14000;
-  const duration = base + Math.floor(Math.random() * 6000);
-  const t = setTimeout(() => {
-    const foundBug = Math.random() < 0.18;
-    if (foundBug) {
-      addEvent(`${agent.role} encontrou um bug durante #${task.id}. Criando card de bug.`);
-      bugFromTask(task);
-      agent.status = "idle";
-      task.assignedTo = null;
-      task.interrupted = true;
-      task.lane = "backlog";
-    } else {
-      const idx = lanes.indexOf(task.lane);
-      const next = Math.min(lanes.length - 1, idx + 1);
-      task.lane = lanes[next];
-      addEvent(`${agent.role} concluiu trabalho no card #${task.id} — movido para ${laneLabels[task.lane]}.`);
-      agent.status = "idle";
-      task.assignedTo = null;
-    }
-    workTimers.delete(task.id);
-    saveState();
-    render();
-  }, duration) as unknown as number;
-  workTimers.set(task.id, t);
-}
+tick();

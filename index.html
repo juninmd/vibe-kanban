@@ -10,6 +10,12 @@
     <header class="topbar">
       <h1>Vibe Kanban • Time de Agentes</h1>
       <div class="topbar-actions">
+        <select id="driverSelect" style="margin-right: 10px;">
+          <option value="mock">Mock Driver</option>
+          <option value="gemini">Gemini CLI</option>
+          <option value="copilot">Copilot SDK</option>
+          <option value="opencode">OpenCode AI</option>
+        </select>
         <button id="toggleViewBtn">Alternar 2D / 3D</button>
         <button id="seedTasksBtn">Gerar tarefas exemplo</button>
         <button id="resetDataBtn" style="border-color: #ff6f6f; color: #ff6f6f;">Resetar Dados</button>
@@ -78,6 +84,14 @@
       </section>
     </main>
 
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://unpkg.com/three@0.161.0/build/three.module.js",
+          "three/addons/": "https://unpkg.com/three@0.161.0/examples/jsm/"
+        }
+      }
+    </script>
     <script type="module" src="dist/app.js"></script>
   </body>
 </html>

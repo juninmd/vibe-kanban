@@ -14,12 +14,12 @@ let taskIdCounter = 1;
 const state: State = {
   tasks: [],
   agents: [
-    { id: "pm", role: "Roadmap", model: "gpt-4.1", category: "roadmap", status: "idle", assignedTask: null },
+    { id: "pm", role: "Product Manager", model: "gpt-4.1", category: "roadmap", status: "idle", assignedTask: null },
     { id: "sec", role: "Segurança", model: "o3-mini", category: "seguranca", status: "idle", assignedTask: null },
     { id: "perf", role: "Performance", model: "gpt-4o", category: "performance", status: "idle", assignedTask: null },
-    { id: "func", role: "Funcionalidades", model: "gpt-4.1-mini", category: "funcionalidades", status: "idle", assignedTask: null },
+    { id: "func", role: "Novas Funcionalidades", model: "gpt-4.1-mini", category: "funcionalidades", status: "idle", assignedTask: null },
     { id: "tests", role: "Testes", model: "o1", category: "testes", status: "idle", assignedTask: null },
-    { id: "feat", role: "Features", model: "codex-mini", category: "features", status: "idle", assignedTask: null },
+    { id: "feat", role: "Novas Features", model: "codex-mini", category: "features", status: "idle", assignedTask: null },
   ],
   events: []
 };
@@ -31,7 +31,8 @@ const drivers: Record<string, LLMDriver> = {
   copilot: new CopilotDriver(),
   opencode: new OpenCodeDriver(),
 };
-let currentDriver: LLMDriver = drivers.mock;
+// Default to OpenCodeDriver as requested, falling back to mock behavior internally if CLI missing
+let currentDriver: LLMDriver = drivers.opencode;
 
 function addEvent(text: string) {
   state.events.unshift({ timestamp: new Date().toLocaleTimeString("pt-BR"), text });
@@ -61,6 +62,82 @@ function parseBody(req: any): Promise<any> {
     });
   });
 }
+
+// --- Auto-Pilot Logic ---
+function autoAssign() {
+  const backlogTasks = state.tasks.filter(t => t.lane === "backlog" && !t.assignedTo);
+  if (backlogTasks.length === 0) return;
+
+  backlogTasks.forEach(task => {
+    // Basic heuristic: match category.
+    // PM can also assign generic tasks or 'roadmap' tasks.
+    const agent = state.agents.find(a =>
+      a.status === "idle" && (a.category === task.category)
+    );
+
+    if (agent) {
+      // Assign
+      task.assignedTo = agent.id;
+      task.lane = "in_progress";
+      task.interrupted = false;
+      agent.status = "working";
+      agent.assignedTask = task.id;
+      addEvent(`[AutoPilot] ${agent.role} iniciou a tarefa #${task.id}`);
+
+      // Execute via Driver
+      currentDriver.executeTask(task, agent, {
+          onLog: (tid, msg) => {
+             const t = getTask(tid);
+             if (t) {
+                t.logs.push(msg);
+                if (msg.includes("Error") || msg.includes("Completed")) addEvent(`#${tid}: ${msg}`);
+             }
+          },
+          onComplete: (tid) => {
+             const t = getTask(tid);
+             if (t && t.assignedTo) {
+                const a = getAgent(t.assignedTo);
+                if (a) { a.status = "idle"; a.assignedTask = null; }
+                t.assignedTo = null;
+                t.lane = "done";
+                addEvent(`Tarefa #${tid} concluída!`);
+             }
+          },
+          onBugFound: (tid, desc) => {
+             const t = getTask(tid);
+                if (t) {
+                  addEvent(`BUG encontrado em #${tid}: ${desc}`);
+                  const bugTask: Task = {
+                    id: taskIdCounter++,
+                    title: `Bug: ${desc}`,
+                    source: "system",
+                    category: "testes",
+                    priority: "alta",
+                    lane: "backlog",
+                    assignedTo: null,
+                    interrupted: false,
+                    logs: [],
+                    createdAt: Date.now(),
+                    updatedAt: Date.now()
+                  };
+                  state.tasks.push(bugTask);
+                  if (t.assignedTo) {
+                     const a = getAgent(t.assignedTo);
+                     if (a) { a.status = "idle"; a.assignedTask = null; }
+                     t.assignedTo = null;
+                     t.lane = "backlog";
+                     t.interrupted = true;
+                  }
+                }
+          },
+          onInterrupt: (tid) => {}
+      });
+    }
+  });
+}
+
+// Start Auto-Pilot loop (every 3 seconds)
+setInterval(autoAssign, 3000);
 
 // --- Server ---
 const server = createServer(async (req, res) => {
@@ -264,6 +341,28 @@ const server = createServer(async (req, res) => {
     return jsonResponse(res, 200, { task });
   }
 
+  // POST /api/reorder (Move task up/down in priority/list)
+  if (url === "/api/reorder" && method === "POST") {
+    const { taskId, direction } = await parseBody(req);
+    const task = getTask(taskId);
+    if (!task) return jsonResponse(res, 404, { error: "Task not found" });
+
+    const laneTasks = state.tasks.filter(t => t.lane === task.lane);
+    const currentIndex = laneTasks.findIndex(t => t.id === task.id);
+    const targetIndex = currentIndex + direction;
+
+    if (targetIndex >= 0 && targetIndex < laneTasks.length) {
+      const otherTask = laneTasks[targetIndex];
+      // Swap in main array
+      const index1 = state.tasks.indexOf(task);
+      const index2 = state.tasks.indexOf(otherTask);
+      [state.tasks[index1], state.tasks[index2]] = [state.tasks[index2], state.tasks[index1]];
+      addEvent(`Prioridade reordenada no card #${taskId}`);
+    }
+
+    return jsonResponse(res, 200, { tasks: state.tasks });
+  }
+
   // POST /api/config
   if (url === "/api/config" && method === "POST") {
     const { driver } = await parseBody(req);
@@ -283,6 +382,32 @@ const server = createServer(async (req, res) => {
     taskIdCounter = 1;
     addEvent("Sistema resetado.");
     return jsonResponse(res, 200, { ok: true });
+  }
+
+  // Static File Serving
+  if (method === "GET") {
+    let filePath = "";
+    if (url === "/" || url === "/index.html") filePath = "index.html";
+    else if (url === "/styles.css") filePath = "styles.css";
+    else if (url.startsWith("/dist/")) filePath = url.substring(1);
+
+    if (filePath) {
+      const ext = path.extname(filePath);
+      const contentTypes: Record<string, string> = {
+        ".html": "text/html",
+        ".css": "text/css",
+        ".js": "application/javascript"
+      };
+
+      try {
+        const content = await fs.promises.readFile(filePath);
+        res.writeHead(200, { "Content-Type": contentTypes[ext] || "text/plain" });
+        res.end(content);
+        return;
+      } catch (e) {
+        // Fall through to 404
+      }
+    }
   }
 
   jsonResponse(res, 404, { error: "Not found" });
