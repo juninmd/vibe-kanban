@@ -14,12 +14,12 @@ let taskIdCounter = 1;
 const state: State = {
   tasks: [],
   agents: [
-    { id: "pm", role: "Roadmap", model: "gpt-4.1", category: "roadmap", status: "idle", assignedTask: null },
+    { id: "pm", role: "Product Manager", model: "gpt-4.1", category: "roadmap", status: "idle", assignedTask: null },
     { id: "sec", role: "Segurança", model: "o3-mini", category: "seguranca", status: "idle", assignedTask: null },
     { id: "perf", role: "Performance", model: "gpt-4o", category: "performance", status: "idle", assignedTask: null },
-    { id: "func", role: "Funcionalidades", model: "gpt-4.1-mini", category: "funcionalidades", status: "idle", assignedTask: null },
+    { id: "func", role: "Novas Funcionalidades", model: "gpt-4.1-mini", category: "funcionalidades", status: "idle", assignedTask: null },
     { id: "tests", role: "Testes", model: "o1", category: "testes", status: "idle", assignedTask: null },
-    { id: "feat", role: "Features", model: "codex-mini", category: "features", status: "idle", assignedTask: null },
+    { id: "feat", role: "Novas Features", model: "codex-mini", category: "features", status: "idle", assignedTask: null },
   ],
   events: []
 };
@@ -31,7 +31,8 @@ const drivers: Record<string, LLMDriver> = {
   copilot: new CopilotDriver(),
   opencode: new OpenCodeDriver(),
 };
-let currentDriver: LLMDriver = drivers.mock;
+// Default to OpenCodeDriver as requested, falling back to mock behavior internally if CLI missing
+let currentDriver: LLMDriver = drivers.opencode;
 
 function addEvent(text: string) {
   state.events.unshift({ timestamp: new Date().toLocaleTimeString("pt-BR"), text });
@@ -208,6 +209,28 @@ const server = createServer(async (req, res) => {
     }
     task.lane = lane;
     return jsonResponse(res, 200, { task });
+  }
+
+  // POST /api/reorder (Move task up/down in priority/list)
+  if (url === "/api/reorder" && method === "POST") {
+    const { taskId, direction } = await parseBody(req);
+    const task = getTask(taskId);
+    if (!task) return jsonResponse(res, 404, { error: "Task not found" });
+
+    const laneTasks = state.tasks.filter(t => t.lane === task.lane);
+    const currentIndex = laneTasks.findIndex(t => t.id === task.id);
+    const targetIndex = currentIndex + direction;
+
+    if (targetIndex >= 0 && targetIndex < laneTasks.length) {
+      const otherTask = laneTasks[targetIndex];
+      // Swap in main array
+      const index1 = state.tasks.indexOf(task);
+      const index2 = state.tasks.indexOf(otherTask);
+      [state.tasks[index1], state.tasks[index2]] = [state.tasks[index2], state.tasks[index1]];
+      addEvent(`Prioridade reordenada no card #${taskId}`);
+    }
+
+    return jsonResponse(res, 200, { tasks: state.tasks });
   }
 
   // POST /api/config
