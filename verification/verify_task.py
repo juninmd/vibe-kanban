@@ -8,7 +8,7 @@ def run(playwright):
         page = context.new_page()
 
         print("Navigating to app...")
-        page.goto("http://localhost:4173")
+        page.goto("http://localhost:5174")
         time.sleep(2)
 
         print("Creating task...")

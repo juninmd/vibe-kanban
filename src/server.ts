@@ -1,4 +1,6 @@
 import { createServer } from "http";
+import * as fs from "fs";
+import * as path from "path";
 import { Task, Agent, State, EventLog, LLMDriver } from "./types.js";
 import { MockDriver } from "./drivers/MockDriver.js";
 import { GeminiDriver } from "./drivers/GeminiDriver.js";
@@ -63,6 +65,60 @@ function parseBody(req: any): Promise<any> {
 // --- Server ---
 const server = createServer(async (req, res) => {
   const { method, url } = req as any;
+
+  if (!url) return;
+
+  // Serve static files
+  if (method === "GET" && !url.startsWith("/api")) {
+    let filePath = "." + url;
+    if (filePath === "./") filePath = "./index.html";
+
+    // Prevent directory traversal
+    const normalizedPath = path.normalize(filePath);
+    if (normalizedPath.startsWith("..")) {
+        res.writeHead(403);
+        res.end("Forbidden");
+        return;
+    }
+
+    const extname = path.extname(filePath);
+    let contentType = "text/html";
+    switch (extname) {
+      case ".js":
+        contentType = "text/javascript";
+        break;
+      case ".css":
+        contentType = "text/css";
+        break;
+      case ".json":
+        contentType = "application/json";
+        break;
+      case ".png":
+        contentType = "image/png";
+        break;
+      case ".jpg":
+        contentType = "image/jpg";
+        break;
+      case ".svg":
+        contentType = "image/svg+xml";
+        break;
+    }
+
+    fs.readFile(filePath, (error, content) => {
+      if (error) {
+        if (error.code == "ENOENT") {
+           jsonResponse(res, 404, { error: "Not found" });
+        } else {
+           res.writeHead(500);
+           res.end("Sorry, check with the site admin for error: " + error.code + " ..\n");
+        }
+      } else {
+        res.writeHead(200, { "Content-Type": contentType });
+        res.end(content, "utf-8");
+      }
+    });
+    return;
+  }
 
   if (method === "OPTIONS") return jsonResponse(res, 200, { ok: true });
 
