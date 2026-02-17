@@ -1,5 +1,1 @@
-
-> vibe-kanban@0.1.0 start
-> node dist/server.js
-
 Server listening on http://localhost:5174
