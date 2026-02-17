@@ -1,5 +1,6 @@
 // @ts-nocheck
-import * as THREE from "https://unpkg.com/three@0.161.0/build/three.module.js";
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 const API_URL = "http://localhost:5174";
 const lanes = ["backlog", "in_progress", "review", "done"];
 const laneLabels = {
@@ -145,6 +146,10 @@ function renderAgents() {
     `)
         .join("");
 }
+function addEvent(text) {
+    eventLog.unshift({ timestamp: new Date().toLocaleTimeString(), text });
+    renderEvents();
+}
 function renderEvents() {
     els.eventLog.innerHTML = eventLog.map((e) => `<li>${e.timestamp} — ${e.text}</li>`).join("");
 }
@@ -198,6 +203,22 @@ scene.add(dir);
 const floor = new THREE.Mesh(new THREE.PlaneGeometry(24, 14), new THREE.MeshStandardMaterial({ color: "#141c3f" }));
 floor.rotation.x = -Math.PI / 2;
 scene.add(floor);
+const grid = new THREE.GridHelper(24, 24, 0x30385f, 0x1b2241);
+grid.position.y = 0.01;
+scene.add(grid);
+// Particles
+const pGeo = new THREE.BufferGeometry();
+const pPos = new Float32Array(600);
+for (let i = 0; i < 600; i++)
+    pPos[i] = (Math.random() - 0.5) * 20;
+pGeo.setAttribute("position", new THREE.BufferAttribute(pPos, 3));
+const pMat = new THREE.PointsMaterial({ color: 0x88ccff, size: 0.05, transparent: true, opacity: 0.4 });
+const particles = new THREE.Points(pGeo, pMat);
+scene.add(particles);
+const controls = new OrbitControls(camera, canvas);
+controls.enableDamping = true;
+controls.dampingFactor = 0.05;
+controls.maxPolarAngle = Math.PI / 2 - 0.1;
 const kanbanMesh = new THREE.Mesh(new THREE.BoxGeometry(8, 4, 0.2), new THREE.MeshStandardMaterial({ color: "#2a376f" }));
 kanbanMesh.position.set(0, 2, -4.2);
 scene.add(kanbanMesh);
@@ -211,7 +232,9 @@ for (let i = 0; i < 4; i++) {
 const agentMeshes = new Map();
 function createAgentMesh(agent, index) {
     const group = new THREE.Group();
-    const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.35, 0.9, 4, 8), new THREE.MeshStandardMaterial({ color: ["#5f78ea", "#e07a5f", "#7bd389", "#f2c94c", "#9b7cff", "#5fc3d3"][index % 6] }));
+    const hue = (index * 0.15) % 1;
+    const color = new THREE.Color().setHSL(hue, 0.7, 0.6);
+    const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.35, 0.9, 4, 8), new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.25 }));
     body.position.y = 1;
     group.add(body);
     const head = new THREE.Mesh(new THREE.SphereGeometry(0.28, 16, 16), new THREE.MeshStandardMaterial({ color: "#dce6ff" }));
@@ -277,6 +300,10 @@ function tick() {
     agentMeshes.forEach((item) => {
         item.group.position.lerp(item.target, 0.08);
     });
+    particles.rotation.y += 0.0005;
+    controls.update();
+    if (typeof particles !== "undefined")
+        particles.rotation.y += 0.0005;
     renderer.render(scene, camera);
     requestAnimationFrame(tick);
 }
