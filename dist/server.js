@@ -153,6 +153,32 @@ function autoAssign() {
 }
 // Start Auto-Pilot loop (every 3 seconds)
 setInterval(autoAssign, 3000);
+// --- PM Auto-Create Logic ---
+function pmAutoCreateLoop() {
+    const backlogTasks = state.tasks.filter(t => t.lane === "backlog");
+    // If backlog is running low, PM creates new tasks
+    if (backlogTasks.length < 3) {
+        const categories = ["roadmap", "seguranca", "performance", "funcionalidades", "features"];
+        const randomCategory = categories[Math.floor(Math.random() * categories.length)];
+        const task = {
+            id: taskIdCounter++,
+            title: `Feature backlog item ${Date.now().toString().slice(-4)}`,
+            source: "product_manager",
+            category: randomCategory,
+            priority: Math.random() > 0.7 ? "alta" : "media",
+            lane: "backlog",
+            assignedTo: null,
+            interrupted: false,
+            logs: [],
+            createdAt: Date.now(),
+            updatedAt: Date.now()
+        };
+        state.tasks.push(task);
+        addEvent(`[PM] Novo card criado: ${task.title}`);
+    }
+}
+// PM loop (every 10 seconds)
+setInterval(pmAutoCreateLoop, 10000);
 // --- Server ---
 const server = createServer(async (req, res) => {
     const { method, url } = req;
