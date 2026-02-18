@@ -324,6 +324,17 @@ function createAgentMesh(agent, index) {
     const visor = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.1, 0.15), new THREE.MeshStandardMaterial({ color: "#111111", roughness: 0.2 }));
     visor.position.set(0, 1.92, 0.22);
     group.add(visor);
+    // Arms
+    const armGeo = new THREE.CapsuleGeometry(0.1, 0.6, 4, 8);
+    const armMat = new THREE.MeshStandardMaterial({ color: color, emissive: color, emissiveIntensity: 0.1 });
+    const leftArm = new THREE.Mesh(armGeo, armMat);
+    leftArm.position.set(-0.5, 1.2, 0);
+    leftArm.rotation.z = -0.2;
+    group.add(leftArm);
+    const rightArm = new THREE.Mesh(armGeo, armMat);
+    rightArm.position.set(0.5, 1.2, 0);
+    rightArm.rotation.z = 0.2;
+    group.add(rightArm);
     group.position.set(-5 + index * 2, 0, -0.5);
     scene.add(group);
     function makeLabelCanvas(text) {
