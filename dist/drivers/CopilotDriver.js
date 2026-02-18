@@ -10,7 +10,7 @@ export class CopilotDriver {
                 // More robust check
                 if (error.message.includes("not found") || (stderr && stderr.includes("not found"))) {
                     ctx.onLog(task.id, "Copilot CLI not installed. Falling back to simulation.");
-                    this.simulateSuccess(task, ctx);
+                    this.simulateDevelopment(task, ctx);
                     return;
                 }
                 ctx.onBugFound(task.id, stderr || error.message);
@@ -22,16 +22,42 @@ export class CopilotDriver {
         this.runningTasks.set(task.id, child);
         return Promise.resolve();
     }
-    simulateSuccess(task, ctx) {
-        setTimeout(() => {
-            ctx.onLog(task.id, "Simulated Copilot response: Suggestion accepted.");
-            ctx.onComplete(task.id);
-        }, 3000);
+    simulateDevelopment(task, ctx) {
+        const steps = [
+            "Analyzing workspace context...",
+            `Synthesizing solution for "${task.title}"...`,
+            "Suggesting code changes...",
+            "Refactoring for style compliance...",
+            "Verifying implementation..."
+        ];
+        let stepIndex = 0;
+        const interval = setInterval(() => {
+            if (stepIndex >= steps.length) {
+                clearInterval(interval);
+                this.runningTasks.delete(task.id);
+                // 20% chance of finding a bug
+                if (Math.random() < 0.2) {
+                    const bugMsg = "Test failed: Copilot suggestion introduced a regression.";
+                    ctx.onLog(task.id, bugMsg);
+                    ctx.onBugFound(task.id, bugMsg);
+                }
+                else {
+                    ctx.onLog(task.id, "Copilot: Suggestion accepted and merged.");
+                    ctx.onComplete(task.id);
+                }
+                return;
+            }
+            ctx.onLog(task.id, `Copilot: ${steps[stepIndex++]}`);
+        }, 1500);
+        this.runningTasks.set(task.id, interval);
     }
     async interruptTask(task) {
-        const child = this.runningTasks.get(task.id);
-        if (child) {
-            child.kill();
+        const processOrTimer = this.runningTasks.get(task.id);
+        if (processOrTimer) {
+            if (processOrTimer.kill)
+                processOrTimer.kill();
+            else
+                clearInterval(processOrTimer);
             this.runningTasks.delete(task.id);
         }
         return Promise.resolve();
