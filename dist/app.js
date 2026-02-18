@@ -31,26 +31,28 @@ const els = {
 };
 // Confetti State
 const confettiParticles = [];
+function updateState(data) {
+    // Detect completions for celebration
+    const newTasks = data.tasks || [];
+    newTasks.forEach((t) => {
+        const old = previousTasks.find((pt) => pt.id === t.id);
+        if (old && old.lane !== "done" && t.lane === "done") {
+            spawnConfetti();
+        }
+    });
+    previousTasks = JSON.parse(JSON.stringify(newTasks));
+    tasks = newTasks;
+    agents = data.agents || [];
+    eventLog = data.events || [];
+    render();
+}
 async function fetchState() {
     try {
         const res = await fetch(`${API_URL}/api/state`);
         if (!res.ok)
             return;
         const data = await res.json();
-        // Detect completions for celebration
-        const newTasks = data.tasks || [];
-        newTasks.forEach((t) => {
-            const old = previousTasks.find((pt) => pt.id === t.id);
-            if (old && old.lane !== "done" && t.lane === "done") {
-                spawnConfetti();
-                // Visual feedback in UI isn't needed as the kanban updates, but confetti is the key.
-            }
-        });
-        previousTasks = JSON.parse(JSON.stringify(newTasks));
-        tasks = newTasks;
-        agents = data.agents || [];
-        eventLog = data.events || [];
-        render();
+        updateState(data);
     }
     catch (e) {
         console.error("Failed to fetch state:", e);
@@ -63,8 +65,7 @@ async function apiCall(endpoint, method, body) {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(body),
         });
-        // Immediately fetch state to update UI
-        await fetchState();
+        // State update handled by SSE
         return await res.json();
     }
     catch (e) {
@@ -162,8 +163,11 @@ function renderAgents() {
         .join("");
 }
 function addEvent(text) {
-    eventLog.unshift({ timestamp: new Date().toLocaleTimeString(), text });
-    renderEvents();
+    // Local event log update (optional, but good for immediate feedback if SSE is slow)
+    // But strictly we should rely on state from server to be single source of truth
+    // So I'll comment this out and let SSE handle it
+    // eventLog.unshift({ timestamp: new Date().toLocaleTimeString(), text });
+    // renderEvents();
 }
 function renderEvents() {
     els.eventLog.innerHTML = eventLog.map((e) => `<li>${e.timestamp} — ${e.text}</li>`).join("");
@@ -174,7 +178,7 @@ function render() {
     renderEvents();
     updateAgents3D();
 }
-els.driverSelect?.addEventListener("change", async () => { const driver = els.driverSelect.value; await fetch("/api/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ driver }) }); addEvent("Driver alterado: " + driver); renderEvents(); });
+els.driverSelect?.addEventListener("change", async () => { const driver = els.driverSelect.value; await fetch("/api/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ driver }) }); /* addEvent("Driver alterado: " + driver); */ });
 els.form.addEventListener("submit", (e) => {
     e.preventDefault();
     createTask({
@@ -422,7 +426,15 @@ function tick() {
     renderer.render(scene, camera);
     requestAnimationFrame(tick);
 }
-// Initial fetch and polling
-fetchState();
-setInterval(fetchState, 1000);
+// SSE Connection
+const evtSource = new EventSource(`${API_URL}/api/events`);
+evtSource.onmessage = (event) => {
+    try {
+        const data = JSON.parse(event.data);
+        updateState(data);
+    }
+    catch (e) {
+        console.error("Error parsing SSE data", e);
+    }
+};
 tick();

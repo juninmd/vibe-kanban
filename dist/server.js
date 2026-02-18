@@ -20,6 +20,19 @@ const state = {
     ],
     events: []
 };
+// SSE Clients
+let clients = [];
+function broadcastState() {
+    const data = JSON.stringify(state);
+    clients.forEach(client => {
+        try {
+            client.res.write(`data: ${data}\n\n`);
+        }
+        catch (e) {
+            console.error(`Error broadcasting to client ${client.id}:`, e);
+        }
+    });
+}
 // Driver selection
 const drivers = {
     mock: new MockDriver(),
@@ -33,6 +46,7 @@ function addEvent(text) {
     state.events.unshift({ timestamp: new Date().toLocaleTimeString("pt-BR"), text });
     if (state.events.length > 50)
         state.events.pop();
+    broadcastState();
 }
 function getTask(id) { return state.tasks.find(t => t.id === id); }
 function getAgent(id) { return state.agents.find(a => a.id === id); }
@@ -85,6 +99,8 @@ function autoAssign() {
                         t.logs.push(msg);
                         if (msg.includes("Error") || msg.includes("Completed"))
                             addEvent(`#${tid}: ${msg}`);
+                        else
+                            broadcastState();
                     }
                 },
                 onComplete: (tid) => {
@@ -195,6 +211,26 @@ const server = createServer(async (req, res) => {
     }
     if (method === "OPTIONS")
         return jsonResponse(res, 200, { ok: true });
+    // GET /api/events (SSE)
+    if (url === "/api/events" && method === "GET") {
+        res.writeHead(200, {
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive"
+        });
+        // Send initial state
+        res.write(`data: ${JSON.stringify(state)}\n\n`);
+        const clientId = Date.now();
+        const newClient = {
+            id: clientId,
+            res
+        };
+        clients.push(newClient);
+        req.on("close", () => {
+            clients = clients.filter(c => c.id !== clientId);
+        });
+        return;
+    }
     // GET /api/state
     if (url === "/api/state" && method === "GET") {
         return jsonResponse(res, 200, state);
@@ -245,6 +281,8 @@ const server = createServer(async (req, res) => {
                     // Only log important steps to global event log to avoid spam
                     if (msg.includes("Error") || msg.includes("Completed"))
                         addEvent(`#${tid}: ${msg}`);
+                    else
+                        broadcastState();
                 }
             },
             onComplete: (tid) => {
@@ -338,6 +376,7 @@ const server = createServer(async (req, res) => {
             }
         }
         task.lane = lane;
+        broadcastState();
         return jsonResponse(res, 200, { task });
     }
     // POST /api/reorder (Move task up/down in priority/list)
