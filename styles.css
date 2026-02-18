@@ -88,13 +88,14 @@ button#seedTasksBtn:hover {
 }
 
 .sidebar {
-  border-right: 1px solid var(--border);
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
   padding: 1.5rem;
   overflow-y: auto;
   display: grid;
   gap: 1.5rem;
   align-content: start;
-  background: var(--panel-solid);
+  background: rgba(23, 27, 47, 0.6);
+  backdrop-filter: blur(12px);
 }
 
 .sidebar section {
@@ -164,8 +165,9 @@ label { display: grid; gap: 0.25rem; font-size: 0.8rem; color: var(--muted); tex
 }
 
 .column {
-  background: rgba(30, 41, 59, 0.5);
-  border: 1px solid #334155;
+  background: rgba(30, 41, 59, 0.4);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px;
   padding: 1rem;
   display: grid;

@@ -326,14 +326,14 @@ function createAgentMesh(agent, index) {
         const size = 256;
         const canvas = document.createElement("canvas");
         canvas.width = size;
-        canvas.height = 64;
+        canvas.height = 80;
         const ctx = canvas.getContext("2d");
-        ctx.fillStyle = "rgba(20,24,38,0.9)";
+        ctx.fillStyle = "rgba(20,24,38,0.95)";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.font = "28px Inter, sans-serif";
-        ctx.fillStyle = "#e6e9ff";
+        ctx.font = "bold 36px Inter, sans-serif";
+        ctx.fillStyle = "#ffffff";
         ctx.textAlign = "center";
-        ctx.fillText(text, canvas.width / 2, 42);
+        ctx.fillText(text, canvas.width / 2, 52);
         return canvas;
     }
     const labelCanvas = makeLabelCanvas(`${agent.model}`);
