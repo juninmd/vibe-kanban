@@ -368,19 +368,122 @@ for (let i = -1; i <= 1; i++) {
 }
 scene.add(kanbanMesh);
 
+const kanbanGroup = new THREE.Group();
+kanbanMesh.add(kanbanGroup);
+
+function createTaskTexture(task: Task) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 512;
+  canvas.height = 128;
+  const ctx = canvas.getContext("2d")!;
+
+  // Background
+  const categoryColors: Record<string, string> = {
+    roadmap: "#a855f7",
+    seguranca: "#ef4444",
+    performance: "#f97316",
+    funcionalidades: "#3b82f6",
+    testes: "#22c55e",
+    features: "#06b6d4"
+  };
+
+  ctx.fillStyle = categoryColors[task.category] || "#64748b";
+  ctx.fillRect(0, 0, 16, canvas.height); // Color strip on left
+
+  ctx.fillStyle = "#334155";
+  ctx.fillRect(16, 0, canvas.width - 16, canvas.height);
+
+  // Text
+  ctx.font = "bold 28px Inter, sans-serif";
+  ctx.fillStyle = "#e2e8f0";
+  ctx.fillText(`#${task.id}`, 32, 40);
+
+  ctx.font = "24px Inter, sans-serif";
+  ctx.fillStyle = "#cbd5e1";
+
+  // Truncate title
+  let title = task.title;
+  if (title.length > 30) title = title.substring(0, 30) + "...";
+  ctx.fillText(title, 32, 80);
+
+  // Status/Meta
+  ctx.font = "18px Inter, sans-serif";
+  ctx.fillStyle = "#94a3b8";
+  ctx.fillText(`${task.priority.toUpperCase()} • ${task.category}`, 32, 110);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.encoding = THREE.sRGBEncoding;
+  return tex;
+}
+
+function updateKanban3D() {
+  // Clear old meshes
+  while(kanbanGroup.children.length > 0){
+    const child = kanbanGroup.children[0];
+    if ((child as any).geometry) (child as any).geometry.dispose();
+    if ((child as any).material) {
+        if (Array.isArray((child as any).material)) (child as any).material.forEach((m: any) => { if(m.map) m.map.dispose(); m.dispose(); });
+        else {
+           if ((child as any).material.map) (child as any).material.map.dispose();
+           (child as any).material.dispose();
+        }
+    }
+    kanbanGroup.remove(child);
+  }
+
+  // Group tasks by lane to stack them
+  const laneCounts: Record<string, number> = { backlog: 0, in_progress: 0, review: 0, done: 0 };
+  const laneX: Record<string, number> = { backlog: -3, in_progress: -1, review: 1, done: 3 };
+
+  tasks.forEach(task => {
+    const lane = task.lane || "backlog";
+    if (lane === "done" && (laneCounts.done || 0) > 5) return;
+
+    const count = laneCounts[lane] || 0;
+    const x = laneX[lane] || 0;
+    const y = 1.3 - count * 0.6;
+
+    if (y < -1.5) return; // Don't overflow board
+
+    // Create card mesh
+    const geometry = new THREE.BoxGeometry(1.8, 0.5, 0.05);
+    const texture = createTaskTexture(task);
+    const material = new THREE.MeshStandardMaterial({
+      map: texture,
+      emissive: 0x222222,
+      emissiveMap: texture,
+      emissiveIntensity: 0.4
+    });
+
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.set(x, y, 0.15);
+    kanbanGroup.add(mesh);
+
+    laneCounts[lane] = count + 1;
+  });
+}
+
 const computers: THREE.Vector3[] = [];
+const screenGlows: THREE.Mesh[] = [];
+
 for (let i = 0; i < 4; i++) {
   const desk = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.6, 1.2), new THREE.MeshStandardMaterial({ color: "#202b56" }));
   desk.position.set(-6 + i * 4, 0.3, 2.8);
   scene.add(desk);
   computers.push(desk.position.clone());
+
+  const screen = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.7), new THREE.MeshBasicMaterial({ color: 0x66aaff, transparent: true, opacity: 0.1, side: THREE.DoubleSide }));
+  screen.position.set(-6 + i * 4, 0.9, 2.8);
+  screen.rotation.x = -0.2;
+  scene.add(screen);
+  screenGlows.push(screen);
 }
 
 const agentMeshes = new Map<string, {
   group: any;
   label?: any;
   target: any;
-  phase: "idle" | "walking_to_board" | "at_board" | "walking_to_desk" | "working";
+  phase: "idle" | "walking_to_board" | "at_board" | "walking_to_desk" | "working" | "walking_from_desk";
   phaseTimer: number;
 }>();
 
@@ -468,27 +571,31 @@ function updateAgents3D() {
     }
   });
 
+  // Reset glows
+  screenGlows.forEach(s => {
+    if ((s.material as any).opacity) (s.material as any).opacity = 0.05;
+  });
+
   let workstationIndex = 0;
   agents.forEach((agent, idx) => {
     const item = agentMeshes.get(agent.id);
     if (!item) return;
 
-    // Determine desk position (simple round robin based on current working agents count)
-    // Note: In a real app, we'd assign a specific desk to a specific task/agent to avoid swapping.
-    const deskPos = computers[workstationIndex % computers.length].clone();
+    const spawnPos = new THREE.Vector3(-5 + idx * 2, 0, -0.5);
+    // Determine desk position. We need a stable mapping if possible, but strictly round-robin by list index works for visual chaos
+    // A better way is to hash the agent ID to a desk, but let's keep it simple.
+    const deskIdx = (idx) % computers.length;
+    const deskPos = computers[deskIdx].clone();
     deskPos.y = 0.5;
 
     if (agent.status === "working") {
-       workstationIndex++;
-
-       if (item.phase === "idle") {
-          // Start sequence: Go to board
+       if (item.phase === "idle" || item.phase === "walking_from_desk") {
           item.phase = "walking_to_board";
-          item.target.set(0, 0.5, -3); // Near board
+          item.target.set(0, 0.5, -3); // Board position
        } else if (item.phase === "walking_to_board") {
-          if (item.group.position.distanceTo(item.target) < 0.5) {
+          if (item.group.position.distanceTo(item.target) < 0.8) {
              item.phase = "at_board";
-             item.phaseTimer = 60; // Wait 60 frames (~1 sec)
+             item.phaseTimer = 60;
           }
        } else if (item.phase === "at_board") {
           item.phaseTimer--;
@@ -503,11 +610,36 @@ function updateAgents3D() {
           }
        } else if (item.phase === "working") {
           item.target.copy(deskPos);
+          // Highlight screen
+          if (screenGlows[deskIdx]) (screenGlows[deskIdx].material as any).opacity = 0.5 + Math.random() * 0.2;
+
+          // Typing animation (arms)
+          const leftArm = item.group.children[3];
+          const rightArm = item.group.children[4];
+          if(leftArm && rightArm) {
+             leftArm.rotation.x = Math.sin(Date.now() * 0.01) * 0.2;
+             rightArm.rotation.x = Math.cos(Date.now() * 0.01) * 0.2;
+          }
        }
     } else {
-      // Return to spawn
-      item.phase = "idle";
-      item.target.set(-5 + idx * 2, 0, -0.5);
+      // If was working, walk back. If already idle, stay idle.
+      if (item.phase === "working" || item.phase === "walking_to_desk") {
+          item.phase = "walking_from_desk";
+          item.target.copy(spawnPos);
+      } else if (item.phase === "walking_from_desk") {
+          item.target.copy(spawnPos);
+          if (item.group.position.distanceTo(item.target) < 0.5) {
+             item.phase = "idle";
+             // Reset arms
+             const leftArm = item.group.children[3];
+             const rightArm = item.group.children[4];
+             if(leftArm) leftArm.rotation.x = 0;
+             if(rightArm) rightArm.rotation.x = 0;
+          }
+      } else {
+          item.phase = "idle";
+          item.target.copy(spawnPos);
+      }
     }
   });
 }
