@@ -22,7 +22,7 @@ Depois acesse `http://localhost:4173`.
 
 - `index.html`: layout principal (painel lateral, visão 3D e kanban 2D).
 - `styles.css`: estilo visual da sala, cards e avatars.
-- `app.js`: estado dos agentes/tarefas e renderização da UI/3D.
+- `src/app.ts`: estado dos agentes/tarefas e renderização da UI/3D (compilado para `dist/app.js`).
 
 ## Próximos passos sugeridos
 

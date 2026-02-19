@@ -5,7 +5,8 @@
   "scripts": {
     "build": "tsc",
     "watch": "tsc -w",
-    "start": "node dist/server.js"
+    "start": "node dist/server.js",
+    "test": "node --test test/api.test.js"
   },
   "devDependencies": {
     "@types/node": "^25.2.3",
