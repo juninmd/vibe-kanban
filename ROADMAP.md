@@ -7,7 +7,7 @@ This roadmap outlines the evolution of Vibe Kanban from a static prototype to a 
 
 - [x] **Auto-Pilot Mode:** The "Product Manager" agent autonomously assigns tasks from the backlog to idle agents based on their specialization.
 - [x] **Visual Celebration:** When a task is completed, the 3D environment reacts (Confetti/Particles).
-- [ ] **Real-time Updates:** Switch from polling to Server-Sent Events (SSE) for instant feedback.
+- [x] **Real-time Updates:** Switch from polling to Server-Sent Events (SSE) for instant feedback.
 
 ## Phase 2: Visual Fidelity & "Juice"
 **Goal:** Enhance the aesthetic to be worthy of a sci-fi operations room.

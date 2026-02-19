@@ -1,4 +1,3 @@
-// @ts-nocheck
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
@@ -303,7 +302,7 @@ function spawnConfetti() {
   const count = 150;
   const positions = new Float32Array(count * 3);
   const colors = new Float32Array(count * 3);
-  const velocities = [];
+  const velocities: {x: number, y: number, z: number}[] = [];
 
   for(let i=0; i<count; i++) {
     positions[i*3] = 0; // x (center)
@@ -446,7 +445,7 @@ function createAgentMesh(agent: Agent, index: number) {
 
   const labelCanvas = makeLabelCanvas(`${agent.model}`);
   const labelTex = new THREE.CanvasTexture(labelCanvas);
-  labelTex.encoding = THREE.sRGBEncoding;
+  labelTex.colorSpace = THREE.SRGBColorSpace;
   const labelMat = new THREE.SpriteMaterial({ map: labelTex, transparent: true });
   const label = new THREE.Sprite(labelMat);
   label.scale.set(2.6, 0.66, 1);

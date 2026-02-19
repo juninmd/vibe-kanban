@@ -1,4 +1,3 @@
-// @ts-nocheck
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 const API_URL = "http://localhost:5174";
@@ -353,7 +352,7 @@ function createAgentMesh(agent, index) {
     }
     const labelCanvas = makeLabelCanvas(`${agent.model}`);
     const labelTex = new THREE.CanvasTexture(labelCanvas);
-    labelTex.encoding = THREE.sRGBEncoding;
+    labelTex.colorSpace = THREE.SRGBColorSpace;
     const labelMat = new THREE.SpriteMaterial({ map: labelTex, transparent: true });
     const label = new THREE.Sprite(labelMat);
     label.scale.set(2.6, 0.66, 1);
