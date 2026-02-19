@@ -412,7 +412,7 @@ function createTaskTexture(task: Task) {
   ctx.fillText(`${task.priority.toUpperCase()} • ${task.category}`, 32, 110);
 
   const tex = new THREE.CanvasTexture(canvas);
-  tex.encoding = THREE.sRGBEncoding;
+  tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
 }
 
@@ -487,6 +487,31 @@ const agentMeshes = new Map<string, {
   phaseTimer: number;
 }>();
 
+function createSkinTexture(color: string, text: string) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 512;
+  canvas.height = 256;
+  const ctx = canvas.getContext("2d")!;
+
+  // Background
+  ctx.fillStyle = color;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Text on "chest" area
+  ctx.font = "bold 60px Inter, sans-serif";
+  ctx.fillStyle = "rgba(255,255,255,0.9)";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+
+  // Draw text in the middle (should map to front/back of capsule)
+  // We might need to adjust based on UVs, but center is a safe bet for visibility
+  ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
 function createAgentMesh(agent: Agent, index: number) {
   const group = new THREE.Group();
 
@@ -501,7 +526,20 @@ function createAgentMesh(agent: Agent, index: number) {
 
   const colorHex = roleColors[agent.role] || "#888888";
   const color = new THREE.Color(colorHex);
-  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.35, 0.9, 4, 8), new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.25 }));
+
+  // Create Skin Texture with Name
+  const skinTex = createSkinTexture(colorHex, agent.model);
+
+  const body = new THREE.Mesh(
+    new THREE.CapsuleGeometry(0.35, 0.9, 4, 16),
+    new THREE.MeshStandardMaterial({
+      map: skinTex,
+      color: 0xffffff, // Tint with white to show texture color
+      emissive: color,
+      emissiveIntensity: 0.15
+    })
+  );
+  body.rotation.y = -Math.PI / 2; // Rotate body to face forward with texture if needed
   body.position.y = 1;
   group.add(body);
 
@@ -513,6 +551,20 @@ function createAgentMesh(agent: Agent, index: number) {
   const visor = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.1, 0.15), new THREE.MeshStandardMaterial({ color: "#111111", roughness: 0.2 }));
   visor.position.set(0, 1.92, 0.22);
   group.add(visor);
+
+  // Chest Badge (Skin/Role Indicator)
+  const badgeColor = new THREE.Color(colorHex);
+  const badge = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.1, 0.1, 0.05, 16),
+    new THREE.MeshStandardMaterial({
+      color: badgeColor,
+      emissive: badgeColor,
+      emissiveIntensity: 0.8
+    })
+  );
+  badge.rotation.x = Math.PI / 2;
+  badge.position.set(0, 1.45, 0.32); // On chest
+  group.add(badge);
 
   // Arms
   const armGeo = new THREE.CapsuleGeometry(0.1, 0.6, 4, 8);
