@@ -228,6 +228,7 @@ function render() {
   renderKanban();
   renderAgents();
   renderEvents();
+  updateKanban3D();
   updateAgents3D();
 }
 
@@ -326,8 +327,9 @@ loader.load("/models/RobotExpressive.glb", (gltf) => {
 loader.load("/models/old_computer.glb", (gltf) => {
   computerModel = gltf.scene;
   // Scale and adjust the computer model
-  computerModel.scale.set(0.6, 0.6, 0.6);
-  computerModel.rotation.y = Math.PI; // Face the agent
+  computerModel.scale.set(0.12, 0.12, 0.12); // smaller for the desk
+  computerModel.rotation.y = -Math.PI / 2; // Rotate 90 degrees to face the agent (assuming the model points on X axis)
+
 
   // Clone it to all desk anchors
   screenGlows.forEach(anchorGroup => {
@@ -553,7 +555,7 @@ function createAgentMesh(agent: Agent, index: number) {
 
   if (robotModel) {
     const clonedRobot = SkeletonUtils.clone(robotModel) as THREE.Group;
-    clonedRobot.scale.set(0.35, 0.35, 0.35);
+    clonedRobot.scale.set(0.45, 0.45, 0.45); // increased height
     clonedRobot.position.y = 0;
     group.add(clonedRobot);
 
@@ -622,7 +624,9 @@ function updateAgents3D() {
 
   // Reset glows
   screenGlows.forEach(s => {
-    if ((s.material as any).opacity) (s.material as any).opacity = 0.05;
+    if (s.material && (s.material as any).opacity !== undefined) {
+      (s.material as any).opacity = 0.05;
+    }
   });
 
   agents.forEach((agent, idx) => {
@@ -642,22 +646,8 @@ function updateAgents3D() {
 
     if (agent.status === "working") {
       if (item.phase === "idle" || item.phase === "walking_from_desk") {
-        item.phase = "walking_to_board";
-        item.target.set(0, 0.5, -3); // Board position
-      } else if (item.phase === "walking_to_board") {
-        if (item.group.position.distanceTo(item.target) < 0.8) {
-          item.phase = "at_board";
-          item.phaseTimer = 60;
-          playAction(item, "Dance");
-        } else {
-          playAction(item, "Walking");
-        }
-      } else if (item.phase === "at_board") {
-        item.phaseTimer--;
-        if (item.phaseTimer <= 0) {
-          item.phase = "walking_to_desk";
-          item.target.copy(deskPos);
-        }
+        item.phase = "walking_to_desk";
+        item.target.copy(deskPos);
       } else if (item.phase === "walking_to_desk") {
         item.target.copy(deskPos);
         if (item.group.position.distanceTo(item.target) < 0.5) {
@@ -669,17 +659,21 @@ function updateAgents3D() {
         }
       } else if (item.phase === "working") {
         item.target.copy(deskPos);
-        // Highlight screen
-        if (screenGlows[deskIdx]) (screenGlows[deskIdx].material as any).opacity = 0.5 + Math.random() * 0.2;
+        // Highlight screen safely
+        if (screenGlows[deskIdx] && screenGlows[deskIdx].material && (screenGlows[deskIdx].material as any).opacity !== undefined) {
+          (screenGlows[deskIdx].material as any).opacity = 0.5 + Math.random() * 0.2;
+        }
         playAction(item, sitAnim, 1.0);
       }
     } else {
-      // If was working, walk back. If already idle, stay idle.
+      // If was working, walk back to kanban. Spread them evenly to prevent stacking.
+      const kanbanPos = new THREE.Vector3(-6 + idx * 2.5, 0, -2.5);
+
       if (item.phase === "working" || item.phase === "walking_to_desk") {
         item.phase = "walking_from_desk";
-        item.target.copy(spawnPos);
+        item.target.copy(kanbanPos);
       } else if (item.phase === "walking_from_desk") {
-        item.target.copy(spawnPos);
+        item.target.copy(kanbanPos);
         if (item.group.position.distanceTo(item.target) < 0.5) {
           item.phase = "idle";
           item.group.position.copy(item.target);
@@ -689,7 +683,7 @@ function updateAgents3D() {
         }
       } else {
         item.phase = "idle";
-        item.target.copy(spawnPos);
+        item.target.copy(kanbanPos);
         playAction(item, "Idle");
       }
     }
@@ -700,9 +694,9 @@ function updateAgents3D() {
     } else if (item.phase === "working") {
       item.group.lookAt(item.group.position.x, item.group.position.y, item.group.position.z - 100);
     } else if (item.phase === "idle") {
-      item.group.rotation.set(0, 0, 0); // Face forward towards camera
+      item.group.rotation.set(0, Math.PI, 0); // Face forward towards camera (Kanban board is at z=-4.2, camera is at z=12, so Math.PI faces the camera)
     } else {
-      item.group.rotation.set(0, 0, 0);
+      item.group.rotation.set(0, Math.PI, 0);
     }
   });
 }
@@ -789,6 +783,8 @@ evtSource.onmessage = (event) => {
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
 
+const tooltip = document.getElementById("agentTooltip") as HTMLElement;
+
 function onPointerDown(event: PointerEvent) {
   const rect = canvas.getBoundingClientRect();
   mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
@@ -796,19 +792,67 @@ function onPointerDown(event: PointerEvent) {
 
   raycaster.setFromCamera(mouse, camera);
 
-  const intersects = raycaster.intersectObjects(kanbanGroup.children);
+  // Check clicks on Kanban tasks
+  const intersectsTasks = raycaster.intersectObjects(kanbanGroup.children);
 
-  if (intersects.length > 0) {
-    const object = intersects[0].object;
+  // Create an array of all agent groups for hit testing
+  const agentGroupsObjects: THREE.Object3D[] = [];
+  agentMeshes.forEach((val) => agentGroupsObjects.push(val.group));
+  const intersectsAgents = raycaster.intersectObjects(agentGroupsObjects, true);
+
+  // Hide tooltip by default
+  tooltip.style.display = "none";
+
+  if (intersectsTasks.length > 0) {
+    const object = intersectsTasks[0].object;
     const taskId = object.userData.taskId;
     const task = tasks.find(t => t.id === taskId);
 
     if (task) {
       alert(`Task #${task.id}\nTitle: ${task.title}\nCategory: ${task.category}\nAssigned: ${task.assignedTo || "None"}`);
     }
+  } else if (intersectsAgents.length > 0) {
+    // Determine which agent was clicked
+    const clickedObj = intersectsAgents[0].object;
+    // Find the nearest parent group that is in our agent array
+    let current: THREE.Object3D | null = clickedObj;
+    let foundGroupId: string | null = null;
+
+    while (current && !foundGroupId && current !== scene) {
+      agentMeshes.forEach((meshData, agentId) => {
+        if (meshData.group === current) {
+          foundGroupId = agentId;
+        }
+      });
+      current = current.parent;
+    }
+
+    if (foundGroupId) {
+      const agent = agents.find(a => a.id === foundGroupId);
+      if (agent) {
+        let text = `Agente: ${agent.role}\nModelo: ${agent.model}\nStatus: ${agent.status}`;
+        if (agent.assignedTask) {
+          const task = tasks.find(t => t.id === agent.assignedTask);
+          if (task) {
+            text += `\nTrabalhando na Task #${task.id}: ${task.title}`;
+          } else {
+            text += `\nTrabalhando na Task #${agent.assignedTask}`;
+          }
+        }
+        tooltip.textContent = text;
+        tooltip.style.left = `${event.clientX}px`;
+        tooltip.style.top = `${event.clientY}px`;
+        tooltip.style.display = "block";
+      }
+    }
   }
 }
 
 window.addEventListener('pointerdown', onPointerDown);
+
+// Hide tooltip if clicked elsewhere or moving camera
+controls.addEventListener('start', () => {
+  tooltip.style.display = "none";
+});
 
 tick();

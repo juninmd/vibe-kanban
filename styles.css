@@ -269,3 +269,20 @@ label { display: grid; gap: 0.25rem; font-size: 0.8rem; color: var(--muted); tex
 .priority-alta { border-left: 3px solid #f87171; }
 .priority-media { border-left: 3px solid #fbbf24; }
 .priority-baixa { border-left: 3px solid #34d399; }
+
+.agent-tooltip {
+  position: absolute;
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid #3b82f6;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  color: white;
+  font-size: 0.85rem;
+  pointer-events: none;
+  backdrop-filter: blur(4px);
+  z-index: 100;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
+  transform: translate(-50%, -100%);
+  margin-top: -15px;
+  white-space: pre-wrap;
+}
