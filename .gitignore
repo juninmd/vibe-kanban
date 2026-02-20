@@ -2,6 +2,5 @@ node_modules/
 dist/
 server.log
 frontend.log
-models/
 .env
 .gemini/
