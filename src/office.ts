@@ -9,8 +9,8 @@ export function createOffice(scene: THREE.Scene): OfficeData {
     const deskPositions: THREE.Vector3[] = [];
     const screenGlows: THREE.Mesh[] = [];
 
-    // 1. Floor
-    const floorGeo = new THREE.PlaneGeometry(24, 24);
+    // 1. Floor (Widened to 32)
+    const floorGeo = new THREE.PlaneGeometry(32, 24);
     // Procedural carpet texture
     const canvas = document.createElement('canvas');
     canvas.width = 512;
@@ -26,7 +26,7 @@ export function createOffice(scene: THREE.Scene): OfficeData {
     const floorTex = new THREE.CanvasTexture(canvas);
     floorTex.wrapS = THREE.RepeatWrapping;
     floorTex.wrapT = THREE.RepeatWrapping;
-    floorTex.repeat.set(4, 4);
+    floorTex.repeat.set(5.3, 4); // Adjusted repeat for wider floor
 
     const floorMat = new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.8 });
     const floor = new THREE.Mesh(floorGeo, floorMat);
@@ -37,37 +37,41 @@ export function createOffice(scene: THREE.Scene): OfficeData {
     // 2. Walls
     const wallMat = new THREE.MeshStandardMaterial({ color: '#f1f5f9', roughness: 0.5 });
 
-    // Back Wall
-    const backWall = new THREE.Mesh(new THREE.BoxGeometry(24, 8, 0.5), wallMat);
+    // Back Wall (Widened to 32)
+    const backWall = new THREE.Mesh(new THREE.BoxGeometry(32, 8, 0.5), wallMat);
     backWall.position.set(0, 4, -6);
     scene.add(backWall);
 
-    // Side Walls
+    // Side Walls (Moved to -16 and 16)
     const leftWall = new THREE.Mesh(new THREE.BoxGeometry(0.5, 8, 12), wallMat);
-    leftWall.position.set(-12, 4, 0);
+    leftWall.position.set(-16, 4, 0);
     scene.add(leftWall);
 
     const rightWall = new THREE.Mesh(new THREE.BoxGeometry(0.5, 8, 12), wallMat);
-    rightWall.position.set(12, 4, 0);
+    rightWall.position.set(16, 4, 0);
     scene.add(rightWall);
 
-    // 3. Windows
+    // 3. Windows (4 windows spread out)
     const windowGeo = new THREE.PlaneGeometry(4, 3);
     const windowMat = new THREE.MeshBasicMaterial({ color: '#88ccff' });
-    for (let i = -1; i <= 1; i += 2) {
+    // Positions: -12, -4, 4, 12
+    const windowPositions = [-12, -4, 4, 12];
+    windowPositions.forEach(x => {
         const win = new THREE.Mesh(windowGeo, windowMat);
-        win.position.set(i * 6, 5, -5.7);
-        scene.add(win); // Back windows
-    }
+        win.position.set(x, 5, -5.7);
+        scene.add(win);
+    });
 
-    // 4. Plants
-    addPlant(scene, -10, -4);
-    addPlant(scene, 10, -4);
-    addPlant(scene, -10, 4);
+    // 4. Plants (Adding more for wider room)
+    addPlant(scene, -14, -4);
+    addPlant(scene, 14, -4);
+    addPlant(scene, -6, 4); // Extra plant near back
+    addPlant(scene, 6, 4);  // Extra plant near back
 
-    // 5. Desks & Chairs
-    for (let i = 0; i < 4; i++) {
-        const x = -6 + i * 4;
+    // 5. Desks & Chairs (Increased to 6)
+    for (let i = 0; i < 6; i++) {
+        // Start at -10, spacing 4 (-10, -6, -2, 2, 6, 10)
+        const x = -10 + i * 4;
         const z = 2.8;
 
         // Desk
