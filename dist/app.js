@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-const API_URL = "http://localhost:5174";
+const API_URL = "";
 const lanes = ["backlog", "in_progress", "review", "done"];
 const laneLabels = {
     backlog: "Backlog",
