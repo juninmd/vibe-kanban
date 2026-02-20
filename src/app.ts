@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
-const API_URL = "http://localhost:5174";
+const API_URL = "";
 
 type Agent = {
   id: string;
