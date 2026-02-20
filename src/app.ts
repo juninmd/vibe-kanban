@@ -629,11 +629,16 @@ function updateAgents3D() {
     const item = agentMeshes.get(agent.id);
     if (!item) return;
 
-    const spawnPos = new THREE.Vector3(-5 + idx * 2, 0, -1.0); // agents start slightly further from board
-    const deskIdx = (idx) % computers.length;
+    // Spread agents out more: -8 to +8 roughly
+    const spawnPos = new THREE.Vector3(-8 + idx * 3, 0, -1.0);
+    const deskIdx = idx % (computers.length || 1);
+
     // Safe check for computers array
     const deskPos = computers[deskIdx] ? computers[deskIdx].clone() : spawnPos.clone();
     deskPos.y = 0.5;
+
+    // Animation fallback
+    const sitAnim = (item.anims && item.anims["Sitting"]) ? "Sitting" : "Idle";
 
     if (agent.status === "working") {
       if (item.phase === "idle" || item.phase === "walking_from_desk") {
@@ -658,7 +663,7 @@ function updateAgents3D() {
         if (item.group.position.distanceTo(item.target) < 0.5) {
           item.phase = "working";
           item.group.position.copy(item.target);
-          playAction(item, "Sitting");
+          playAction(item, sitAnim);
         } else {
           playAction(item, "Walking");
         }
@@ -666,7 +671,7 @@ function updateAgents3D() {
         item.target.copy(deskPos);
         // Highlight screen
         if (screenGlows[deskIdx]) (screenGlows[deskIdx].material as any).opacity = 0.5 + Math.random() * 0.2;
-        playAction(item, "Sitting", 1.0);
+        playAction(item, sitAnim, 1.0);
       }
     } else {
       // If was working, walk back. If already idle, stay idle.
