@@ -1,13 +1,13 @@
 import { Task, Agent, LLMDriver, DriverContext } from "../types.js";
 import { spawn } from "child_process";
 
-export class OpenCodeDriver implements LLMDriver {
-  name: string = "OpenCode AI";
+export class ClaudeDriver implements LLMDriver {
+  name: string = "Claude Code";
   private runningTasks = new Map<number, any>();
 
   async executeTask(task: Task, agent: Agent, ctx: DriverContext): Promise<void> {
-    const cmd = "opencode";
-    const args = ["run", task.title, "--agent", agent.role];
+    const cmd = "claude";
+    const args = ["prompt", task.title, "--model", agent.model];
     ctx.onLog(task.id, `Running: ${cmd} ${args.join(" ")}`);
 
     const child = spawn(cmd, args);
@@ -19,14 +19,14 @@ export class OpenCodeDriver implements LLMDriver {
     child.stderr.on("data", (data) => {
        const msg = data.toString();
        if (msg.includes("not found") || msg.includes("ENOENT")) {
-          // This might not be enough
+          // This might not be enough as spawn error event is separate
        }
        ctx.onBugFound(task.id, msg);
     });
 
     child.on("error", (error: any) => {
         if (error.code === "ENOENT") {
-            ctx.onLog(task.id, "OpenCode CLI not installed. Falling back to simulation.");
+            ctx.onLog(task.id, "Claude CLI not installed. Falling back to simulation.");
             this.simulateDevelopment(task, ctx);
             return;
         }
@@ -37,7 +37,10 @@ export class OpenCodeDriver implements LLMDriver {
         if (code === 0) {
             ctx.onComplete(task.id);
         } else {
-             // Handle error
+             // If exit code is non-zero, it might have failed.
+             // But if we already handled error/simulation, we might duplicate logic.
+             // For now, assume stderr handled it or simulation took over.
+             // If simulation took over, we don't need to do anything here.
         }
     });
 
@@ -47,11 +50,11 @@ export class OpenCodeDriver implements LLMDriver {
 
   private simulateDevelopment(task: Task, ctx: DriverContext) {
      const steps = [
-        "Analyzing codebase structure...",
-        `Generating implementation plan for "${task.title}"...`,
-        "Applying changes via AST transformation...",
-        "Writing unit tests...",
-        "Running verification suite..."
+        "Thinking deeply about the request...",
+        `Generating artifacts for "${task.title}"...`,
+        "Executing tool use via computer use API...",
+        "Refining implementation details...",
+        "Verifying constraints and safety guidelines..."
      ];
 
      let stepIndex = 0;
@@ -60,20 +63,20 @@ export class OpenCodeDriver implements LLMDriver {
            clearInterval(interval);
            this.runningTasks.delete(task.id);
 
-           // 20% chance of finding a bug
-           if (Math.random() < 0.2) {
-              const bugMsg = "Test failed: Edge case not handled in OpenCode generation.";
+           // 10% chance of finding a bug
+           if (Math.random() < 0.1) {
+              const bugMsg = "Claude: Safety check failed during artifact generation.";
               ctx.onLog(task.id, bugMsg);
               ctx.onBugFound(task.id, bugMsg);
            } else {
-              ctx.onLog(task.id, "OpenCode: Changes verified and committed.");
+              ctx.onLog(task.id, "Claude: Task completed with high confidence.");
               ctx.onComplete(task.id);
            }
            return;
         }
 
-        ctx.onLog(task.id, `OpenCode: ${steps[stepIndex++]}`);
-     }, 1500); // 1.5s per step
+        ctx.onLog(task.id, `Claude: ${steps[stepIndex++]}`);
+     }, 1500);
 
      this.runningTasks.set(task.id, interval);
   }

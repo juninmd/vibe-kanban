@@ -1,37 +1,49 @@
-import { exec } from "child_process";
+import { spawn } from "child_process";
 export class GeminiDriver {
     name = "Gemini CLI";
     runningTasks = new Map();
     async executeTask(task, agent, ctx) {
-        const cmd = `gemini prompt "${task.title}" --model ${agent.model}`;
-        ctx.onLog(task.id, `Running: ${cmd}`);
-        // Simulate async execution via CLI
-        const child = exec(cmd, (error, stdout, stderr) => {
-            if (error) {
-                // If command fails (likely because tool missing), fallback to mock behavior or just fail
-                // For this demo, we'll pretend it worked if command not found
-                if (error.message.includes("not found") || (stderr && stderr.includes("not found"))) {
-                    ctx.onLog(task.id, "Gemini CLI not installed. Falling back to simulation.");
-                    this.simulateDevelopment(task, ctx);
-                    return;
-                }
-                ctx.onLog(task.id, `Error: ${error.message}`);
-                ctx.onBugFound(task.id, stderr || error.message);
+        const cmd = "gemini";
+        const args = ["prompt", task.title, "--model", agent.model];
+        ctx.onLog(task.id, `Running: ${cmd} ${args.join(" ")}`);
+        const child = spawn(cmd, args);
+        child.stdout.on("data", (data) => {
+            ctx.onLog(task.id, data.toString());
+        });
+        child.stderr.on("data", (data) => {
+            const msg = data.toString();
+            if (msg.includes("not found") || msg.includes("ENOENT")) {
+                // This might not catch everything
+            }
+            ctx.onBugFound(task.id, msg);
+        });
+        child.on("error", (error) => {
+            if (error.code === "ENOENT") {
+                ctx.onLog(task.id, "Gemini CLI not installed. Falling back to simulation.");
+                this.simulateDevelopment(task, ctx);
                 return;
             }
-            ctx.onLog(task.id, stdout);
-            ctx.onComplete(task.id);
+            ctx.onLog(task.id, `Error: ${error.message}`);
+            ctx.onBugFound(task.id, error.message);
+        });
+        child.on("close", (code) => {
+            if (code === 0) {
+                ctx.onComplete(task.id);
+            }
+            else {
+                // Handle error if needed
+            }
         });
         this.runningTasks.set(task.id, child);
         return Promise.resolve();
     }
     simulateDevelopment(task, ctx) {
         const steps = [
-            "Analyzing request context...",
-            `Prompting Gemini with "${task.title}"...`,
-            "Receiving generated code...",
-            "Validating syntax...",
-            "Running internal tests..."
+            "Analyzing request context with multimodal reasoning...",
+            `Prompting Gemini Advanced with "${task.title}"...`,
+            "Processing response stream...",
+            "Validating syntax and logic...",
+            "Running internal verification tests..."
         ];
         let stepIndex = 0;
         const interval = setInterval(() => {

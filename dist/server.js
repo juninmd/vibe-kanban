@@ -5,6 +5,7 @@ import { MockDriver } from "./drivers/MockDriver.js";
 import { GeminiDriver } from "./drivers/GeminiDriver.js";
 import { CopilotDriver } from "./drivers/CopilotDriver.js";
 import { OpenCodeDriver } from "./drivers/OpenCodeDriver.js";
+import { ClaudeDriver } from "./drivers/ClaudeDriver.js";
 const PORT = process.env.PORT ? Number(process.env.PORT) : 5174;
 // --- State ---
 let taskIdCounter = 1;
@@ -39,6 +40,7 @@ const drivers = {
     gemini: new GeminiDriver(),
     copilot: new CopilotDriver(),
     opencode: new OpenCodeDriver(),
+    claude: new ClaudeDriver(),
 };
 // Default to OpenCodeDriver as requested, falling back to mock behavior internally if CLI missing
 let currentDriver = drivers.opencode;
