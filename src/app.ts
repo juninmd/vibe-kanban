@@ -1,5 +1,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { createOffice } from "./office.js";
+import { getHeadMaterials, getBodyMaterials, getLimbMaterial } from "./skins.js";
 
 const API_URL = "";
 
@@ -290,13 +292,7 @@ function updateLighting() {
   ambientLight.intensity += (targetAmb - ambientLight.intensity) * 0.05;
 }
 
-const floor = new THREE.Mesh(new THREE.PlaneGeometry(24, 14), new THREE.MeshStandardMaterial({ color: "#141c3f" }));
-floor.rotation.x = -Math.PI / 2;
-scene.add(floor);
-
-const grid = new THREE.GridHelper(24, 24, 0x30385f, 0x1b2241);
-grid.position.y = 0.01;
-scene.add(grid);
+const officeData = createOffice(scene);
 
 // Ambient Particles
 const pGeo = new THREE.BufferGeometry();
@@ -475,21 +471,8 @@ function updateKanban3D() {
   });
 }
 
-const computers: THREE.Vector3[] = [];
-const screenGlows: THREE.Mesh[] = [];
-
-for (let i = 0; i < 4; i++) {
-  const desk = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.6, 1.2), new THREE.MeshStandardMaterial({ color: "#202b56" }));
-  desk.position.set(-6 + i * 4, 0.3, 2.8);
-  scene.add(desk);
-  computers.push(desk.position.clone());
-
-  const screen = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.7), new THREE.MeshBasicMaterial({ color: 0x66aaff, transparent: true, opacity: 0.1, side: THREE.DoubleSide }));
-  screen.position.set(-6 + i * 4, 0.9, 2.8);
-  screen.rotation.x = -0.2;
-  scene.add(screen);
-  screenGlows.push(screen);
-}
+const computers = officeData.deskPositions;
+const screenGlows = officeData.screenGlows;
 
 const agentMeshes = new Map<string, {
   group: any;
@@ -500,34 +483,21 @@ const agentMeshes = new Map<string, {
   color: THREE.Color;
 }>();
 
-function createSkinTexture(color: string, text: string) {
-  const canvas = document.createElement("canvas");
-  canvas.width = 512;
-  canvas.height = 256;
-  const ctx = canvas.getContext("2d")!;
-
-  // Background
-  ctx.fillStyle = color;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  // Text on "chest" area
-  ctx.font = "bold 60px Inter, sans-serif";
-  ctx.fillStyle = "rgba(255,255,255,0.9)";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-
-  // Draw text in the middle (should map to front/back of capsule)
-  // We might need to adjust based on UVs, but center is a safe bet for visibility
-  ctx.fillText(text, canvas.width / 2, canvas.height / 2);
-
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  return tex;
-}
-
 function createAgentMesh(agent: Agent, index: number) {
   const group = new THREE.Group();
 
+  const roleKeyMap: Record<string, string> = {
+    "Product Manager": "product_manager",
+    "Segurança": "seguranca",
+    "Performance": "performance",
+    "Novas Funcionalidades": "funcionalidades",
+    "Testes": "testes",
+    "Novas Features": "features"
+  };
+
+  const roleKey = roleKeyMap[agent.role] || "features";
+
+  // Use existing color map for trails/lights
   const roleColors: Record<string, string> = {
     "Product Manager": "#a855f7",
     "Segurança": "#ef4444",
@@ -536,62 +506,47 @@ function createAgentMesh(agent: Agent, index: number) {
     "Testes": "#22c55e",
     "Novas Features": "#06b6d4"
   };
+  const color = new THREE.Color(roleColors[agent.role] || "#888888");
 
-  const colorHex = roleColors[agent.role] || "#888888";
-  const color = new THREE.Color(colorHex);
-
-  // Create Skin Texture with Name
-  const skinTex = createSkinTexture(colorHex, agent.model);
-
-  const body = new THREE.Mesh(
-    new THREE.CapsuleGeometry(0.35, 0.9, 4, 16),
-    new THREE.MeshStandardMaterial({
-      map: skinTex,
-      color: 0xffffff, // Tint with white to show texture color
-      emissive: color,
-      emissiveIntensity: 0.15
-    })
-  );
-  body.rotation.y = -Math.PI / 2; // Rotate body to face forward with texture if needed
-  body.position.y = 1;
-  group.add(body);
-
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.28, 16, 16), new THREE.MeshStandardMaterial({ color: "#dce6ff" }));
-  head.position.y = 1.9;
+  // Voxel Construction
+  const headMat = getHeadMaterials(roleKey);
+  const head = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), headMat);
+  head.position.y = 1.75;
+  head.castShadow = true;
   group.add(head);
 
-  // Visor
-  const visor = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.1, 0.15), new THREE.MeshStandardMaterial({ color: "#111111", roughness: 0.2 }));
-  visor.position.set(0, 1.92, 0.22);
-  group.add(visor);
+  const bodyMat = getBodyMaterials(roleKey);
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.7, 0.3), bodyMat);
+  body.position.y = 1.15;
+  body.castShadow = true;
+  group.add(body);
 
-  // Chest Badge (Skin/Role Indicator)
-  const badgeColor = new THREE.Color(colorHex);
-  const badge = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.1, 0.1, 0.05, 16),
-    new THREE.MeshStandardMaterial({
-      color: badgeColor,
-      emissive: badgeColor,
-      emissiveIntensity: 0.8
-    })
-  );
-  badge.rotation.x = Math.PI / 2;
-  badge.position.set(0, 1.45, 0.32); // On chest
-  group.add(badge);
+  const limbMat = getLimbMaterial(roleKey);
+  const armGeo = new THREE.BoxGeometry(0.15, 0.7, 0.15);
+  armGeo.translate(0, -0.25, 0); // Pivot at shoulder
 
-  // Arms
-  const armGeo = new THREE.CapsuleGeometry(0.1, 0.6, 4, 8);
-  const armMat = new THREE.MeshStandardMaterial({ color: color, emissive: color, emissiveIntensity: 0.1 });
-
-  const leftArm = new THREE.Mesh(armGeo, armMat);
-  leftArm.position.set(-0.5, 1.2, 0);
-  leftArm.rotation.z = -0.2;
+  const leftArm = new THREE.Mesh(armGeo, limbMat);
+  leftArm.position.set(-0.35, 1.4, 0);
+  leftArm.castShadow = true;
   group.add(leftArm);
 
-  const rightArm = new THREE.Mesh(armGeo, armMat);
-  rightArm.position.set(0.5, 1.2, 0);
-  rightArm.rotation.z = 0.2;
+  const rightArm = new THREE.Mesh(armGeo, limbMat);
+  rightArm.position.set(0.35, 1.4, 0);
+  rightArm.castShadow = true;
   group.add(rightArm);
+
+  const legGeo = new THREE.BoxGeometry(0.2, 0.7, 0.2);
+  legGeo.translate(0, -0.35, 0); // Pivot at hip
+
+  const leftLeg = new THREE.Mesh(legGeo, limbMat);
+  leftLeg.position.set(-0.15, 0.7, 0);
+  leftLeg.castShadow = true;
+  group.add(leftLeg);
+
+  const rightLeg = new THREE.Mesh(legGeo, limbMat);
+  rightLeg.position.set(0.15, 0.7, 0);
+  rightLeg.castShadow = true;
+  group.add(rightLeg);
 
   group.position.set(-5 + index * 2, 0, -0.5);
   scene.add(group);
@@ -616,11 +571,11 @@ function createAgentMesh(agent: Agent, index: number) {
   labelTex.colorSpace = THREE.SRGBColorSpace;
   const labelMat = new THREE.SpriteMaterial({ map: labelTex, transparent: true });
   const label = new THREE.Sprite(labelMat);
-  label.scale.set(2.6, 0.66, 1);
-  label.position.set(0, 2.7, 0);
+  label.scale.set(1.5, 0.4, 1);
+  label.position.set(0, 2.3, 0);
   group.add(label);
 
-  return { group, label, target: group.position.clone(), color: new THREE.Color(roleColors[agent.role] || "#888888") };
+  return { group, label, target: group.position.clone(), color };
 }
 
 function updateAgents3D() {
@@ -641,16 +596,14 @@ function updateAgents3D() {
     if ((s.material as any).opacity) (s.material as any).opacity = 0.05;
   });
 
-  let workstationIndex = 0;
   agents.forEach((agent, idx) => {
     const item = agentMeshes.get(agent.id);
     if (!item) return;
 
     const spawnPos = new THREE.Vector3(-5 + idx * 2, 0, -0.5);
-    // Determine desk position. We need a stable mapping if possible, but strictly round-robin by list index works for visual chaos
-    // A better way is to hash the agent ID to a desk, but let's keep it simple.
     const deskIdx = (idx) % computers.length;
-    const deskPos = computers[deskIdx].clone();
+    // Safe check for computers array
+    const deskPos = computers[deskIdx] ? computers[deskIdx].clone() : spawnPos.clone();
     deskPos.y = 0.5;
 
     if (agent.status === "working") {
@@ -679,11 +632,19 @@ function updateAgents3D() {
           if (screenGlows[deskIdx]) (screenGlows[deskIdx].material as any).opacity = 0.5 + Math.random() * 0.2;
 
           // Typing animation (arms)
-          const leftArm = item.group.children[3];
-          const rightArm = item.group.children[4];
+          // New Indices: LeftArm(2), RightArm(3)
+          const leftArm = item.group.children[2];
+          const rightArm = item.group.children[3];
           if(leftArm && rightArm) {
-             leftArm.rotation.x = Math.sin(Date.now() * 0.01) * 0.2;
-             rightArm.rotation.x = Math.cos(Date.now() * 0.01) * 0.2;
+             leftArm.rotation.x = -Math.PI/2 + Math.sin(Date.now() * 0.015) * 0.2; // Arms up for typing
+             rightArm.rotation.x = -Math.PI/2 + Math.cos(Date.now() * 0.015) * 0.2;
+          }
+          // Legs sitting
+          const leftLeg = item.group.children[4];
+          const rightLeg = item.group.children[5];
+          if(leftLeg && rightLeg) {
+             leftLeg.rotation.x = -Math.PI/2;
+             rightLeg.rotation.x = -Math.PI/2;
           }
        }
     } else {
@@ -695,17 +656,47 @@ function updateAgents3D() {
           item.target.copy(spawnPos);
           if (item.group.position.distanceTo(item.target) < 0.5) {
              item.phase = "idle";
-             // Reset arms
-             const leftArm = item.group.children[3];
-             const rightArm = item.group.children[4];
-             if(leftArm) leftArm.rotation.x = 0;
-             if(rightArm) rightArm.rotation.x = 0;
+             [2,3,4,5].forEach(i => { if(item.group.children[i]) item.group.children[i].rotation.x = 0; });
           }
       } else {
           item.phase = "idle";
           item.target.copy(spawnPos);
+          [2,3,4,5].forEach(i => { if(item.group.children[i]) item.group.children[i].rotation.x = 0; });
       }
     }
+
+    // Walking Animation
+    if (item.phase.includes("walking")) {
+        const time = Date.now() * 0.015;
+        const leftArm = item.group.children[2];
+        const rightArm = item.group.children[3];
+        const leftLeg = item.group.children[4];
+        const rightLeg = item.group.children[5];
+
+        if(leftLeg && rightLeg) {
+            leftLeg.rotation.x = Math.sin(time) * 0.5;
+            rightLeg.rotation.x = Math.cos(time) * 0.5;
+        }
+        if(leftArm && rightArm) {
+            leftArm.rotation.x = Math.cos(time) * 0.5;
+            rightArm.rotation.x = Math.sin(time) * 0.5;
+        }
+    }
+
+    // Rotate to face target
+    if (item.phase !== "working" && item.phase !== "idle") {
+        item.group.lookAt(item.target.x, item.group.position.y, item.target.z);
+    } else if (item.phase === "working") {
+         // Face towards board (away from desk screen usually, or towards it?)
+         // Desk setup: Screen at Z-0.3 relative to desk.
+         // If desk is at Z=2.8, screen is at Z=2.5.
+         // Agent is at Z=2.8.
+         // Agent should face -Z to see screen.
+         item.group.lookAt(item.group.position.x, item.group.position.y, -100);
+    } else {
+        item.group.rotation.set(0, 0, 0);
+    }
+
   });
 }
 
