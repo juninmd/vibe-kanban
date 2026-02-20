@@ -17,11 +17,11 @@ export function createOffice(scene: THREE.Scene): OfficeData {
     canvas.height = 512;
     const ctx = canvas.getContext('2d')!;
     ctx.fillStyle = '#2c3e50';
-    ctx.fillRect(0,0,512,512);
+    ctx.fillRect(0, 0, 512, 512);
     // Add noise
-    for(let i=0; i<5000; i++) {
+    for (let i = 0; i < 5000; i++) {
         ctx.fillStyle = Math.random() > 0.5 ? '#34495e' : '#253545';
-        ctx.fillRect(Math.random()*512, Math.random()*512, 2, 2);
+        ctx.fillRect(Math.random() * 512, Math.random() * 512, 2, 2);
     }
     const floorTex = new THREE.CanvasTexture(canvas);
     floorTex.wrapS = THREE.RepeatWrapping;
@@ -54,9 +54,9 @@ export function createOffice(scene: THREE.Scene): OfficeData {
     // 3. Windows
     const windowGeo = new THREE.PlaneGeometry(4, 3);
     const windowMat = new THREE.MeshBasicMaterial({ color: '#88ccff' });
-    for(let i=-1; i<=1; i+=2) {
+    for (let i = -1; i <= 1; i += 2) {
         const win = new THREE.Mesh(windowGeo, windowMat);
-        win.position.set(i*6, 5, -5.7);
+        win.position.set(i * 6, 5, -5.7);
         scene.add(win); // Back windows
     }
 
@@ -77,21 +77,17 @@ export function createOffice(scene: THREE.Scene): OfficeData {
         );
         desk.position.set(x, 0.3, z);
         scene.add(desk);
-        deskPositions.push(desk.position.clone());
 
-        // Screen
-        const screenBase = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.4, 0.1), new THREE.MeshStandardMaterial({ color: '#111' }));
-        screenBase.position.set(x, 0.8, z - 0.3);
-        scene.add(screenBase);
+        // Agent's correct sitting position (behind desk)
+        const agentPos = new THREE.Vector3(x, 0, z + 1.2);
+        deskPositions.push(agentPos);
 
-        const screen = new THREE.Mesh(
-            new THREE.PlaneGeometry(1.2, 0.7),
-            new THREE.MeshBasicMaterial({ color: 0x66aaff, transparent: true, opacity: 0.1, side: THREE.DoubleSide })
-        );
-        screen.position.set(x, 0.9, z);
-        screen.rotation.x = -0.1;
-        scene.add(screen);
-        screenGlows.push(screen);
+        // PC Screen anchor pos
+        const pcAnchor = new THREE.Group();
+        pcAnchor.position.set(x, 0.6, z - 0.2);
+        // We'll rotate the PC differently, let the app do it when it loads the GLB
+        scene.add(pcAnchor);
+        screenGlows.push(pcAnchor as any); // using this array to store pc anchors for convenience
 
         // Chair
         const chair = createChair();
@@ -118,12 +114,12 @@ function addPlant(scene: THREE.Scene, x: number, z: number) {
     const leavesMat = new THREE.MeshStandardMaterial({ color: '#2e7d32' });
     const geo = new THREE.DodecahedronGeometry(0.3);
 
-    for(let i=0; i<5; i++) {
+    for (let i = 0; i < 5; i++) {
         const leaf = new THREE.Mesh(geo, leavesMat);
         leaf.position.set(
-            (Math.random()-0.5)*0.5,
-            0.6 + Math.random()*0.5,
-            (Math.random()-0.5)*0.5
+            (Math.random() - 0.5) * 0.5,
+            0.6 + Math.random() * 0.5,
+            (Math.random() - 0.5) * 0.5
         );
         leaf.scale.setScalar(0.8 + Math.random() * 0.4);
         group.add(leaf);

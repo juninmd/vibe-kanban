@@ -307,7 +307,9 @@ scene.add(particles);
 
 let robotModel: THREE.Group | null = null;
 let robotAnimations: THREE.AnimationClip[] = [];
+let computerModel: THREE.Group | null = null;
 const loader = new GLTFLoader();
+
 loader.load("/models/RobotExpressive.glb", (gltf) => {
   robotModel = gltf.scene;
   robotAnimations = gltf.animations;
@@ -319,6 +321,21 @@ loader.load("/models/RobotExpressive.glb", (gltf) => {
     }
   });
   console.log("Robot animations loaded:", robotAnimations.map(a => a.name));
+});
+
+loader.load("/models/old_computer.glb", (gltf) => {
+  computerModel = gltf.scene;
+  // Scale and adjust the computer model
+  computerModel.scale.set(0.6, 0.6, 0.6);
+  computerModel.rotation.y = Math.PI; // Face the agent
+
+  // Clone it to all desk anchors
+  screenGlows.forEach(anchorGroup => {
+    if (computerModel) {
+      const pcClone = SkeletonUtils.clone(computerModel) as THREE.Group;
+      anchorGroup.add(pcClone);
+    }
+  });
 });
 
 // Confetti System
@@ -394,6 +411,8 @@ for (let i = -1; i <= 1; i++) {
 scene.add(kanbanMesh);
 
 const kanbanGroup = new THREE.Group();
+// Pull it slightly forward off the board mesh to prevent z-fighting
+kanbanGroup.position.set(0, 0, 0.05);
 kanbanMesh.add(kanbanGroup);
 
 function createTaskTexture(task: Task) {
@@ -481,7 +500,7 @@ function updateKanban3D() {
     });
 
     const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.set(x, y, 0.15);
+    mesh.position.set(x, y, 0.15); // Move off surface
     mesh.userData = { taskId: task.id };
     kanbanGroup.add(mesh);
 
@@ -558,27 +577,28 @@ function createAgentMesh(agent: Agent, index: number) {
   scene.add(group);
 
   function makeLabelCanvas(text: string) {
-    const size = 256;
+    const size = 512;
     const canvas = document.createElement("canvas");
     canvas.width = size;
-    canvas.height = 80;
+    canvas.height = 120;
     const ctx = canvas.getContext("2d")!;
-    ctx.fillStyle = "rgba(20,24,38,0.95)";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.font = "bold 36px Inter, sans-serif";
+    ctx.fillStyle = "rgba(20,24,38,0.8)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height); // Use simple fillRect to avoid TS roundRect issues
+    ctx.font = "bold 48px Inter, sans-serif";
     ctx.fillStyle = "#ffffff";
     ctx.textAlign = "center";
-    ctx.fillText(text, canvas.width / 2, 52);
+    ctx.fillText(text, canvas.width / 2, 75);
     return canvas;
   }
 
   const labelCanvas = makeLabelCanvas(`${agent.model}`);
   const labelTex = new THREE.CanvasTexture(labelCanvas);
   labelTex.colorSpace = THREE.SRGBColorSpace;
-  const labelMat = new THREE.SpriteMaterial({ map: labelTex, transparent: true });
+  const labelMat = new THREE.SpriteMaterial({ map: labelTex, transparent: true, depthTest: false });
   const label = new THREE.Sprite(labelMat);
-  label.scale.set(1.5, 0.4, 1);
-  label.position.set(0, 2.3, 0);
+  label.scale.set(1.8, 0.45, 1);
+  label.renderOrder = 999; // Ensure labels render on top of the board
+  label.position.set(0, 3.0, 0); // Higher name tags so they don't clip into the agents' heads
   group.add(label);
 
   return { group, label, target: group.position.clone(), color, mixer, anims, currentAction: null };
@@ -609,7 +629,7 @@ function updateAgents3D() {
     const item = agentMeshes.get(agent.id);
     if (!item) return;
 
-    const spawnPos = new THREE.Vector3(-5 + idx * 2, 0, -0.5);
+    const spawnPos = new THREE.Vector3(-5 + idx * 2, 0, -1.0); // agents start slightly further from board
     const deskIdx = (idx) % computers.length;
     // Safe check for computers array
     const deskPos = computers[deskIdx] ? computers[deskIdx].clone() : spawnPos.clone();
@@ -673,7 +693,9 @@ function updateAgents3D() {
     if (item.phase !== "working" && item.phase !== "idle") {
       item.group.lookAt(item.target.x, item.group.position.y, item.target.z);
     } else if (item.phase === "working") {
-      item.group.lookAt(item.group.position.x, item.group.position.y, -100);
+      item.group.lookAt(item.group.position.x, item.group.position.y, item.group.position.z - 100);
+    } else if (item.phase === "idle") {
+      item.group.rotation.set(0, 0, 0); // Face forward towards camera
     } else {
       item.group.rotation.set(0, 0, 0);
     }

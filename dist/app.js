@@ -1,7 +1,8 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import * as SkeletonUtils from "three/addons/utils/SkeletonUtils.js";
 import { createOffice } from "./office.js";
-import { getHeadMaterials, getBodyMaterials, getLimbMaterial } from "./skins.js";
 const API_URL = "";
 const lanes = ["backlog", "in_progress", "review", "done"];
 const laneLabels = {
@@ -213,6 +214,7 @@ const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 const scene = new THREE.Scene();
 scene.background = new THREE.Color("#0b1022");
+const clock = new THREE.Clock();
 const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 100);
 camera.position.set(0, 7, 12);
 camera.lookAt(0, 0, 0);
@@ -239,6 +241,34 @@ pGeo.setAttribute("position", new THREE.BufferAttribute(pPos, 3));
 const pMat = new THREE.PointsMaterial({ color: 0x88ccff, size: 0.05, transparent: true, opacity: 0.4 });
 const particles = new THREE.Points(pGeo, pMat);
 scene.add(particles);
+let robotModel = null;
+let robotAnimations = [];
+let computerModel = null;
+const loader = new GLTFLoader();
+loader.load("/models/RobotExpressive.glb", (gltf) => {
+    robotModel = gltf.scene;
+    robotAnimations = gltf.animations;
+    robotModel.traverse((child) => {
+        if (child.isMesh) {
+            child.castShadow = true;
+            child.receiveShadow = true;
+        }
+    });
+    console.log("Robot animations loaded:", robotAnimations.map(a => a.name));
+});
+loader.load("/models/old_computer.glb", (gltf) => {
+    computerModel = gltf.scene;
+    // Scale and adjust the computer model
+    computerModel.scale.set(0.6, 0.6, 0.6);
+    computerModel.rotation.y = Math.PI; // Face the agent
+    // Clone it to all desk anchors
+    screenGlows.forEach(anchorGroup => {
+        if (computerModel) {
+            const pcClone = SkeletonUtils.clone(computerModel);
+            anchorGroup.add(pcClone);
+        }
+    });
+});
 // Confetti System
 function spawnConfetti() {
     const geometry = new THREE.BufferGeometry();
@@ -300,6 +330,8 @@ for (let i = -1; i <= 1; i++) {
 }
 scene.add(kanbanMesh);
 const kanbanGroup = new THREE.Group();
+// Pull it slightly forward off the board mesh to prevent z-fighting
+kanbanGroup.position.set(0, 0, 0.05);
 kanbanMesh.add(kanbanGroup);
 function createTaskTexture(task) {
     const canvas = document.createElement("canvas");
@@ -378,7 +410,7 @@ function updateKanban3D() {
             emissiveIntensity: 0.4
         });
         const mesh = new THREE.Mesh(geometry, material);
-        mesh.position.set(x, y, 0.15);
+        mesh.position.set(x, y, 0.15); // Move off surface
         mesh.userData = { taskId: task.id };
         kanbanGroup.add(mesh);
         laneCounts[lane] = count + 1;
@@ -387,18 +419,20 @@ function updateKanban3D() {
 const computers = officeData.deskPositions;
 const screenGlows = officeData.screenGlows;
 const agentMeshes = new Map();
+function playAction(item, name, duration = 0.5) {
+    if (!item.anims)
+        return;
+    const action = item.anims[name] || item.anims["Idle"];
+    if (action && item.currentAction !== action) {
+        if (item.currentAction) {
+            item.currentAction.fadeOut(duration);
+        }
+        action.reset().fadeIn(duration).play();
+        item.currentAction = action;
+    }
+}
 function createAgentMesh(agent, index) {
     const group = new THREE.Group();
-    const roleKeyMap = {
-        "Product Manager": "product_manager",
-        "Segurança": "seguranca",
-        "Performance": "performance",
-        "Novas Funcionalidades": "funcionalidades",
-        "Testes": "testes",
-        "Novas Features": "features"
-    };
-    const roleKey = roleKeyMap[agent.role] || "features";
-    // Use existing color map for trails/lights
     const roleColors = {
         "Product Manager": "#a855f7",
         "Segurança": "#ef4444",
@@ -408,65 +442,57 @@ function createAgentMesh(agent, index) {
         "Novas Features": "#06b6d4"
     };
     const color = new THREE.Color(roleColors[agent.role] || "#888888");
-    // Voxel Construction
-    const headMat = getHeadMaterials(roleKey);
-    const head = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), headMat);
-    head.position.y = 1.75;
-    head.castShadow = true;
-    group.add(head);
-    const bodyMat = getBodyMaterials(roleKey);
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.7, 0.3), bodyMat);
-    body.position.y = 1.15;
-    body.castShadow = true;
-    group.add(body);
-    const limbMat = getLimbMaterial(roleKey);
-    const armGeo = new THREE.BoxGeometry(0.15, 0.7, 0.15);
-    armGeo.translate(0, -0.25, 0); // Pivot at shoulder
-    const leftArm = new THREE.Mesh(armGeo, limbMat);
-    leftArm.position.set(-0.35, 1.4, 0);
-    leftArm.castShadow = true;
-    group.add(leftArm);
-    const rightArm = new THREE.Mesh(armGeo, limbMat);
-    rightArm.position.set(0.35, 1.4, 0);
-    rightArm.castShadow = true;
-    group.add(rightArm);
-    const legGeo = new THREE.BoxGeometry(0.2, 0.7, 0.2);
-    legGeo.translate(0, -0.35, 0); // Pivot at hip
-    const leftLeg = new THREE.Mesh(legGeo, limbMat);
-    leftLeg.position.set(-0.15, 0.7, 0);
-    leftLeg.castShadow = true;
-    group.add(leftLeg);
-    const rightLeg = new THREE.Mesh(legGeo, limbMat);
-    rightLeg.position.set(0.15, 0.7, 0);
-    rightLeg.castShadow = true;
-    group.add(rightLeg);
+    let mixer;
+    let anims;
+    if (robotModel) {
+        const clonedRobot = SkeletonUtils.clone(robotModel);
+        clonedRobot.scale.set(0.35, 0.35, 0.35);
+        clonedRobot.position.y = 0;
+        group.add(clonedRobot);
+        clonedRobot.traverse((child) => {
+            if (child.isMesh && child.material) {
+                child.material = child.material.clone();
+                if (child.name !== "Face") {
+                    child.material.color.lerp(color, 0.7);
+                }
+            }
+        });
+        mixer = new THREE.AnimationMixer(clonedRobot);
+        anims = {};
+        robotAnimations.forEach(clip => {
+            anims[clip.name] = mixer.clipAction(clip);
+        });
+    }
     group.position.set(-5 + index * 2, 0, -0.5);
     scene.add(group);
     function makeLabelCanvas(text) {
-        const size = 256;
+        const size = 512;
         const canvas = document.createElement("canvas");
         canvas.width = size;
-        canvas.height = 80;
+        canvas.height = 120;
         const ctx = canvas.getContext("2d");
-        ctx.fillStyle = "rgba(20,24,38,0.95)";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.font = "bold 36px Inter, sans-serif";
+        ctx.fillStyle = "rgba(20,24,38,0.8)";
+        ctx.fillRect(0, 0, canvas.width, canvas.height); // Use simple fillRect to avoid TS roundRect issues
+        ctx.font = "bold 48px Inter, sans-serif";
         ctx.fillStyle = "#ffffff";
         ctx.textAlign = "center";
-        ctx.fillText(text, canvas.width / 2, 52);
+        ctx.fillText(text, canvas.width / 2, 75);
         return canvas;
     }
     const labelCanvas = makeLabelCanvas(`${agent.model}`);
     const labelTex = new THREE.CanvasTexture(labelCanvas);
     labelTex.colorSpace = THREE.SRGBColorSpace;
-    const labelMat = new THREE.SpriteMaterial({ map: labelTex, transparent: true });
+    const labelMat = new THREE.SpriteMaterial({ map: labelTex, transparent: true, depthTest: false });
     const label = new THREE.Sprite(labelMat);
-    label.scale.set(1.5, 0.4, 1);
-    label.position.set(0, 2.3, 0);
+    label.scale.set(1.8, 0.45, 1);
+    label.renderOrder = 999; // Ensure labels render on top of the board
+    label.position.set(0, 3.0, 0); // Higher name tags so they don't clip into the agents' heads
     group.add(label);
-    return { group, label, target: group.position.clone(), color };
+    return { group, label, target: group.position.clone(), color, mixer, anims, currentAction: null };
 }
 function updateAgents3D() {
+    if (!robotModel)
+        return;
     // Check if we need to create meshes for new agents
     agents.forEach((agent, idx) => {
         if (!agentMeshes.has(agent.id)) {
@@ -476,6 +502,7 @@ function updateAgents3D() {
                 phase: "idle",
                 phaseTimer: 0
             });
+            playAction(agentMeshes.get(agent.id), "Idle", 0);
         }
     });
     // Reset glows
@@ -487,7 +514,7 @@ function updateAgents3D() {
         const item = agentMeshes.get(agent.id);
         if (!item)
             return;
-        const spawnPos = new THREE.Vector3(-5 + idx * 2, 0, -0.5);
+        const spawnPos = new THREE.Vector3(-5 + idx * 2, 0, -1.0); // agents start slightly further from board
         const deskIdx = (idx) % computers.length;
         // Safe check for computers array
         const deskPos = computers[deskIdx] ? computers[deskIdx].clone() : spawnPos.clone();
@@ -501,6 +528,10 @@ function updateAgents3D() {
                 if (item.group.position.distanceTo(item.target) < 0.8) {
                     item.phase = "at_board";
                     item.phaseTimer = 60;
+                    playAction(item, "Dance");
+                }
+                else {
+                    playAction(item, "Walking");
                 }
             }
             else if (item.phase === "at_board") {
@@ -514,6 +545,11 @@ function updateAgents3D() {
                 item.target.copy(deskPos);
                 if (item.group.position.distanceTo(item.target) < 0.5) {
                     item.phase = "working";
+                    item.group.position.copy(item.target);
+                    playAction(item, "Sitting");
+                }
+                else {
+                    playAction(item, "Walking");
                 }
             }
             else if (item.phase === "working") {
@@ -521,21 +557,7 @@ function updateAgents3D() {
                 // Highlight screen
                 if (screenGlows[deskIdx])
                     screenGlows[deskIdx].material.opacity = 0.5 + Math.random() * 0.2;
-                // Typing animation (arms)
-                // New Indices: LeftArm(2), RightArm(3)
-                const leftArm = item.group.children[2];
-                const rightArm = item.group.children[3];
-                if (leftArm && rightArm) {
-                    leftArm.rotation.x = -Math.PI / 2 + Math.sin(Date.now() * 0.015) * 0.2; // Arms up for typing
-                    rightArm.rotation.x = -Math.PI / 2 + Math.cos(Date.now() * 0.015) * 0.2;
-                }
-                // Legs sitting
-                const leftLeg = item.group.children[4];
-                const rightLeg = item.group.children[5];
-                if (leftLeg && rightLeg) {
-                    leftLeg.rotation.x = -Math.PI / 2;
-                    rightLeg.rotation.x = -Math.PI / 2;
-                }
+                playAction(item, "Sitting", 1.0);
             }
         }
         else {
@@ -548,31 +570,17 @@ function updateAgents3D() {
                 item.target.copy(spawnPos);
                 if (item.group.position.distanceTo(item.target) < 0.5) {
                     item.phase = "idle";
-                    [2, 3, 4, 5].forEach(i => { if (item.group.children[i])
-                        item.group.children[i].rotation.x = 0; });
+                    item.group.position.copy(item.target);
+                    playAction(item, "Idle");
+                }
+                else {
+                    playAction(item, "Walking");
                 }
             }
             else {
                 item.phase = "idle";
                 item.target.copy(spawnPos);
-                [2, 3, 4, 5].forEach(i => { if (item.group.children[i])
-                    item.group.children[i].rotation.x = 0; });
-            }
-        }
-        // Walking Animation
-        if (item.phase.includes("walking")) {
-            const time = Date.now() * 0.015;
-            const leftArm = item.group.children[2];
-            const rightArm = item.group.children[3];
-            const leftLeg = item.group.children[4];
-            const rightLeg = item.group.children[5];
-            if (leftLeg && rightLeg) {
-                leftLeg.rotation.x = Math.sin(time) * 0.5;
-                rightLeg.rotation.x = Math.cos(time) * 0.5;
-            }
-            if (leftArm && rightArm) {
-                leftArm.rotation.x = Math.cos(time) * 0.5;
-                rightArm.rotation.x = Math.sin(time) * 0.5;
+                playAction(item, "Idle");
             }
         }
         // Rotate to face target
@@ -580,12 +588,10 @@ function updateAgents3D() {
             item.group.lookAt(item.target.x, item.group.position.y, item.target.z);
         }
         else if (item.phase === "working") {
-            // Face towards board (away from desk screen usually, or towards it?)
-            // Desk setup: Screen at Z-0.3 relative to desk.
-            // If desk is at Z=2.8, screen is at Z=2.5.
-            // Agent is at Z=2.8.
-            // Agent should face -Z to see screen.
-            item.group.lookAt(item.group.position.x, item.group.position.y, -100);
+            item.group.lookAt(item.group.position.x, item.group.position.y, item.group.position.z - 100);
+        }
+        else if (item.phase === "idle") {
+            item.group.rotation.set(0, 0, 0); // Face forward towards camera
         }
         else {
             item.group.rotation.set(0, 0, 0);
@@ -593,6 +599,7 @@ function updateAgents3D() {
     });
 }
 function tick() {
+    const delta = clock.getDelta();
     const width = canvas.clientWidth;
     const height = canvas.clientHeight;
     if (canvas.width !== width || canvas.height !== height) {
@@ -602,6 +609,8 @@ function tick() {
     }
     agentMeshes.forEach((item) => {
         item.group.position.lerp(item.target, 0.08);
+        if (item.mixer)
+            item.mixer.update(delta);
         // Spawn trail if moving
         if (item.phase !== "idle" && item.phase !== "working" && item.phase !== "at_board") {
             if (Math.random() < 0.4) {

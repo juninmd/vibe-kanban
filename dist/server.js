@@ -219,6 +219,9 @@ const server = createServer(async (req, res) => {
             case ".svg":
                 contentType = "image/svg+xml";
                 break;
+            case ".glb":
+                contentType = "model/gltf-binary";
+                break;
         }
         fs.readFile(filePath, (error, content) => {
             if (error) {
