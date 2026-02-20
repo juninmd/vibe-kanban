@@ -106,46 +106,53 @@ function renderKanban() {
     els.kanban.innerHTML = "";
     lanes.forEach((lane) => {
         const col = document.createElement("div");
-        col.className = "column";
-        col.innerHTML = `<h3>${laneLabels[lane]}</h3>`;
+        // Tailwind classes for column
+        col.className = "bg-slate-800/40 backdrop-blur-md border border-white/10 rounded-xl p-4 grid gap-4 content-start min-w-[280px]";
+        col.innerHTML = `<h3 class="text-sm font-bold text-slate-400 uppercase tracking-wider border-b border-slate-700 pb-2 mb-2">${laneLabels[lane]}</h3>`;
         tasks
             .filter((task) => task.lane === lane)
             .forEach((task) => {
             const card = document.createElement("article");
-            card.className = `task-card priority-${task.priority}`;
+            // Tailwind classes for card
+            const priorityColors = {
+                alta: "border-l-red-500",
+                media: "border-l-amber-500",
+                baixa: "border-l-emerald-500"
+            };
+            const pColor = priorityColors[task.priority] || "border-l-slate-500";
+            card.className = `border border-slate-700 rounded-lg bg-slate-800 p-3 grid gap-2 shadow-sm hover:-translate-y-1 hover:shadow-md transition-all border-l-4 ${pColor}`;
             const assigned = task.assignedTo ? agents.find((a) => a.id === task.assignedTo)?.role : "-";
             // Logs preview
             const lastLog = task.logs && task.logs.length > 0 ? task.logs[task.logs.length - 1] : "";
-            // Highlight auto-assigned tasks
-            const isAuto = task.source === "system" || (!task.source && task.assignedTo);
             card.innerHTML = `
-          <strong>#${task.id} ${task.title}</strong>
-          <div class="task-meta">
-            <span class="tag">${task.category}</span>
-            <span class="tag">${task.priority}</span>
-            <span class="tag">fonte: ${task.source}</span>
-            <span class="tag">agente: ${assigned}</span>
-            ${task.interrupted ? '<span class="tag">interrompido</span>' : ""}
+          <strong class="text-sm font-semibold text-slate-200 leading-snug">#${task.id} ${task.title}</strong>
+          <div class="flex flex-wrap gap-2 text-[10px] text-slate-400 uppercase font-bold tracking-wide">
+            <span class="bg-slate-700 rounded px-1.5 py-0.5 text-slate-300">${task.category}</span>
+            <span class="bg-slate-700 rounded px-1.5 py-0.5 text-slate-300">${task.priority}</span>
+            <span class="bg-slate-700 rounded px-1.5 py-0.5 text-slate-300">${task.source}</span>
+            <span class="bg-slate-700 rounded px-1.5 py-0.5 text-indigo-300">${assigned}</span>
+            ${task.interrupted ? '<span class="bg-red-900/50 text-red-300 rounded px-1.5 py-0.5">interrompido</span>' : ""}
           </div>
-          ${lastLog ? `<div style="font-size:0.8em; margin-top:5px; color:#aaa;">> ${lastLog}</div>` : ""}
+          ${lastLog ? `<div class="text-xs text-slate-500 font-mono mt-1 truncate border-t border-slate-700/50 pt-1">> ${lastLog}</div>` : ""}
         `;
             const actions = document.createElement("div");
-            actions.className = "task-actions";
+            actions.className = "flex flex-wrap gap-1 mt-1";
             const makeBtn = (txt, onClick) => {
                 const btn = document.createElement("button");
                 btn.textContent = txt;
+                btn.className = "text-[10px] px-2 py-1 bg-transparent border border-slate-600 rounded hover:bg-slate-700 hover:border-indigo-500 text-slate-300 transition-colors cursor-pointer";
                 btn.onclick = onClick;
                 return btn;
             };
             if (lane === "backlog")
-                actions.append(makeBtn("Pegar tarefa", () => pickTask(task)));
+                actions.append(makeBtn("Pegar", () => pickTask(task)));
             if (lane === "in_progress")
-                actions.append(makeBtn("Interromper", () => interruptTask(task)));
+                actions.append(makeBtn("Parar", () => interruptTask(task)));
             actions.append(makeBtn("←", () => moveTask(task, -1)));
             actions.append(makeBtn("→", () => moveTask(task, +1)));
             actions.append(makeBtn("↑", () => reprioritize(task, -1)));
             actions.append(makeBtn("↓", () => reprioritize(task, +1)));
-            actions.append(makeBtn("+ bug", () => bugFromTask(task)));
+            actions.append(makeBtn("Bug", () => bugFromTask(task)));
             card.append(actions);
             col.append(card);
         });
@@ -155,12 +162,16 @@ function renderKanban() {
 function renderAgents() {
     els.agentsList.innerHTML = agents
         .map((a) => `
-      <div class="agent-item">
-        <strong>${a.role}</strong>
-        <span>Modelo: ${a.model}</span>
-        <span>Categoria: ${a.category}</span>
-        <span>Status: ${a.status === "idle" ? "Livre" : "Trabalhando"}</span>
-        ${a.assignedTask ? `<span>Task: #${a.assignedTask}</span>` : ""}
+      <div class="border border-slate-700 bg-slate-800 rounded-lg p-3 grid gap-1 text-sm shadow-sm hover:border-indigo-500/50 transition-colors">
+        <strong class="text-indigo-400 font-semibold">${a.role}</strong>
+        <div class="text-xs text-slate-400 grid gap-0.5">
+           <span>Modelo: <span class="text-slate-300">${a.model}</span></span>
+           <span>Categoria: <span class="text-slate-300">${a.category}</span></span>
+           <span class="${a.status === 'working' ? 'text-emerald-400' : 'text-slate-500'} font-medium">
+             ● ${a.status === "idle" ? "Livre" : "Trabalhando"}
+           </span>
+           ${a.assignedTask ? `<span class="text-indigo-300">Task: #${a.assignedTask}</span>` : ""}
+        </div>
       </div>
     `)
         .join("");
@@ -233,21 +244,98 @@ els.settingsForm?.addEventListener("submit", async (e) => {
 const canvas = document.getElementById("sceneCanvas");
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
 const scene = new THREE.Scene();
 scene.background = new THREE.Color("#0b1022");
+scene.fog = new THREE.FogExp2(0x0b1022, 0.02);
 const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 100);
-camera.position.set(0, 7, 12);
+camera.position.set(0, 8, 14);
 camera.lookAt(0, 0, 0);
-scene.add(new THREE.AmbientLight("#ffffff", 0.75));
-const dir = new THREE.DirectionalLight("#b7c6ff", 1.2);
-dir.position.set(5, 8, 3);
+// Lighting
+const hemiLight = new THREE.HemisphereLight(0xffffff, 0x0f172a, 0.6);
+scene.add(hemiLight);
+const dir = new THREE.DirectionalLight("#a5b4fc", 0.8);
+dir.position.set(5, 12, 5);
+dir.castShadow = true;
+dir.shadow.mapSize.width = 1024;
+dir.shadow.mapSize.height = 1024;
 scene.add(dir);
-const floor = new THREE.Mesh(new THREE.PlaneGeometry(24, 14), new THREE.MeshStandardMaterial({ color: "#141c3f" }));
+const accentLight1 = new THREE.PointLight("#6366f1", 1, 15);
+accentLight1.position.set(-8, 5, -5);
+scene.add(accentLight1);
+const accentLight2 = new THREE.PointLight("#d946ef", 1, 15);
+accentLight2.position.set(8, 5, -5);
+scene.add(accentLight2);
+// Room Environment
+const roomGroup = new THREE.Group();
+scene.add(roomGroup);
+// Floor
+const floorMat = new THREE.MeshStandardMaterial({ color: "#1e293b", roughness: 0.8, metalness: 0.2 });
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(24, 16), floorMat);
 floor.rotation.x = -Math.PI / 2;
-scene.add(floor);
-const grid = new THREE.GridHelper(24, 24, 0x30385f, 0x1b2241);
+floor.receiveShadow = true;
+roomGroup.add(floor);
+// Grid (subtle)
+const grid = new THREE.GridHelper(24, 24, 0x334155, 0x1e293b);
 grid.position.y = 0.01;
-scene.add(grid);
+grid.material.opacity = 0.2;
+grid.material.transparent = true;
+roomGroup.add(grid);
+// Walls
+const wallMat = new THREE.MeshStandardMaterial({ color: "#0f172a", roughness: 0.5 });
+const backWall = new THREE.Mesh(new THREE.BoxGeometry(24, 8, 0.5), wallMat);
+backWall.position.set(0, 4, -8.25);
+backWall.receiveShadow = true;
+roomGroup.add(backWall);
+// Server Racks (Decor)
+function createServerRack(x) {
+    const rack = new THREE.Group();
+    const box = new THREE.Mesh(new THREE.BoxGeometry(1.2, 2.8, 1), new THREE.MeshStandardMaterial({ color: "#000000", roughness: 0.3 }));
+    box.position.y = 1.4;
+    box.castShadow = true;
+    rack.add(box);
+    // Blinking lights
+    const lightsGeo = new THREE.PlaneGeometry(1, 2.4);
+    const lightsCanvas = document.createElement("canvas");
+    lightsCanvas.width = 64;
+    lightsCanvas.height = 128;
+    const ctx = lightsCanvas.getContext("2d");
+    // Draw initial random dots
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, 64, 128);
+    for (let i = 0; i < 40; i++) {
+        ctx.fillStyle = Math.random() > 0.5 ? "#22c55e" : "#3b82f6";
+        ctx.fillRect(Math.random() * 60, Math.random() * 120, 2, 2);
+    }
+    const lightsTex = new THREE.CanvasTexture(lightsCanvas);
+    lightsTex.magFilter = THREE.NearestFilter;
+    const lights = new THREE.Mesh(lightsGeo, new THREE.MeshBasicMaterial({ map: lightsTex }));
+    lights.position.set(0, 1.4, 0.51);
+    rack.add(lights);
+    rack.position.set(x, 0, -7);
+    roomGroup.add(rack);
+    return { canvas, ctx, tex: lightsTex };
+}
+const racks = [createServerRack(-10), createServerRack(-8), createServerRack(8), createServerRack(10)];
+// Update racks animation
+function updateRacks() {
+    racks.forEach(r => {
+        if (Math.random() > 0.1)
+            return;
+        const { ctx, tex } = r;
+        ctx.fillStyle = "#000"; // dim
+        ctx.fillStyle = Math.random() > 0.5 ? "#22c55e" : "#3b82f6";
+        const x = Math.random() * 60;
+        const y = Math.random() * 120;
+        ctx.fillRect(x, y, 3, 3);
+        // Clear some
+        if (Math.random() > 0.5) {
+            ctx.fillStyle = "#000";
+            ctx.fillRect(Math.random() * 60, Math.random() * 120, 3, 3);
+        }
+        tex.needsUpdate = true;
+    });
+}
 // Ambient Particles
 const pGeo = new THREE.BufferGeometry();
 const pPos = new Float32Array(600);
@@ -582,6 +670,39 @@ function createAgentMesh(agent, index) {
         const rightLeg = new THREE.Mesh(legGeo, legMat);
         rightLeg.position.set(0.18, 0.4, 0);
         group.add(rightLeg);
+        // Accessories
+        if (agent.role === "Performance") {
+            // Headphones
+            const band = new THREE.Mesh(new THREE.TorusGeometry(0.32, 0.04, 8, 24, 2.5), new THREE.MeshStandardMaterial({ color: "#111" }));
+            band.rotation.z = -1.25;
+            band.position.set(0, 1.95, 0);
+            group.add(band);
+            const earL = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.1, 16), new THREE.MeshStandardMaterial({ color: "#111" }));
+            earL.rotation.z = Math.PI / 2;
+            earL.position.set(-0.3, 1.9, 0);
+            group.add(earL);
+            const earR = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.1, 16), new THREE.MeshStandardMaterial({ color: "#111" }));
+            earR.rotation.z = Math.PI / 2;
+            earR.position.set(0.3, 1.9, 0);
+            group.add(earR);
+        }
+        else if (agent.role === "Segurança") {
+            // Police Cap
+            const capTop = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.3, 0.15, 32), new THREE.MeshStandardMaterial({ color: "#1e293b" }));
+            capTop.position.set(0, 2.15, 0);
+            group.add(capTop);
+            const capBrim = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.02, 32, 1, false, 0, Math.PI), new THREE.MeshStandardMaterial({ color: "#000" }));
+            capBrim.rotation.x = 0.2;
+            capBrim.position.set(0, 2.1, 0.15);
+            group.add(capBrim);
+        }
+        else if (agent.role === "Testes") {
+            // Clipboard on left arm
+            const board = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.4, 0.02), new THREE.MeshStandardMaterial({ color: "#a855f7" }));
+            board.position.set(0.2, -0.1, 0.2);
+            board.rotation.x = -0.5;
+            leftArm.add(board);
+        }
         group.userData.legs = [leftLeg, rightLeg];
         group.userData.arms = [leftArm, rightArm];
     }
@@ -748,6 +869,7 @@ function tick() {
     });
     if (typeof particles !== "undefined")
         particles.rotation.y += 0.0005;
+    updateRacks();
     updateConfetti();
     controls.update();
     renderer.render(scene, camera);

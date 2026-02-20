@@ -1,47 +1,57 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="pt-BR" class="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Vibe Kanban — Orquestrador de Agentes</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
-  <body>
-    <header class="topbar">
-      <h1>Vibe Kanban • Time de Agentes</h1>
-      <div class="topbar-actions">
-        <select id="driverSelect" style="margin-right: 10px;">
+  <body class="bg-[#0b1022] text-slate-200 h-screen overflow-hidden font-sans">
+    <header class="h-16 border-b border-slate-800 flex items-center justify-between px-6 bg-[#0b1022]/80 backdrop-blur-md z-10 relative">
+      <h1 class="text-xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
+        Vibe Kanban • Time de Agentes
+      </h1>
+      <div class="flex gap-3">
+        <select id="driverSelect" class="bg-slate-800 text-slate-200 border border-slate-700 rounded-lg px-3 py-2 text-sm hover:border-indigo-500 hover:bg-slate-700 transition-all outline-none">
           <option value="mock">Mock Driver</option>
           <option value="gemini">Gemini CLI</option>
           <option value="copilot">Copilot SDK</option>
           <option value="opencode">OpenCode AI</option>
         </select>
-        <button id="toggleViewBtn">Alternar 2D / 3D</button>
-        <button id="seedTasksBtn">Gerar tarefas exemplo</button>
-        <button id="resetDataBtn" style="border-color: #ff6f6f; color: #ff6f6f;">Resetar Dados</button>
-        <button id="settingsBtn" title="Configurações">⚙️</button>
+        <button id="toggleViewBtn" class="bg-slate-800 text-slate-200 border border-slate-700 rounded-lg px-3 py-2 text-sm hover:border-indigo-500 hover:bg-slate-700 transition-all font-medium">
+          Alternar 2D / 3D
+        </button>
+        <button id="seedTasksBtn" class="bg-indigo-600 text-white border border-indigo-600 rounded-lg px-3 py-2 text-sm hover:bg-indigo-700 transition-all font-medium">
+          Gerar tarefas exemplo
+        </button>
+        <button id="resetDataBtn" class="bg-slate-800 text-red-400 border border-red-400/50 rounded-lg px-3 py-2 text-sm hover:bg-red-900/20 hover:border-red-400 transition-all font-medium">
+          Resetar Dados
+        </button>
+        <button id="settingsBtn" title="Configurações" class="bg-slate-800 text-slate-200 border border-slate-700 rounded-lg px-3 py-2 text-sm hover:border-indigo-500 hover:bg-slate-700 transition-all">
+          ⚙️
+        </button>
       </div>
     </header>
 
-    <main class="layout">
-      <aside class="sidebar">
-        <section>
-          <h2>Criar tarefa</h2>
-          <form id="taskForm">
-            <label>
+    <main class="grid grid-cols-[360px_1fr] h-[calc(100vh-64px)]">
+      <aside class="sidebar border-r border-white/10 p-6 overflow-y-auto grid gap-6 content-start bg-[#171b2f]/60 backdrop-blur-xl">
+        <section class="bg-slate-800 border border-slate-700 rounded-xl p-4 shadow-lg">
+          <h2 class="text-base text-slate-200 mb-4 flex items-center gap-2 font-semibold">Criar tarefa</h2>
+          <form id="taskForm" class="grid gap-3">
+            <label class="grid gap-1 text-xs text-slate-400 uppercase tracking-wider font-semibold">
               Fonte
-              <select id="taskSource">
+              <select id="taskSource" class="bg-slate-900 text-slate-200 border border-slate-700 rounded-lg px-3 py-2 text-sm hover:border-indigo-500 outline-none">
                 <option value="product_manager">Product Manager</option>
                 <option value="usuario">Usuário</option>
               </select>
             </label>
-            <label>
+            <label class="grid gap-1 text-xs text-slate-400 uppercase tracking-wider font-semibold">
               Título
-              <input id="taskTitle" required placeholder="Ex: implementar autenticação" />
+              <input id="taskTitle" required placeholder="Ex: implementar autenticação" class="bg-slate-900 text-slate-200 border border-slate-700 rounded-lg px-3 py-2 text-sm hover:border-indigo-500 outline-none placeholder-slate-600" />
             </label>
-            <label>
+            <label class="grid gap-1 text-xs text-slate-400 uppercase tracking-wider font-semibold">
               Categoria
-              <select id="taskCategory">
+              <select id="taskCategory" class="bg-slate-900 text-slate-200 border border-slate-700 rounded-lg px-3 py-2 text-sm hover:border-indigo-500 outline-none">
                 <option value="roadmap">Roadmap</option>
                 <option value="seguranca">Segurança</option>
                 <option value="performance">Performance</option>
@@ -50,40 +60,71 @@
                 <option value="features">Features</option>
               </select>
             </label>
-            <label>
+            <label class="grid gap-1 text-xs text-slate-400 uppercase tracking-wider font-semibold">
               Prioridade
-              <select id="taskPriority">
+              <select id="taskPriority" class="bg-slate-900 text-slate-200 border border-slate-700 rounded-lg px-3 py-2 text-sm hover:border-indigo-500 outline-none">
                 <option value="alta">Alta</option>
                 <option value="media" selected>Média</option>
                 <option value="baixa">Baixa</option>
               </select>
             </label>
-            <button type="submit">Adicionar card</button>
+            <button type="submit" class="bg-slate-700 text-white border border-slate-600 rounded-lg px-3 py-2 text-sm hover:bg-slate-600 hover:border-indigo-500 transition-all font-medium mt-2">
+              Adicionar card
+            </button>
           </form>
         </section>
 
-        <section>
-          <h2>Agentes</h2>
-          <div id="agentsList" class="agents-list"></div>
+        <section class="bg-slate-800 border border-slate-700 rounded-xl p-4 shadow-lg">
+          <h2 class="text-base text-slate-200 mb-4 flex items-center gap-2 font-semibold">Agentes</h2>
+          <div id="agentsList" class="grid gap-3"></div>
         </section>
 
-        <section>
-          <h2>Eventos</h2>
-          <ul id="eventLog" class="event-log"></ul>
+        <section class="bg-slate-800 border border-slate-700 rounded-xl p-4 shadow-lg">
+          <h2 class="text-base text-slate-200 mb-4 flex items-center gap-2 font-semibold">Eventos</h2>
+          <ul id="eventLog" class="text-xs text-slate-400 space-y-2 max-h-48 overflow-y-auto font-mono leading-relaxed pl-2"></ul>
         </section>
       </aside>
 
-      <section class="workspace">
-        <div id="view3d" class="view view-3d active">
-          <canvas id="sceneCanvas"></canvas>
-          <p class="hint">Visão 3D da sala (inspiração: hubzz demo)</p>
+      <section class="workspace relative bg-[#0f172a] overflow-hidden">
+        <div id="view3d" class="absolute inset-0 opacity-0 pointer-events-none transition-opacity duration-300 active:opacity-100 active:pointer-events-auto active">
+          <canvas id="sceneCanvas" class="w-full h-full block outline-none"></canvas>
+          <p class="absolute right-6 bottom-6 bg-[#0f172a]/80 border border-slate-700 rounded-lg px-3 py-2 text-slate-400 text-xs backdrop-blur-sm pointer-events-none">
+            Visão 3D da sala (inspiração: hubzz demo)
+          </p>
         </div>
 
-        <div id="view2d" class="view view-2d">
-          <div class="kanban" id="kanbanBoard"></div>
+        <div id="view2d" class="absolute inset-0 opacity-0 pointer-events-none transition-opacity duration-300">
+          <div class="kanban h-full p-6 grid grid-cols-4 gap-6 overflow-x-auto" id="kanbanBoard"></div>
         </div>
       </section>
     </main>
+
+    <dialog id="settingsDialog" class="bg-slate-800 text-slate-200 border border-slate-700 rounded-xl p-8 shadow-2xl backdrop:bg-black/60 backdrop:backdrop-blur-sm w-full max-w-md open:animate-fade-in">
+      <form method="dialog" id="settingsForm" class="grid gap-4">
+        <h3 class="text-lg font-bold text-indigo-400 m-0">Configurações de API</h3>
+        <p class="text-sm text-slate-400 mb-2">Insira as chaves de API para os drivers (simulação ativa se vazio).</p>
+
+        <label class="grid gap-2 text-sm font-medium">
+          OpenAI API Key
+          <input type="password" name="OPENAI_API_KEY" placeholder="sk-..." class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm w-full outline-none focus:border-indigo-500" />
+        </label>
+
+        <label class="grid gap-2 text-sm font-medium">
+          Gemini API Key
+          <input type="password" name="GEMINI_API_KEY" placeholder="AIza..." class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm w-full outline-none focus:border-indigo-500" />
+        </label>
+
+        <label class="grid gap-2 text-sm font-medium">
+          Anthropic API Key
+          <input type="password" name="ANTHROPIC_API_KEY" placeholder="sk-ant..." class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm w-full outline-none focus:border-indigo-500" />
+        </label>
+
+        <div class="flex justify-end gap-3 mt-4">
+          <button type="button" id="cancelSettingsBtn" class="bg-transparent text-slate-300 border border-slate-600 rounded-lg px-4 py-2 text-sm hover:bg-slate-700 transition-colors">Cancelar</button>
+          <button type="submit" id="saveSettingsBtn" class="bg-indigo-600 text-white border border-indigo-600 rounded-lg px-4 py-2 text-sm hover:bg-indigo-700 transition-colors font-medium">Salvar</button>
+        </div>
+      </form>
+    </dialog>
 
     <script type="importmap">
       {
@@ -93,32 +134,6 @@
         }
       }
     </script>
-    <dialog id="settingsDialog">
-      <form method="dialog" id="settingsForm">
-        <h3>Configurações de API</h3>
-        <p>Insira as chaves de API para os drivers (simulação ativa se vazio).</p>
-
-        <label>
-          OpenAI API Key
-          <input type="password" name="OPENAI_API_KEY" placeholder="sk-..." />
-        </label>
-
-        <label>
-          Gemini API Key
-          <input type="password" name="GEMINI_API_KEY" placeholder="AIza..." />
-        </label>
-
-        <label>
-          Anthropic API Key
-          <input type="password" name="ANTHROPIC_API_KEY" placeholder="sk-ant..." />
-        </label>
-
-        <div class="dialog-actions">
-          <button type="button" id="cancelSettingsBtn">Cancelar</button>
-          <button type="submit" id="saveSettingsBtn">Salvar</button>
-        </div>
-      </form>
-    </dialog>
     <script type="module" src="dist/app.js"></script>
   </body>
 </html>
