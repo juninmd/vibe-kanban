@@ -1,6 +1,7 @@
 import { createServer } from "http";
 import * as fs from "fs";
 import * as path from "path";
+import { exec } from "child_process";
 import { Task, Agent, State, EventLog, LLMDriver } from "./types.js";
 import { MockDriver } from "./drivers/MockDriver.js";
 import { GeminiDriver } from "./drivers/GeminiDriver.js";
@@ -11,9 +12,16 @@ import { ClaudeDriver } from "./drivers/ClaudeDriver.js";
 const PORT = process.env.PORT ? Number(process.env.PORT) : 5174;
 
 // --- State ---
-let taskIdCounter = 1;
+let taskIdCounter = 200;
 const state: State = {
-  tasks: [],
+  tasks: [
+    { id: 101, title: "Definir Roadmap Q4 2024", source: "product_manager", category: "roadmap", priority: "alta", lane: "backlog", assignedTo: null, interrupted: false, logs: [], createdAt: Date.now(), updatedAt: Date.now() },
+    { id: 102, title: "Auditoria de dependências npm", source: "user", category: "seguranca", priority: "alta", lane: "backlog", assignedTo: null, interrupted: false, logs: [], createdAt: Date.now(), updatedAt: Date.now() },
+    { id: 103, title: "Otimizar renderização WebGL", source: "user", category: "performance", priority: "media", lane: "backlog", assignedTo: null, interrupted: false, logs: [], createdAt: Date.now(), updatedAt: Date.now() },
+    { id: 104, title: "Sistema de Notificações", source: "user", category: "features", priority: "media", lane: "backlog", assignedTo: null, interrupted: false, logs: [], createdAt: Date.now(), updatedAt: Date.now() },
+    { id: 105, title: "Cobrir API com testes unitários", source: "user", category: "testes", priority: "alta", lane: "backlog", assignedTo: null, interrupted: false, logs: [], createdAt: Date.now(), updatedAt: Date.now() },
+    { id: 106, title: "Painel de Métricas em Tempo Real", source: "product_manager", category: "funcionalidades", priority: "media", lane: "backlog", assignedTo: null, interrupted: false, logs: [], createdAt: Date.now(), updatedAt: Date.now() },
+  ],
   agents: [
     { id: "pm", role: "Product Manager", model: "gpt-4.1", category: "roadmap", status: "idle", assignedTask: null },
     { id: "sec", role: "Segurança", model: "o3-mini", category: "seguranca", status: "idle", assignedTask: null },
@@ -156,6 +164,22 @@ function autoAssign() {
 
 // Start Auto-Pilot loop (every 3 seconds)
 setInterval(autoAssign, 3000);
+
+function checkCLI(name: string, cmd: string) {
+  exec(cmd, (error, stdout, stderr) => {
+    if (error) {
+      addEvent(`⚠️ ${name} CLI não encontrado (modo simulação).`);
+    } else {
+      addEvent(`✅ ${name} CLI detectado.`);
+    }
+  });
+}
+
+// Check CLIs on startup
+setTimeout(() => {
+  checkCLI("Gemini", "gemini --help");
+  checkCLI("GitHub Copilot", "gh --version");
+}, 2000);
 
 // --- PM Auto-Create Logic ---
 function pmAutoCreateLoop() {

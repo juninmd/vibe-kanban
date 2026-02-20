@@ -557,28 +557,45 @@ function createAgentMesh(agent: Agent, index: number) {
   group.position.set(-5 + index * 2, 0, -0.5);
   scene.add(group);
 
-  function makeLabelCanvas(text: string) {
+  function makeLabelCanvas(text: string, color: THREE.Color) {
     const size = 256;
     const canvas = document.createElement("canvas");
     canvas.width = size;
     canvas.height = 80;
     const ctx = canvas.getContext("2d")!;
-    ctx.fillStyle = "rgba(20,24,38,0.95)";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.font = "bold 36px Inter, sans-serif";
+
+    // Background based on role color
+    const r = Math.floor(color.r * 255);
+    const g = Math.floor(color.g * 255);
+    const b = Math.floor(color.b * 255);
+    ctx.fillStyle = `rgba(${r},${g},${b},0.9)`;
+
+    // Rounded rect
+    ctx.beginPath();
+    ctx.roundRect(0, 0, canvas.width, canvas.height, 20);
+    ctx.fill();
+
+    // Border
+    ctx.strokeStyle = "rgba(255,255,255,0.8)";
+    ctx.lineWidth = 4;
+    ctx.stroke();
+
+    ctx.font = "bold 40px Inter, sans-serif";
     ctx.fillStyle = "#ffffff";
     ctx.textAlign = "center";
-    ctx.fillText(text, canvas.width / 2, 52);
+    // Add role name below model if needed, but for now just model
+    ctx.fillText(text, canvas.width / 2, 54);
+
     return canvas;
   }
 
-  const labelCanvas = makeLabelCanvas(`${agent.model}`);
+  const labelCanvas = makeLabelCanvas(agent.model, color);
   const labelTex = new THREE.CanvasTexture(labelCanvas);
   labelTex.colorSpace = THREE.SRGBColorSpace;
   const labelMat = new THREE.SpriteMaterial({ map: labelTex, transparent: true });
   const label = new THREE.Sprite(labelMat);
-  label.scale.set(1.5, 0.4, 1);
-  label.position.set(0, 2.3, 0);
+  label.scale.set(1.0, 0.3, 1); // Slightly smaller scale for chest badge
+  label.position.set(0, 1.4, 0.35); // Position on chest, slightly forward
   group.add(label);
 
   return { group, label, target: group.position.clone(), color, mixer, anims, currentAction: null };

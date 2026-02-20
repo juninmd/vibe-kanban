@@ -138,6 +138,11 @@ label { display: grid; gap: 0.25rem; font-size: 0.8rem; color: var(--muted); tex
   pointer-events: auto;
 }
 
+.view-2d {
+  background: var(--bg);
+  z-index: 50;
+}
+
 #sceneCanvas { width: 100%; height: 100%; display: block; outline: none; }
 
 .hint {
