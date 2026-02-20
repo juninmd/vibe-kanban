@@ -57,6 +57,10 @@ const els = {
   toggleViewBtn: document.getElementById("toggleViewBtn") as HTMLButtonElement,
   seedTasksBtn: document.getElementById("seedTasksBtn") as HTMLButtonElement,
   resetDataBtn: document.getElementById("resetDataBtn") as HTMLButtonElement,
+  settingsBtn: document.getElementById("settingsBtn") as HTMLButtonElement,
+  settingsDialog: document.getElementById("settingsDialog") as HTMLDialogElement,
+  settingsForm: document.getElementById("settingsForm") as HTMLFormElement,
+  cancelSettingsBtn: document.getElementById("cancelSettingsBtn") as HTMLButtonElement,
 };
 
 // Confetti State
@@ -262,6 +266,30 @@ els.resetDataBtn.addEventListener("click", () => {
   }
 });
 
+els.settingsBtn?.addEventListener("click", () => {
+  els.settingsDialog?.showModal();
+});
+
+els.cancelSettingsBtn?.addEventListener("click", () => {
+  els.settingsDialog?.close();
+});
+
+els.settingsForm?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const formData = new FormData(els.settingsForm);
+  const data: Record<string, string> = {};
+
+  formData.forEach((value, key) => {
+    if (value) data[key] = value as string;
+  });
+
+  if (Object.keys(data).length > 0) {
+    await apiCall("/api/settings", "POST", data);
+    alert("Configurações salvas!");
+  }
+  els.settingsDialog?.close();
+});
+
 // --- 3D Scene ---
 const canvas = document.getElementById("sceneCanvas") as HTMLCanvasElement;
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -465,6 +493,7 @@ function updateKanban3D() {
 
 const computers: THREE.Vector3[] = [];
 const screenGlows: THREE.Mesh[] = [];
+const computerScreens: { canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D, texture: THREE.CanvasTexture, mesh: THREE.Mesh }[] = [];
 
 for (let i = 0; i < 4; i++) {
   const desk = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.6, 1.2), new THREE.MeshStandardMaterial({ color: "#202b56" }));
@@ -472,11 +501,51 @@ for (let i = 0; i < 4; i++) {
   scene.add(desk);
   computers.push(desk.position.clone());
 
-  const screen = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.7), new THREE.MeshBasicMaterial({ color: 0x66aaff, transparent: true, opacity: 0.1, side: THREE.DoubleSide }));
+  // Screen Canvas
+  const canvas = document.createElement("canvas");
+  canvas.width = 512;
+  canvas.height = 256;
+  const ctx = canvas.getContext("2d")!;
+  ctx.fillStyle = "#0f172a";
+  ctx.fillRect(0, 0, 512, 256);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+
+  const screen = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.7), new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide }));
   screen.position.set(-6 + i * 4, 0.9, 2.8);
   screen.rotation.x = -0.2;
   scene.add(screen);
   screenGlows.push(screen);
+  computerScreens.push({ canvas, ctx, texture, mesh: screen });
+}
+
+function updateScreenContent(index: number, text: string) {
+  const screen = computerScreens[index];
+  if (!screen) return;
+  const { ctx, texture, canvas } = screen;
+
+  // Background
+  ctx.fillStyle = "#0f172a";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Header
+  ctx.fillStyle = "#1e293b";
+  ctx.fillRect(0, 0, canvas.width, 40);
+  ctx.fillStyle = "#64748b";
+  ctx.font = "bold 20px Inter, monospace";
+  ctx.fillText("TERMINAL", 10, 28);
+
+  // Text content (multiline)
+  ctx.fillStyle = "#22c55e";
+  ctx.font = "18px monospace";
+  const lines = text.split("\n");
+  const visibleLines = lines.slice(Math.max(lines.length - 8, 0));
+  visibleLines.forEach((line, i) => {
+    ctx.fillText(line.substring(0, 50), 10, 70 + i * 24);
+  });
+
+  texture.needsUpdate = true;
 }
 
 const agentMeshes = new Map<string, {
@@ -527,58 +596,138 @@ function createAgentMesh(agent: Agent, index: number) {
   const colorHex = roleColors[agent.role] || "#888888";
   const color = new THREE.Color(colorHex);
 
-  // Create Skin Texture with Name
-  const skinTex = createSkinTexture(colorHex, agent.model);
+  if (agent.role === "Product Manager") {
+    // Steve Jobs Persona
+    // Head
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.3, 32, 32), new THREE.MeshStandardMaterial({ color: "#ffdbac" }));
+    head.position.y = 1.7;
+    group.add(head);
 
-  const body = new THREE.Mesh(
-    new THREE.CapsuleGeometry(0.35, 0.9, 4, 16),
-    new THREE.MeshStandardMaterial({
-      map: skinTex,
-      color: 0xffffff, // Tint with white to show texture color
-      emissive: color,
-      emissiveIntensity: 0.15
-    })
-  );
-  body.rotation.y = -Math.PI / 2; // Rotate body to face forward with texture if needed
-  body.position.y = 1;
-  group.add(body);
+    // Glasses
+    const glassesMat = new THREE.MeshStandardMaterial({ color: "#111111", roughness: 0.2 });
+    const leftLens = new THREE.Mesh(new THREE.TorusGeometry(0.08, 0.01, 8, 24), glassesMat);
+    leftLens.position.set(-0.12, 1.72, 0.26);
+    group.add(leftLens);
+    const rightLens = new THREE.Mesh(new THREE.TorusGeometry(0.08, 0.01, 8, 24), glassesMat);
+    rightLens.position.set(0.12, 1.72, 0.26);
+    group.add(rightLens);
+    const bridge = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 0.08, 8), glassesMat);
+    bridge.rotation.z = Math.PI / 2;
+    bridge.position.set(0, 1.72, 0.26);
+    group.add(bridge);
 
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.28, 16, 16), new THREE.MeshStandardMaterial({ color: "#dce6ff" }));
-  head.position.y = 1.9;
-  group.add(head);
+    // Turtleneck Body
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 0.8, 32), new THREE.MeshStandardMaterial({ color: "#111111" }));
+    body.position.y = 1.1;
+    group.add(body);
 
-  // Visor
-  const visor = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.1, 0.15), new THREE.MeshStandardMaterial({ color: "#111111", roughness: 0.2 }));
-  visor.position.set(0, 1.92, 0.22);
-  group.add(visor);
+    // Arms
+    const armGeo = new THREE.CapsuleGeometry(0.08, 0.6, 4, 8);
+    const armMat = new THREE.MeshStandardMaterial({ color: "#111111" }); // Black sleeves
 
-  // Chest Badge (Skin/Role Indicator)
-  const badgeColor = new THREE.Color(colorHex);
-  const badge = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.1, 0.1, 0.05, 16),
-    new THREE.MeshStandardMaterial({
-      color: badgeColor,
-      emissive: badgeColor,
-      emissiveIntensity: 0.8
-    })
-  );
-  badge.rotation.x = Math.PI / 2;
-  badge.position.set(0, 1.45, 0.32); // On chest
-  group.add(badge);
+    const leftArm = new THREE.Mesh(armGeo, armMat);
+    leftArm.position.set(-0.45, 1.3, 0);
+    leftArm.rotation.z = -0.2;
+    group.add(leftArm);
 
-  // Arms
-  const armGeo = new THREE.CapsuleGeometry(0.1, 0.6, 4, 8);
-  const armMat = new THREE.MeshStandardMaterial({ color: color, emissive: color, emissiveIntensity: 0.1 });
+    const rightArm = new THREE.Mesh(armGeo, armMat);
+    rightArm.position.set(0.45, 1.3, 0);
+    rightArm.rotation.z = 0.2;
+    group.add(rightArm);
 
-  const leftArm = new THREE.Mesh(armGeo, armMat);
-  leftArm.position.set(-0.5, 1.2, 0);
-  leftArm.rotation.z = -0.2;
-  group.add(leftArm);
+    // Jeans Legs
+    const legGeo = new THREE.CylinderGeometry(0.11, 0.1, 0.8, 16);
+    const legMat = new THREE.MeshStandardMaterial({ color: "#3b82f6" }); // Blue jeans
 
-  const rightArm = new THREE.Mesh(armGeo, armMat);
-  rightArm.position.set(0.5, 1.2, 0);
-  rightArm.rotation.z = 0.2;
-  group.add(rightArm);
+    const leftLeg = new THREE.Mesh(legGeo, legMat);
+    leftLeg.position.set(-0.15, 0.4, 0);
+    group.add(leftLeg);
+
+    const rightLeg = new THREE.Mesh(legGeo, legMat);
+    rightLeg.position.set(0.15, 0.4, 0);
+    group.add(rightLeg);
+
+    // Shoes
+    const shoeGeo = new THREE.BoxGeometry(0.15, 0.1, 0.3);
+    const shoeMat = new THREE.MeshStandardMaterial({ color: "#9ca3af" }); // New Balance grey
+
+    const leftShoe = new THREE.Mesh(shoeGeo, shoeMat);
+    leftShoe.position.set(-0.15, 0.05, 0.1);
+    group.add(leftShoe);
+
+    const rightShoe = new THREE.Mesh(shoeGeo, shoeMat);
+    rightShoe.position.set(0.15, 0.05, 0.1);
+    group.add(rightShoe);
+
+    group.userData.legs = [leftLeg, rightLeg];
+    group.userData.arms = [leftArm, rightArm];
+
+  } else {
+    // Standard Agent (Robot/Armor)
+    const skinTex = createSkinTexture(colorHex, agent.model);
+
+    const body = new THREE.Mesh(
+      new THREE.CapsuleGeometry(0.35, 0.8, 4, 16),
+      new THREE.MeshStandardMaterial({
+        map: skinTex,
+        color: 0xffffff,
+        emissive: color,
+        emissiveIntensity: 0.15
+      })
+    );
+    body.rotation.y = -Math.PI / 2;
+    body.position.y = 1.1;
+    group.add(body);
+
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.28, 16, 16), new THREE.MeshStandardMaterial({ color: "#dce6ff" }));
+    head.position.y = 1.9;
+    group.add(head);
+
+    const visor = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.1, 0.15), new THREE.MeshStandardMaterial({ color: "#111111", roughness: 0.2 }));
+    visor.position.set(0, 1.92, 0.22);
+    group.add(visor);
+
+    const badgeColor = new THREE.Color(colorHex);
+    const badge = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.1, 0.1, 0.05, 16),
+      new THREE.MeshStandardMaterial({
+        color: badgeColor,
+        emissive: badgeColor,
+        emissiveIntensity: 0.8
+      })
+    );
+    badge.rotation.x = Math.PI / 2;
+    badge.position.set(0, 1.45, 0.32);
+    group.add(badge);
+
+    const armGeo = new THREE.CapsuleGeometry(0.1, 0.6, 4, 8);
+    const armMat = new THREE.MeshStandardMaterial({ color: color, emissive: color, emissiveIntensity: 0.1 });
+
+    const leftArm = new THREE.Mesh(armGeo, armMat);
+    leftArm.position.set(-0.5, 1.3, 0);
+    leftArm.rotation.z = -0.2;
+    group.add(leftArm);
+
+    const rightArm = new THREE.Mesh(armGeo, armMat);
+    rightArm.position.set(0.5, 1.3, 0);
+    rightArm.rotation.z = 0.2;
+    group.add(rightArm);
+
+    // Legs
+    const legGeo = new THREE.CapsuleGeometry(0.12, 0.7, 4, 8);
+    const legMat = new THREE.MeshStandardMaterial({ color: "#334155" });
+
+    const leftLeg = new THREE.Mesh(legGeo, legMat);
+    leftLeg.position.set(-0.18, 0.4, 0);
+    group.add(leftLeg);
+
+    const rightLeg = new THREE.Mesh(legGeo, legMat);
+    rightLeg.position.set(0.18, 0.4, 0);
+    group.add(rightLeg);
+
+    group.userData.legs = [leftLeg, rightLeg];
+    group.userData.arms = [leftArm, rightArm];
+  }
 
   group.position.set(-5 + index * 2, 0, -0.5);
   scene.add(group);
@@ -640,6 +789,30 @@ function updateAgents3D() {
     const deskPos = computers[deskIdx].clone();
     deskPos.y = 0.5;
 
+    // Walking Animation
+    const isMoving = item.phase.startsWith("walking_");
+    if (isMoving) {
+       const [leftLeg, rightLeg] = item.group.userData.legs || [];
+       const [leftArm, rightArm] = item.group.userData.arms || [];
+       const speed = 0.015;
+       if(leftLeg && rightLeg) {
+          leftLeg.rotation.x = Math.sin(Date.now() * speed) * 0.5;
+          rightLeg.rotation.x = Math.cos(Date.now() * speed) * 0.5;
+       }
+       if(leftArm && rightArm) {
+          leftArm.rotation.x = -Math.sin(Date.now() * speed) * 0.5;
+          rightArm.rotation.x = -Math.cos(Date.now() * speed) * 0.5;
+       }
+    } else if (item.phase === "idle" || item.phase === "at_board") {
+       // Reset limbs
+       const [leftLeg, rightLeg] = item.group.userData.legs || [];
+       const [leftArm, rightArm] = item.group.userData.arms || [];
+       if(leftLeg) leftLeg.rotation.x = 0;
+       if(rightLeg) rightLeg.rotation.x = 0;
+       if(leftArm) leftArm.rotation.x = 0;
+       if(rightArm) rightArm.rotation.x = 0;
+    }
+
     if (agent.status === "working") {
        if (item.phase === "idle" || item.phase === "walking_from_desk") {
           item.phase = "walking_to_board";
@@ -663,11 +836,18 @@ function updateAgents3D() {
        } else if (item.phase === "working") {
           item.target.copy(deskPos);
           // Highlight screen
-          if (screenGlows[deskIdx]) (screenGlows[deskIdx].material as any).opacity = 0.5 + Math.random() * 0.2;
+          // if (screenGlows[deskIdx]) (screenGlows[deskIdx].material as any).opacity = 0.5 + Math.random() * 0.2;
+
+          if (agent.assignedTask) {
+             const task = tasks.find(t => t.id === agent.assignedTask);
+             if (task) {
+                const logText = (task.logs && task.logs.length > 0) ? task.logs.join("\n") : `Working on #${task.id}...`;
+                updateScreenContent(deskIdx, logText);
+             }
+          }
 
           // Typing animation (arms)
-          const leftArm = item.group.children[3];
-          const rightArm = item.group.children[4];
+          const [leftArm, rightArm] = item.group.userData.arms || [];
           if(leftArm && rightArm) {
              leftArm.rotation.x = Math.sin(Date.now() * 0.01) * 0.2;
              rightArm.rotation.x = Math.cos(Date.now() * 0.01) * 0.2;
@@ -683,8 +863,7 @@ function updateAgents3D() {
           if (item.group.position.distanceTo(item.target) < 0.5) {
              item.phase = "idle";
              // Reset arms
-             const leftArm = item.group.children[3];
-             const rightArm = item.group.children[4];
+             const [leftArm, rightArm] = item.group.userData.arms || [];
              if(leftArm) leftArm.rotation.x = 0;
              if(rightArm) rightArm.rotation.x = 0;
           }

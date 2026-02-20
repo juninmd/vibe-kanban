@@ -152,8 +152,8 @@ function autoAssign() {
   });
 }
 
-// Start Auto-Pilot loop (every 3 seconds)
-setInterval(autoAssign, 3000);
+// Start Auto-Pilot loop (every 2 seconds)
+setInterval(autoAssign, 2000);
 
 // --- PM Auto-Create Logic ---
 function pmAutoCreateLoop() {
@@ -431,6 +431,19 @@ const server = createServer(async (req, res) => {
     }
 
     return jsonResponse(res, 200, { tasks: state.tasks });
+  }
+
+  // POST /api/settings
+  if (url === "/api/settings" && method === "POST") {
+    const body = await parseBody(req);
+    // Merge keys into process.env
+    for (const key in body) {
+      if (typeof body[key] === "string") {
+        process.env[key] = body[key];
+      }
+    }
+    addEvent("Configurações de API atualizadas.");
+    return jsonResponse(res, 200, { ok: true });
   }
 
   // POST /api/config

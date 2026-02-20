@@ -19,6 +19,7 @@
         <button id="toggleViewBtn">Alternar 2D / 3D</button>
         <button id="seedTasksBtn">Gerar tarefas exemplo</button>
         <button id="resetDataBtn" style="border-color: #ff6f6f; color: #ff6f6f;">Resetar Dados</button>
+        <button id="settingsBtn" title="Configurações">⚙️</button>
       </div>
     </header>
 
@@ -92,6 +93,32 @@
         }
       }
     </script>
+    <dialog id="settingsDialog">
+      <form method="dialog" id="settingsForm">
+        <h3>Configurações de API</h3>
+        <p>Insira as chaves de API para os drivers (simulação ativa se vazio).</p>
+
+        <label>
+          OpenAI API Key
+          <input type="password" name="OPENAI_API_KEY" placeholder="sk-..." />
+        </label>
+
+        <label>
+          Gemini API Key
+          <input type="password" name="GEMINI_API_KEY" placeholder="AIza..." />
+        </label>
+
+        <label>
+          Anthropic API Key
+          <input type="password" name="ANTHROPIC_API_KEY" placeholder="sk-ant..." />
+        </label>
+
+        <div class="dialog-actions">
+          <button type="button" id="cancelSettingsBtn">Cancelar</button>
+          <button type="submit" id="saveSettingsBtn">Salvar</button>
+        </div>
+      </form>
+    </dialog>
     <script type="module" src="dist/app.js"></script>
   </body>
 </html>

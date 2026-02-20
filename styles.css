@@ -269,3 +269,66 @@ label { display: grid; gap: 0.25rem; font-size: 0.8rem; color: var(--muted); tex
 .priority-alta { border-left: 3px solid #f87171; }
 .priority-media { border-left: 3px solid #fbbf24; }
 .priority-baixa { border-left: 3px solid #34d399; }
+
+/* Settings Dialog */
+dialog {
+  background: var(--card-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 2rem;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+  max-width: 400px;
+  width: 100%;
+}
+
+dialog::backdrop {
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+}
+
+dialog h3 {
+  margin-top: 0;
+  color: var(--accent);
+}
+
+dialog p {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin-bottom: 1.5rem;
+}
+
+dialog form {
+  display: grid;
+  gap: 1rem;
+}
+
+dialog label {
+  display: grid;
+  gap: 0.5rem;
+  font-weight: 500;
+}
+
+dialog input {
+  width: 100%;
+  background: #0f172a;
+  border-color: #334155;
+}
+
+dialog .dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+#cancelSettingsBtn {
+  background: transparent;
+  border: 1px solid var(--border);
+}
+
+#saveSettingsBtn {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
