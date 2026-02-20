@@ -1,3 +1,6 @@
 node_modules/
 dist/
-server.log
+*.log
+__pycache__/
+verification_*.png
+!verification_working.png
