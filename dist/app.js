@@ -214,10 +214,19 @@ scene.background = new THREE.Color("#0b1022");
 const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 100);
 camera.position.set(0, 7, 12);
 camera.lookAt(0, 0, 0);
-scene.add(new THREE.AmbientLight("#ffffff", 0.75));
+const ambientLight = new THREE.AmbientLight("#ffffff", 0.75);
+scene.add(ambientLight);
 const dir = new THREE.DirectionalLight("#b7c6ff", 1.2);
 dir.position.set(5, 8, 3);
 scene.add(dir);
+function updateLighting() {
+    const workingCount = agents.filter(a => a.status === "working").length;
+    // Target intensity: brighter when busy
+    const targetDir = workingCount > 0 ? 1.8 : 0.8;
+    const targetAmb = workingCount > 0 ? 0.9 : 0.4;
+    dir.intensity += (targetDir - dir.intensity) * 0.05;
+    ambientLight.intensity += (targetAmb - ambientLight.intensity) * 0.05;
+}
 const floor = new THREE.Mesh(new THREE.PlaneGeometry(24, 14), new THREE.MeshStandardMaterial({ color: "#141c3f" }));
 floor.rotation.x = -Math.PI / 2;
 scene.add(floor);
@@ -373,6 +382,7 @@ function updateKanban3D() {
         });
         const mesh = new THREE.Mesh(geometry, material);
         mesh.position.set(x, y, 0.15);
+        mesh.userData = { taskId: task.id };
         kanbanGroup.add(mesh);
         laneCounts[lane] = count + 1;
     });
@@ -486,7 +496,7 @@ function createAgentMesh(agent, index) {
     label.scale.set(2.6, 0.66, 1);
     label.position.set(0, 2.7, 0);
     group.add(label);
-    return { group, label, target: group.position.clone() };
+    return { group, label, target: group.position.clone(), color: new THREE.Color(roleColors[agent.role] || "#888888") };
 }
 function updateAgents3D() {
     // Check if we need to create meshes for new agents
@@ -590,13 +600,48 @@ function tick() {
     }
     agentMeshes.forEach((item) => {
         item.group.position.lerp(item.target, 0.08);
+        // Spawn trail if moving
+        if (item.phase !== "idle" && item.phase !== "working" && item.phase !== "at_board") {
+            if (Math.random() < 0.4) {
+                spawnTrail(item.group.position, item.color);
+            }
+        }
     });
     if (typeof particles !== "undefined")
         particles.rotation.y += 0.0005;
     updateConfetti();
+    updateTrails();
+    updateLighting();
     controls.update();
     renderer.render(scene, camera);
     requestAnimationFrame(tick);
+}
+const trailParticles = [];
+const trailGeo = new THREE.BoxGeometry(0.1, 0.1, 0.1);
+function spawnTrail(position, color) {
+    const mat = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.6 });
+    const mesh = new THREE.Mesh(trailGeo, mat);
+    mesh.position.copy(position);
+    mesh.position.y += 0.5; // center of body
+    // Random offset for "sparkle"
+    mesh.position.x += (Math.random() - 0.5) * 0.2;
+    mesh.position.z += (Math.random() - 0.5) * 0.2;
+    scene.add(mesh);
+    trailParticles.push({ mesh, life: 1.0 });
+}
+function updateTrails() {
+    for (let i = trailParticles.length - 1; i >= 0; i--) {
+        const p = trailParticles[i];
+        p.life -= 0.03;
+        p.mesh.scale.setScalar(p.life);
+        p.mesh.rotation.x += 0.1;
+        p.mesh.rotation.y += 0.1;
+        if (p.life <= 0) {
+            scene.remove(p.mesh);
+            p.mesh.material.dispose();
+            trailParticles.splice(i, 1);
+        }
+    }
 }
 // SSE Connection
 const evtSource = new EventSource(`${API_URL}/api/events`);
@@ -609,4 +654,23 @@ evtSource.onmessage = (event) => {
         console.error("Error parsing SSE data", e);
     }
 };
+// --- Interaction ---
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+function onPointerDown(event) {
+    const rect = canvas.getBoundingClientRect();
+    mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    raycaster.setFromCamera(mouse, camera);
+    const intersects = raycaster.intersectObjects(kanbanGroup.children);
+    if (intersects.length > 0) {
+        const object = intersects[0].object;
+        const taskId = object.userData.taskId;
+        const task = tasks.find(t => t.id === taskId);
+        if (task) {
+            alert(`Task #${task.id}\nTitle: ${task.title}\nCategory: ${task.category}\nAssigned: ${task.assignedTo || "None"}`);
+        }
+    }
+}
+window.addEventListener('pointerdown', onPointerDown);
 tick();
