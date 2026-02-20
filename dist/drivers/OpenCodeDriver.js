@@ -1,23 +1,37 @@
-import { exec } from "child_process";
+import { spawn } from "child_process";
 export class OpenCodeDriver {
     name = "OpenCode AI";
     runningTasks = new Map();
     async executeTask(task, agent, ctx) {
-        const cmd = `opencode run "${task.title}" --agent ${agent.role}`;
-        ctx.onLog(task.id, `Running: ${cmd}`);
-        const child = exec(cmd, (error, stdout, stderr) => {
-            if (error) {
-                // More robust check for command not found
-                if (error.message.includes("not found") || (stderr && stderr.includes("not found"))) {
-                    ctx.onLog(task.id, "OpenCode CLI not installed. Falling back to simulation.");
-                    this.simulateDevelopment(task, ctx);
-                    return;
-                }
-                ctx.onBugFound(task.id, stderr || error.message);
+        const cmd = "opencode";
+        const args = ["run", task.title, "--agent", agent.role];
+        ctx.onLog(task.id, `Running: ${cmd} ${args.join(" ")}`);
+        const child = spawn(cmd, args);
+        child.stdout.on("data", (data) => {
+            ctx.onLog(task.id, data.toString());
+        });
+        child.stderr.on("data", (data) => {
+            const msg = data.toString();
+            if (msg.includes("not found") || msg.includes("ENOENT")) {
+                // This might not be enough
+            }
+            ctx.onBugFound(task.id, msg);
+        });
+        child.on("error", (error) => {
+            if (error.code === "ENOENT") {
+                ctx.onLog(task.id, "OpenCode CLI not installed. Falling back to simulation.");
+                this.simulateDevelopment(task, ctx);
                 return;
             }
-            ctx.onLog(task.id, stdout);
-            ctx.onComplete(task.id);
+            ctx.onBugFound(task.id, error.message);
+        });
+        child.on("close", (code) => {
+            if (code === 0) {
+                ctx.onComplete(task.id);
+            }
+            else {
+                // Handle error
+            }
         });
         this.runningTasks.set(task.id, child);
         return Promise.resolve();

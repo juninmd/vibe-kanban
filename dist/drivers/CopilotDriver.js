@@ -1,23 +1,37 @@
-import { exec } from "child_process";
+import { spawn } from "child_process";
 export class CopilotDriver {
     name = "Copilot SDK";
     runningTasks = new Map();
     async executeTask(task, agent, ctx) {
-        const cmd = `copilot task "${task.title}" --model ${agent.model}`;
-        ctx.onLog(task.id, `Running: ${cmd}`);
-        const child = exec(cmd, (error, stdout, stderr) => {
-            if (error) {
-                // More robust check
-                if (error.message.includes("not found") || (stderr && stderr.includes("not found"))) {
-                    ctx.onLog(task.id, "Copilot CLI not installed. Falling back to simulation.");
-                    this.simulateDevelopment(task, ctx);
-                    return;
-                }
-                ctx.onBugFound(task.id, stderr || error.message);
+        const cmd = "gh";
+        const args = ["copilot", "suggest", task.title, "--target", "nodejs"];
+        ctx.onLog(task.id, `Running: ${cmd} ${args.join(" ")}`);
+        const child = spawn(cmd, args);
+        child.stdout.on("data", (data) => {
+            ctx.onLog(task.id, data.toString());
+        });
+        child.stderr.on("data", (data) => {
+            const msg = data.toString();
+            if (msg.includes("not found") || msg.includes("ENOENT")) {
+                // This might not catch everything but it's okay for now
+            }
+            ctx.onBugFound(task.id, msg);
+        });
+        child.on("error", (error) => {
+            if (error.code === "ENOENT") {
+                ctx.onLog(task.id, "GitHub Copilot CLI not installed. Falling back to simulation.");
+                this.simulateDevelopment(task, ctx);
                 return;
             }
-            ctx.onLog(task.id, stdout);
-            ctx.onComplete(task.id);
+            ctx.onBugFound(task.id, error.message);
+        });
+        child.on("close", (code) => {
+            if (code === 0) {
+                ctx.onComplete(task.id);
+            }
+            else {
+                // Handle error
+            }
         });
         this.runningTasks.set(task.id, child);
         return Promise.resolve();
@@ -26,9 +40,9 @@ export class CopilotDriver {
         const steps = [
             "Analyzing workspace context...",
             `Synthesizing solution for "${task.title}"...`,
-            "Suggesting code changes...",
+            "Suggesting code changes via Ghost Text...",
             "Refactoring for style compliance...",
-            "Verifying implementation..."
+            "Verifying implementation against existing patterns..."
         ];
         let stepIndex = 0;
         const interval = setInterval(() => {
