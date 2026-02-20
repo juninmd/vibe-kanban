@@ -103,52 +103,52 @@ function autoAssign() {
 
       // Execute via Driver
       currentDriver.executeTask(task, agent, {
-          onLog: (tid, msg) => {
-             const t = getTask(tid);
-             if (t) {
-                t.logs.push(msg);
-                if (msg.includes("Error") || msg.includes("Completed")) addEvent(`#${tid}: ${msg}`);
-                else broadcastState();
-             }
-          },
-          onComplete: (tid) => {
-             const t = getTask(tid);
-             if (t && t.assignedTo) {
-                const a = getAgent(t.assignedTo);
-                if (a) { a.status = "idle"; a.assignedTask = null; }
-                t.assignedTo = null;
-                t.lane = "done";
-                addEvent(`Tarefa #${tid} concluída!`);
-             }
-          },
-          onBugFound: (tid, desc) => {
-             const t = getTask(tid);
-                if (t) {
-                  addEvent(`BUG encontrado em #${tid}: ${desc}`);
-                  const bugTask: Task = {
-                    id: taskIdCounter++,
-                    title: `Bug: ${desc}`,
-                    source: "system",
-                    category: "testes",
-                    priority: "alta",
-                    lane: "backlog",
-                    assignedTo: null,
-                    interrupted: false,
-                    logs: [],
-                    createdAt: Date.now(),
-                    updatedAt: Date.now()
-                  };
-                  state.tasks.push(bugTask);
-                  if (t.assignedTo) {
-                     const a = getAgent(t.assignedTo);
-                     if (a) { a.status = "idle"; a.assignedTask = null; }
-                     t.assignedTo = null;
-                     t.lane = "backlog";
-                     t.interrupted = true;
-                  }
-                }
-          },
-          onInterrupt: (tid) => {}
+        onLog: (tid, msg) => {
+          const t = getTask(tid);
+          if (t) {
+            t.logs.push(msg);
+            if (msg.includes("Error") || msg.includes("Completed")) addEvent(`#${tid}: ${msg}`);
+            else broadcastState();
+          }
+        },
+        onComplete: (tid) => {
+          const t = getTask(tid);
+          if (t && t.assignedTo) {
+            const a = getAgent(t.assignedTo);
+            if (a) { a.status = "idle"; a.assignedTask = null; }
+            t.assignedTo = null;
+            t.lane = "done";
+            addEvent(`Tarefa #${tid} concluída!`);
+          }
+        },
+        onBugFound: (tid, desc) => {
+          const t = getTask(tid);
+          if (t) {
+            addEvent(`BUG encontrado em #${tid}: ${desc}`);
+            const bugTask: Task = {
+              id: taskIdCounter++,
+              title: `Bug: ${desc}`,
+              source: "system",
+              category: "testes",
+              priority: "alta",
+              lane: "backlog",
+              assignedTo: null,
+              interrupted: false,
+              logs: [],
+              createdAt: Date.now(),
+              updatedAt: Date.now()
+            };
+            state.tasks.push(bugTask);
+            if (t.assignedTo) {
+              const a = getAgent(t.assignedTo);
+              if (a) { a.status = "idle"; a.assignedTask = null; }
+              t.assignedTo = null;
+              t.lane = "backlog";
+              t.interrupted = true;
+            }
+          }
+        },
+        onInterrupt: (tid) => { }
       });
     }
   });
@@ -199,9 +199,9 @@ const server = createServer(async (req, res) => {
     // Prevent directory traversal
     const normalizedPath = path.normalize(filePath);
     if (normalizedPath.startsWith("..")) {
-        res.writeHead(403);
-        res.end("Forbidden");
-        return;
+      res.writeHead(403);
+      res.end("Forbidden");
+      return;
     }
 
     const extname = path.extname(filePath);
@@ -225,15 +225,18 @@ const server = createServer(async (req, res) => {
       case ".svg":
         contentType = "image/svg+xml";
         break;
+      case ".glb":
+        contentType = "model/gltf-binary";
+        break;
     }
 
     fs.readFile(filePath, (error, content) => {
       if (error) {
         if (error.code == "ENOENT") {
-           jsonResponse(res, 404, { error: "Not found" });
+          jsonResponse(res, 404, { error: "Not found" });
         } else {
-           res.writeHead(500);
-           res.end("Sorry, check with the site admin for error: " + error.code + " ..\n");
+          res.writeHead(500);
+          res.end("Sorry, check with the site admin for error: " + error.code + " ..\n");
         }
       } else {
         res.writeHead(200, { "Content-Type": contentType });
@@ -318,10 +321,10 @@ const server = createServer(async (req, res) => {
       onLog: (tid, msg) => {
         const t = getTask(tid);
         if (t) {
-           t.logs.push(msg);
-           // Only log important steps to global event log to avoid spam
-           if (msg.includes("Error") || msg.includes("Completed")) addEvent(`#${tid}: ${msg}`);
-           else broadcastState();
+          t.logs.push(msg);
+          // Only log important steps to global event log to avoid spam
+          if (msg.includes("Error") || msg.includes("Completed")) addEvent(`#${tid}: ${msg}`);
+          else broadcastState();
         }
       },
       onComplete: (tid) => {
@@ -355,11 +358,11 @@ const server = createServer(async (req, res) => {
           state.tasks.push(bugTask);
           // For now, interrupt original task
           if (t.assignedTo) {
-             const a = getAgent(t.assignedTo);
-             if (a) { a.status = "idle"; a.assignedTask = null; }
-             t.assignedTo = null;
-             t.lane = "backlog"; // Return to backlog to retry later
-             t.interrupted = true;
+            const a = getAgent(t.assignedTo);
+            if (a) { a.status = "idle"; a.assignedTask = null; }
+            t.assignedTo = null;
+            t.lane = "backlog"; // Return to backlog to retry later
+            t.interrupted = true;
           }
         }
       },
@@ -401,12 +404,12 @@ const server = createServer(async (req, res) => {
 
     // If moving out of in_progress, interrupt/finish logic
     if (task.lane === "in_progress" && lane !== "in_progress") {
-       if (task.assignedTo) {
-         const agent = getAgent(task.assignedTo);
-         if (agent) { agent.status = "idle"; agent.assignedTask = null; }
-         currentDriver.interruptTask(task);
-         task.assignedTo = null;
-       }
+      if (task.assignedTo) {
+        const agent = getAgent(task.assignedTo);
+        if (agent) { agent.status = "idle"; agent.assignedTask = null; }
+        currentDriver.interruptTask(task);
+        task.assignedTo = null;
+      }
     }
     task.lane = lane;
     broadcastState();

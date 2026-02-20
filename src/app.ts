@@ -1,7 +1,8 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+import * as SkeletonUtils from "three/addons/utils/SkeletonUtils.js";
 import { createOffice } from "./office.js";
-import { getHeadMaterials, getBodyMaterials, getLimbMaterial } from "./skins.js";
 
 const API_URL = "";
 
@@ -271,6 +272,7 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color("#0b1022");
+const clock = new THREE.Clock();
 
 const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 100);
 camera.position.set(0, 7, 12);
@@ -297,11 +299,27 @@ const officeData = createOffice(scene);
 // Ambient Particles
 const pGeo = new THREE.BufferGeometry();
 const pPos = new Float32Array(600);
-for(let i=0; i<600; i++) pPos[i] = (Math.random() - 0.5) * 20;
+for (let i = 0; i < 600; i++) pPos[i] = (Math.random() - 0.5) * 20;
 pGeo.setAttribute("position", new THREE.BufferAttribute(pPos, 3));
 const pMat = new THREE.PointsMaterial({ color: 0x88ccff, size: 0.05, transparent: true, opacity: 0.4 });
 const particles = new THREE.Points(pGeo, pMat);
 scene.add(particles);
+
+let robotModel: THREE.Group | null = null;
+let robotAnimations: THREE.AnimationClip[] = [];
+const loader = new GLTFLoader();
+loader.load("/models/RobotExpressive.glb", (gltf) => {
+  robotModel = gltf.scene;
+  robotAnimations = gltf.animations;
+
+  robotModel.traverse((child: any) => {
+    if (child.isMesh) {
+      child.castShadow = true;
+      child.receiveShadow = true;
+    }
+  });
+  console.log("Robot animations loaded:", robotAnimations.map(a => a.name));
+});
 
 // Confetti System
 function spawnConfetti() {
@@ -309,17 +327,17 @@ function spawnConfetti() {
   const count = 150;
   const positions = new Float32Array(count * 3);
   const colors = new Float32Array(count * 3);
-  const velocities: {x: number, y: number, z: number}[] = [];
+  const velocities: { x: number, y: number, z: number }[] = [];
 
-  for(let i=0; i<count; i++) {
-    positions[i*3] = 0; // x (center)
-    positions[i*3+1] = 5; // y (high up)
-    positions[i*3+2] = -4; // z (near board)
+  for (let i = 0; i < count; i++) {
+    positions[i * 3] = 0; // x (center)
+    positions[i * 3 + 1] = 5; // y (high up)
+    positions[i * 3 + 2] = -4; // z (near board)
 
     const color = new THREE.Color().setHSL(Math.random(), 0.9, 0.6);
-    colors[i*3] = color.r;
-    colors[i*3+1] = color.g;
-    colors[i*3+2] = color.b;
+    colors[i * 3] = color.r;
+    colors[i * 3 + 1] = color.g;
+    colors[i * 3 + 2] = color.b;
 
     velocities.push({
       x: (Math.random() - 0.5) * 0.3,
@@ -339,24 +357,24 @@ function spawnConfetti() {
 }
 
 function updateConfetti() {
-  for(let i=confettiParticles.length-1; i>=0; i--) {
-     const p = confettiParticles[i];
-     p.age++;
-     const positions = p.mesh.geometry.attributes.position.array;
+  for (let i = confettiParticles.length - 1; i >= 0; i--) {
+    const p = confettiParticles[i];
+    p.age++;
+    const positions = p.mesh.geometry.attributes.position.array;
 
-     for(let j=0; j<p.velocities.length; j++) {
-        p.velocities[j].y -= 0.005; // Gravity
-        positions[j*3] += p.velocities[j].x;
-        positions[j*3+1] += p.velocities[j].y;
-        positions[j*3+2] += p.velocities[j].z;
-     }
-     p.mesh.geometry.attributes.position.needsUpdate = true;
+    for (let j = 0; j < p.velocities.length; j++) {
+      p.velocities[j].y -= 0.005; // Gravity
+      positions[j * 3] += p.velocities[j].x;
+      positions[j * 3 + 1] += p.velocities[j].y;
+      positions[j * 3 + 2] += p.velocities[j].z;
+    }
+    p.mesh.geometry.attributes.position.needsUpdate = true;
 
-     if(p.age > 200) {
-        scene.remove(p.mesh);
-        p.mesh.geometry.dispose();
-        confettiParticles.splice(i, 1);
-     }
+    if (p.age > 200) {
+      scene.remove(p.mesh);
+      p.mesh.geometry.dispose();
+      confettiParticles.splice(i, 1);
+    }
   }
 }
 
@@ -425,15 +443,15 @@ function createTaskTexture(task: Task) {
 
 function updateKanban3D() {
   // Clear old meshes
-  while(kanbanGroup.children.length > 0){
+  while (kanbanGroup.children.length > 0) {
     const child = kanbanGroup.children[0];
     if ((child as any).geometry) (child as any).geometry.dispose();
     if ((child as any).material) {
-        if (Array.isArray((child as any).material)) (child as any).material.forEach((m: any) => { if(m.map) m.map.dispose(); m.dispose(); });
-        else {
-           if ((child as any).material.map) (child as any).material.map.dispose();
-           (child as any).material.dispose();
-        }
+      if (Array.isArray((child as any).material)) (child as any).material.forEach((m: any) => { if (m.map) m.map.dispose(); m.dispose(); });
+      else {
+        if ((child as any).material.map) (child as any).material.map.dispose();
+        (child as any).material.dispose();
+      }
     }
     kanbanGroup.remove(child);
   }
@@ -481,23 +499,26 @@ const agentMeshes = new Map<string, {
   phase: "idle" | "walking_to_board" | "at_board" | "walking_to_desk" | "working" | "walking_from_desk";
   phaseTimer: number;
   color: THREE.Color;
+  mixer?: THREE.AnimationMixer;
+  anims?: Record<string, THREE.AnimationAction>;
+  currentAction?: THREE.AnimationAction | null;
 }>();
+
+function playAction(item: any, name: string, duration = 0.5) {
+  if (!item.anims) return;
+  const action = item.anims[name] || item.anims["Idle"];
+  if (action && item.currentAction !== action) {
+    if (item.currentAction) {
+      item.currentAction.fadeOut(duration);
+    }
+    action.reset().fadeIn(duration).play();
+    item.currentAction = action;
+  }
+}
 
 function createAgentMesh(agent: Agent, index: number) {
   const group = new THREE.Group();
 
-  const roleKeyMap: Record<string, string> = {
-    "Product Manager": "product_manager",
-    "Segurança": "seguranca",
-    "Performance": "performance",
-    "Novas Funcionalidades": "funcionalidades",
-    "Testes": "testes",
-    "Novas Features": "features"
-  };
-
-  const roleKey = roleKeyMap[agent.role] || "features";
-
-  // Use existing color map for trails/lights
   const roleColors: Record<string, string> = {
     "Product Manager": "#a855f7",
     "Segurança": "#ef4444",
@@ -508,45 +529,30 @@ function createAgentMesh(agent: Agent, index: number) {
   };
   const color = new THREE.Color(roleColors[agent.role] || "#888888");
 
-  // Voxel Construction
-  const headMat = getHeadMaterials(roleKey);
-  const head = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), headMat);
-  head.position.y = 1.75;
-  head.castShadow = true;
-  group.add(head);
+  let mixer: THREE.AnimationMixer | undefined;
+  let anims: Record<string, THREE.AnimationAction> | undefined;
 
-  const bodyMat = getBodyMaterials(roleKey);
-  const body = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.7, 0.3), bodyMat);
-  body.position.y = 1.15;
-  body.castShadow = true;
-  group.add(body);
+  if (robotModel) {
+    const clonedRobot = SkeletonUtils.clone(robotModel) as THREE.Group;
+    clonedRobot.scale.set(0.35, 0.35, 0.35);
+    clonedRobot.position.y = 0;
+    group.add(clonedRobot);
 
-  const limbMat = getLimbMaterial(roleKey);
-  const armGeo = new THREE.BoxGeometry(0.15, 0.7, 0.15);
-  armGeo.translate(0, -0.25, 0); // Pivot at shoulder
+    clonedRobot.traverse((child: any) => {
+      if (child.isMesh && child.material) {
+        child.material = child.material.clone();
+        if (child.name !== "Face") {
+          child.material.color.lerp(color, 0.7);
+        }
+      }
+    });
 
-  const leftArm = new THREE.Mesh(armGeo, limbMat);
-  leftArm.position.set(-0.35, 1.4, 0);
-  leftArm.castShadow = true;
-  group.add(leftArm);
-
-  const rightArm = new THREE.Mesh(armGeo, limbMat);
-  rightArm.position.set(0.35, 1.4, 0);
-  rightArm.castShadow = true;
-  group.add(rightArm);
-
-  const legGeo = new THREE.BoxGeometry(0.2, 0.7, 0.2);
-  legGeo.translate(0, -0.35, 0); // Pivot at hip
-
-  const leftLeg = new THREE.Mesh(legGeo, limbMat);
-  leftLeg.position.set(-0.15, 0.7, 0);
-  leftLeg.castShadow = true;
-  group.add(leftLeg);
-
-  const rightLeg = new THREE.Mesh(legGeo, limbMat);
-  rightLeg.position.set(0.15, 0.7, 0);
-  rightLeg.castShadow = true;
-  group.add(rightLeg);
+    mixer = new THREE.AnimationMixer(clonedRobot);
+    anims = {};
+    robotAnimations.forEach(clip => {
+      anims![clip.name] = mixer!.clipAction(clip);
+    });
+  }
 
   group.position.set(-5 + index * 2, 0, -0.5);
   scene.add(group);
@@ -575,10 +581,12 @@ function createAgentMesh(agent: Agent, index: number) {
   label.position.set(0, 2.3, 0);
   group.add(label);
 
-  return { group, label, target: group.position.clone(), color };
+  return { group, label, target: group.position.clone(), color, mixer, anims, currentAction: null };
 }
 
 function updateAgents3D() {
+  if (!robotModel) return;
+
   // Check if we need to create meshes for new agents
   agents.forEach((agent, idx) => {
     if (!agentMeshes.has(agent.id)) {
@@ -588,6 +596,7 @@ function updateAgents3D() {
         phase: "idle",
         phaseTimer: 0
       });
+      playAction(agentMeshes.get(agent.id), "Idle", 0);
     }
   });
 
@@ -607,100 +616,72 @@ function updateAgents3D() {
     deskPos.y = 0.5;
 
     if (agent.status === "working") {
-       if (item.phase === "idle" || item.phase === "walking_from_desk") {
-          item.phase = "walking_to_board";
-          item.target.set(0, 0.5, -3); // Board position
-       } else if (item.phase === "walking_to_board") {
-          if (item.group.position.distanceTo(item.target) < 0.8) {
-             item.phase = "at_board";
-             item.phaseTimer = 60;
-          }
-       } else if (item.phase === "at_board") {
-          item.phaseTimer--;
-          if (item.phaseTimer <= 0) {
-             item.phase = "walking_to_desk";
-             item.target.copy(deskPos);
-          }
-       } else if (item.phase === "walking_to_desk") {
+      if (item.phase === "idle" || item.phase === "walking_from_desk") {
+        item.phase = "walking_to_board";
+        item.target.set(0, 0.5, -3); // Board position
+      } else if (item.phase === "walking_to_board") {
+        if (item.group.position.distanceTo(item.target) < 0.8) {
+          item.phase = "at_board";
+          item.phaseTimer = 60;
+          playAction(item, "Dance");
+        } else {
+          playAction(item, "Walking");
+        }
+      } else if (item.phase === "at_board") {
+        item.phaseTimer--;
+        if (item.phaseTimer <= 0) {
+          item.phase = "walking_to_desk";
           item.target.copy(deskPos);
-          if (item.group.position.distanceTo(item.target) < 0.5) {
-             item.phase = "working";
-          }
-       } else if (item.phase === "working") {
-          item.target.copy(deskPos);
-          // Highlight screen
-          if (screenGlows[deskIdx]) (screenGlows[deskIdx].material as any).opacity = 0.5 + Math.random() * 0.2;
-
-          // Typing animation (arms)
-          // New Indices: LeftArm(2), RightArm(3)
-          const leftArm = item.group.children[2];
-          const rightArm = item.group.children[3];
-          if(leftArm && rightArm) {
-             leftArm.rotation.x = -Math.PI/2 + Math.sin(Date.now() * 0.015) * 0.2; // Arms up for typing
-             rightArm.rotation.x = -Math.PI/2 + Math.cos(Date.now() * 0.015) * 0.2;
-          }
-          // Legs sitting
-          const leftLeg = item.group.children[4];
-          const rightLeg = item.group.children[5];
-          if(leftLeg && rightLeg) {
-             leftLeg.rotation.x = -Math.PI/2;
-             rightLeg.rotation.x = -Math.PI/2;
-          }
-       }
+        }
+      } else if (item.phase === "walking_to_desk") {
+        item.target.copy(deskPos);
+        if (item.group.position.distanceTo(item.target) < 0.5) {
+          item.phase = "working";
+          item.group.position.copy(item.target);
+          playAction(item, "Sitting");
+        } else {
+          playAction(item, "Walking");
+        }
+      } else if (item.phase === "working") {
+        item.target.copy(deskPos);
+        // Highlight screen
+        if (screenGlows[deskIdx]) (screenGlows[deskIdx].material as any).opacity = 0.5 + Math.random() * 0.2;
+        playAction(item, "Sitting", 1.0);
+      }
     } else {
       // If was working, walk back. If already idle, stay idle.
       if (item.phase === "working" || item.phase === "walking_to_desk") {
-          item.phase = "walking_from_desk";
-          item.target.copy(spawnPos);
+        item.phase = "walking_from_desk";
+        item.target.copy(spawnPos);
       } else if (item.phase === "walking_from_desk") {
-          item.target.copy(spawnPos);
-          if (item.group.position.distanceTo(item.target) < 0.5) {
-             item.phase = "idle";
-             [2,3,4,5].forEach(i => { if(item.group.children[i]) item.group.children[i].rotation.x = 0; });
-          }
-      } else {
+        item.target.copy(spawnPos);
+        if (item.group.position.distanceTo(item.target) < 0.5) {
           item.phase = "idle";
-          item.target.copy(spawnPos);
-          [2,3,4,5].forEach(i => { if(item.group.children[i]) item.group.children[i].rotation.x = 0; });
+          item.group.position.copy(item.target);
+          playAction(item, "Idle");
+        } else {
+          playAction(item, "Walking");
+        }
+      } else {
+        item.phase = "idle";
+        item.target.copy(spawnPos);
+        playAction(item, "Idle");
       }
-    }
-
-    // Walking Animation
-    if (item.phase.includes("walking")) {
-        const time = Date.now() * 0.015;
-        const leftArm = item.group.children[2];
-        const rightArm = item.group.children[3];
-        const leftLeg = item.group.children[4];
-        const rightLeg = item.group.children[5];
-
-        if(leftLeg && rightLeg) {
-            leftLeg.rotation.x = Math.sin(time) * 0.5;
-            rightLeg.rotation.x = Math.cos(time) * 0.5;
-        }
-        if(leftArm && rightArm) {
-            leftArm.rotation.x = Math.cos(time) * 0.5;
-            rightArm.rotation.x = Math.sin(time) * 0.5;
-        }
     }
 
     // Rotate to face target
     if (item.phase !== "working" && item.phase !== "idle") {
-        item.group.lookAt(item.target.x, item.group.position.y, item.target.z);
+      item.group.lookAt(item.target.x, item.group.position.y, item.target.z);
     } else if (item.phase === "working") {
-         // Face towards board (away from desk screen usually, or towards it?)
-         // Desk setup: Screen at Z-0.3 relative to desk.
-         // If desk is at Z=2.8, screen is at Z=2.5.
-         // Agent is at Z=2.8.
-         // Agent should face -Z to see screen.
-         item.group.lookAt(item.group.position.x, item.group.position.y, -100);
+      item.group.lookAt(item.group.position.x, item.group.position.y, -100);
     } else {
-        item.group.rotation.set(0, 0, 0);
+      item.group.rotation.set(0, 0, 0);
     }
-
   });
 }
 
 function tick() {
+  const delta = clock.getDelta();
   const width = canvas.clientWidth;
   const height = canvas.clientHeight;
   if (canvas.width !== width || canvas.height !== height) {
@@ -711,15 +692,16 @@ function tick() {
 
   agentMeshes.forEach((item) => {
     item.group.position.lerp(item.target, 0.08);
+    if (item.mixer) item.mixer.update(delta);
     // Spawn trail if moving
     if (item.phase !== "idle" && item.phase !== "working" && item.phase !== "at_board") {
-        if (Math.random() < 0.4) {
-            spawnTrail(item.group.position, item.color);
-        }
+      if (Math.random() < 0.4) {
+        spawnTrail(item.group.position, item.color);
+      }
     }
   });
 
-  if(typeof particles !== "undefined") particles.rotation.y += 0.0005;
+  if (typeof particles !== "undefined") particles.rotation.y += 0.0005;
 
   updateConfetti();
   updateTrails();
@@ -771,7 +753,7 @@ evtSource.onmessage = (event) => {
   try {
     const data = JSON.parse(event.data);
     updateState(data);
-  } catch(e) {
+  } catch (e) {
     console.error("Error parsing SSE data", e);
   }
 };
@@ -795,7 +777,7 @@ function onPointerDown(event: PointerEvent) {
     const task = tasks.find(t => t.id === taskId);
 
     if (task) {
-        alert(`Task #${task.id}\nTitle: ${task.title}\nCategory: ${task.category}\nAssigned: ${task.assignedTo || "None"}`);
+      alert(`Task #${task.id}\nTitle: ${task.title}\nCategory: ${task.category}\nAssigned: ${task.assignedTo || "None"}`);
     }
   }
 }
