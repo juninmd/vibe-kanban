@@ -22,6 +22,8 @@ export interface Agent {
   category: string;
   status: "idle" | "working";
   assignedTask: number | null;
+  tool?: string;
+  terminalId?: string;
 }
 
 export interface EventLog {

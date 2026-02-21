@@ -70,6 +70,17 @@ const els = {
   toggleViewBtn: document.getElementById("toggleViewBtn") as HTMLButtonElement,
   seedTasksBtn: document.getElementById("seedTasksBtn") as HTMLButtonElement,
   resetDataBtn: document.getElementById("resetDataBtn") as HTMLButtonElement,
+  createAgentBtn: document.getElementById("createAgentBtn") as HTMLButtonElement,
+  settingsBtn: document.getElementById("settingsBtn") as HTMLButtonElement,
+  agentModal: document.getElementById("agentModal") as HTMLDialogElement,
+  agentForm: document.getElementById("agentForm") as HTMLFormElement,
+  cancelAgentBtn: document.getElementById("cancelAgentBtn") as HTMLButtonElement,
+  agentTool: document.getElementById("agentTool") as HTMLSelectElement,
+  agentModelDropdown: document.getElementById("agentModel") as HTMLSelectElement,
+  settingsModal: document.getElementById("settingsModal") as HTMLDialogElement,
+  settingsForm: document.getElementById("settingsForm") as HTMLFormElement,
+  cancelSettingsBtn: document.getElementById("cancelSettingsBtn") as HTMLButtonElement,
+  configCloneDir: document.getElementById("configCloneDir") as HTMLInputElement,
 };
 
 // Confetti State
@@ -327,6 +338,73 @@ els.resetDataBtn.addEventListener("click", () => {
   if (confirm("Tem certeza que deseja apagar todos os dados do servidor?")) {
     apiCall("/api/reset", "POST", {});
   }
+});
+
+// --- Modals Logic ---
+els.createAgentBtn.addEventListener("click", async () => {
+  els.agentModal.showModal();
+  els.agentTool.innerHTML = '<option value="">Carregando...</option>';
+  try {
+    const res = await fetch(`${API_URL}/api/tools`);
+    const data = await res.json();
+    if (data.tools && data.tools.length > 0) {
+      els.agentTool.innerHTML = '<option value="">Selecione a ferramenta</option>' + data.tools.map((t: any) => `<option value="${t.id}">${t.name}</option>`).join("");
+    } else {
+      els.agentTool.innerHTML = '<option value="">Nenhuma ferramenta CLI encontrada</option>';
+    }
+  } catch (e) {
+    console.error(e);
+  }
+});
+
+els.cancelAgentBtn.addEventListener("click", () => els.agentModal.close());
+
+els.agentTool.addEventListener("change", async (e: Event) => {
+  const tool = (e.target as HTMLSelectElement).value;
+  if (!tool) {
+    els.agentModelDropdown.innerHTML = '<option value="">Selecione a ferramenta primeiro</option>';
+    return;
+  }
+  els.agentModelDropdown.innerHTML = '<option value="">Carregando modelos...</option>';
+  try {
+    const res = await fetch(`${API_URL}/api/models?tool=${tool}`);
+    const data = await res.json();
+    if (data.models && data.models.length > 0) {
+      els.agentModelDropdown.innerHTML = data.models.map((m: string) => `<option value="${m}">${m}</option>`).join("");
+    } else {
+      els.agentModelDropdown.innerHTML = '<option value="">Nenhum modelo encontrado</option>';
+    }
+  } catch (e) { console.error(e); }
+});
+
+els.agentForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const role = (document.getElementById("agentRole") as HTMLInputElement).value;
+  const category = (document.getElementById("agentCategory") as HTMLSelectElement).value;
+  const tool = els.agentTool.value;
+  const model = els.agentModelDropdown.value;
+
+  await apiCall("/api/agents", "POST", { role, category, tool, model });
+  els.agentModal.close();
+  els.agentForm.reset();
+  els.agentModelDropdown.innerHTML = '<option value="">Selecione a ferramenta primeiro</option>';
+});
+
+els.settingsBtn.addEventListener("click", async () => {
+  els.settingsModal.showModal();
+  try {
+    const res = await fetch(`${API_URL}/api/config/clone-dir`);
+    const data = await res.json();
+    els.configCloneDir.value = data.cloneDir || "";
+  } catch (e) { console.error(e); }
+});
+
+els.cancelSettingsBtn.addEventListener("click", () => els.settingsModal.close());
+
+els.settingsForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  await apiCall("/api/config/clone-dir", "POST", { cloneDir: els.configCloneDir.value });
+  els.settingsModal.close();
 });
 
 // --- 3D Scene ---

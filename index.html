@@ -18,6 +18,8 @@
         <option value="copilot">Copilot SDK</option>
         <option value="opencode">OpenCode AI</option>
       </select>
+      <button id="createAgentBtn">Novo Agente</button>
+      <button id="settingsBtn">Configurações</button>
       <button id="toggleViewBtn">Alternar 2D / 3D</button>
       <button id="seedTasksBtn">Gerar tarefas exemplo</button>
       <button id="resetDataBtn" style="border-color: #ff6f6f; color: #ff6f6f;">Resetar Dados</button>
@@ -118,6 +120,57 @@
       <div id="agentTooltip" class="agent-tooltip" style="display: none;"></div>
     </section>
   </main>
+
+  <!-- Modal Novo Agente -->
+  <dialog id="agentModal" class="modal">
+    <div class="modal-content">
+      <h2>Criar Novo Agente</h2>
+      <form id="agentForm" class="modal-form">
+        <label>Nome / Role <input id="agentRole" required placeholder="Ex: Desenvolvedor React" /></label>
+        <label>Categoria
+          <select id="agentCategory">
+            <option value="roadmap">Roadmap</option>
+            <option value="seguranca">Segurança</option>
+            <option value="performance">Performance</option>
+            <option value="funcionalidades">Funcionalidades</option>
+            <option value="testes">Testes</option>
+            <option value="features">Features</option>
+            <option value="misc">Geral</option>
+          </select>
+        </label>
+        <label>Ferramenta (CLI)
+          <select id="agentTool" required>
+            <option value="">Carregando...</option>
+          </select>
+        </label>
+        <label>Modelo
+          <select id="agentModel" required>
+            <option value="">Selecione a ferramenta primeiro</option>
+          </select>
+        </label>
+        <div class="modal-actions">
+          <button type="button" id="cancelAgentBtn">Cancelar</button>
+          <button type="submit" class="primary-btn">Criar Agente</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+
+  <!-- Modal Configurações -->
+  <dialog id="settingsModal" class="modal">
+    <div class="modal-content">
+      <h2>Configurações do Kanban</h2>
+      <form id="settingsForm" class="modal-form">
+        <label>Diretório padrão para Clones
+          <input id="configCloneDir" required placeholder="C:\Caminho\Para\Clones" />
+        </label>
+        <div class="modal-actions">
+          <button type="button" id="cancelSettingsBtn">Cancelar</button>
+          <button type="submit" class="primary-btn">Salvar</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
 
   <script type="importmap">
       {

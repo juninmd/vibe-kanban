@@ -1,12 +1,14 @@
 import { createServer } from "http";
 import * as fs from "fs";
 import * as path from "path";
+import { execSync } from "child_process";
 import { Task, Agent, State, EventLog, LLMDriver } from "./types.js";
 import { MockDriver } from "./drivers/MockDriver.js";
 import { GeminiDriver } from "./drivers/GeminiDriver.js";
 import { CopilotDriver } from "./drivers/CopilotDriver.js";
 import { OpenCodeDriver } from "./drivers/OpenCodeDriver.js";
 import { ClaudeDriver } from "./drivers/ClaudeDriver.js";
+import { CommandDriver } from "./drivers/CommandDriver.js";
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 5174;
 
@@ -89,8 +91,10 @@ function startTask(task: Task, agent: Agent) {
   agent.assignedTask = task.id;
   addEvent(`[AutoPilot] ${agent.role} iniciou a tarefa #${task.id}`);
 
+  let executeDriver = agent.tool ? cliDriver : currentDriver;
+
   // Execute via Driver
-  currentDriver.executeTask(task, agent, {
+  executeDriver.executeTask(task, agent, {
     onLog: (tid, msg) => {
       const t = getTask(tid);
       if (t) {
@@ -196,7 +200,17 @@ function pmAutoCreateLoop() {
 // PM loop (every 10 seconds)
 setInterval(pmAutoCreateLoop, 10000);
 
+const CONFIG_FILE = "vibe_config.json";
+let appConfig = { cloneDir: "./clones" };
+try {
+  if (fs.existsSync(CONFIG_FILE)) {
+    appConfig = JSON.parse(fs.readFileSync(CONFIG_FILE, "utf-8"));
+  }
+} catch (e) { }
+
 // --- Server ---
+const cliDriver = new CommandDriver(() => appConfig.cloneDir);
+
 const server = createServer(async (req, res) => {
   const { method, url } = req as any;
 
@@ -258,6 +272,72 @@ const server = createServer(async (req, res) => {
   }
 
   if (method === "OPTIONS") return jsonResponse(res, 200, { ok: true });
+
+  // GET /api/config/clone-dir
+  if (url === "/api/config/clone-dir" && method === "GET") {
+    return jsonResponse(res, 200, { cloneDir: appConfig.cloneDir });
+  }
+
+  // POST /api/config/clone-dir
+  if (url === "/api/config/clone-dir" && method === "POST") {
+    const body = await parseBody(req);
+    appConfig.cloneDir = body.cloneDir || "./clones";
+    fs.writeFileSync(CONFIG_FILE, JSON.stringify(appConfig, null, 2));
+    addEvent(`Pasta padrão de clones alterada para: ${appConfig.cloneDir}`);
+    return jsonResponse(res, 200, { cloneDir: appConfig.cloneDir });
+  }
+
+  if (method === "OPTIONS") return jsonResponse(res, 200, { ok: true });
+
+  // GET /api/tools
+  if (url === "/api/tools" && method === "GET") {
+    const tools: { id: string; name: string }[] = [];
+    try {
+      execSync("gemini --version", { stdio: "ignore" });
+      tools.push({ id: "gemini", name: "Gemini CLI" });
+    } catch { }
+    try {
+      execSync("ollama --version", { stdio: "ignore" });
+      tools.push({ id: "ollama", name: "Ollama" });
+    } catch { }
+    return jsonResponse(res, 200, { tools });
+  }
+
+  // GET /api/models?tool=xxx
+  if (url.startsWith("/api/models") && method === "GET") {
+    const urlObj = new URL(url as string, `http://${req.headers?.host || "localhost"}`);
+    const tool = urlObj.searchParams.get("tool");
+    let models: string[] = [];
+    if (tool === "ollama") {
+      try {
+        const output = execSync("ollama list").toString();
+        const lines = output.split('\n').slice(1).filter(l => l.trim().length > 0);
+        models = lines.map(l => l.split(/\s+/)[0]);
+      } catch { }
+    } else if (tool === "gemini") {
+      models = ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash-thinking-exp-01-21", "gemini-2.5-pro-exp", "gemini-2.5-flash-exp"];
+    }
+    return jsonResponse(res, 200, { models });
+  }
+
+  // POST /api/agents (Create dynamic agent)
+  if (url === "/api/agents" && method === "POST") {
+    const body = await parseBody(req);
+    const newAgent: Agent = {
+      id: `agent-${Date.now()}`,
+      role: body.role || "Assistente",
+      model: body.model || "default",
+      category: body.category || "misc",
+      status: "idle",
+      assignedTask: null,
+      tool: body.tool,
+      terminalId: `term-${Date.now()}`
+    };
+    state.agents.push(newAgent);
+    addEvent(`Novo agente criado: ${newAgent.role} (${newAgent.tool} - ${newAgent.model})`);
+    broadcastState();
+    return jsonResponse(res, 201, { agent: newAgent });
+  }
 
   // GET /api/events (SSE)
   if (url === "/api/events" && method === "GET") {
@@ -330,8 +410,10 @@ const server = createServer(async (req, res) => {
     agent.assignedTask = task.id;
     addEvent(`${agent.role} iniciou a tarefa #${task.id}`);
 
+    let executeDriver = agent.tool ? cliDriver : currentDriver;
+
     // Execute via Driver
-    currentDriver.executeTask(task, agent, {
+    executeDriver.executeTask(task, agent, {
       onLog: (tid, msg) => {
         const t = getTask(tid);
         if (t) {
@@ -396,12 +478,14 @@ const server = createServer(async (req, res) => {
 
     if (task.assignedTo) {
       const agent = getAgent(task.assignedTo);
+      let executeDriver = currentDriver;
       if (agent) {
         agent.status = "idle";
         agent.assignedTask = null;
+        if (agent.tool) executeDriver = cliDriver;
       }
       // Stop driver
-      currentDriver.interruptTask(task);
+      executeDriver.interruptTask(task);
       task.assignedTo = null;
       task.lane = "backlog";
       task.interrupted = true;
@@ -420,8 +504,13 @@ const server = createServer(async (req, res) => {
     if (task.lane === "in_progress" && lane !== "in_progress") {
       if (task.assignedTo) {
         const agent = getAgent(task.assignedTo);
-        if (agent) { agent.status = "idle"; agent.assignedTask = null; }
-        currentDriver.interruptTask(task);
+        let executeDriver = currentDriver;
+        if (agent) {
+          agent.status = "idle";
+          agent.assignedTask = null;
+          if (agent.tool) executeDriver = cliDriver;
+        }
+        executeDriver.interruptTask(task);
         task.assignedTo = null;
       }
     }
