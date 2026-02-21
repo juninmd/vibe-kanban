@@ -538,6 +538,7 @@ loader.load("/models/RobotExpressive.glb", (gltf) => {
     }
   });
   console.log("Robot animations loaded:", robotAnimations.map(a => a.name));
+  updateAgents3D();
 });
 
 // Confetti System
@@ -879,7 +880,7 @@ function createAgentMesh(agent: Agent, index: number) {
     // Add a border
     ctx.strokeStyle = "#ffffff";
     ctx.lineWidth = 8;
-    ctx.strokeRect(4, 4, canvas.width-8, canvas.height-8);
+    ctx.strokeRect(4, 4, canvas.width - 8, canvas.height - 8);
 
     ctx.font = "bold 56px Inter, sans-serif";
     ctx.fillStyle = "#ffffff";
@@ -1027,9 +1028,9 @@ function tick() {
     } else if (item.phase === "working") {
       (item.statusSprite?.material as THREE.SpriteMaterial).map = statusTextures.working;
     } else if (item.phase === "idle") {
-       (item.statusSprite?.material as THREE.SpriteMaterial).map = statusTextures.idle;
+      (item.statusSprite?.material as THREE.SpriteMaterial).map = statusTextures.idle;
     } else {
-       (item.statusSprite?.material as THREE.SpriteMaterial).map = statusTextures.walking;
+      (item.statusSprite?.material as THREE.SpriteMaterial).map = statusTextures.walking;
     }
 
     // Laser & Floating Terminal Update
@@ -1097,7 +1098,7 @@ function tick() {
   updateVisualAlerts();
   updateConfetti();
   updateTrails();
-  
+
   // Pulse lighting based on active agents
   const activeCount = agents.filter(a => a.status === "working").length;
   if (activeCount > 0) {
@@ -1110,7 +1111,7 @@ function tick() {
     dir.intensity = 1.0 + pulse;
     ambientLight.intensity = 0.6 + pulse;
   }
-  
+
   controls.update();
   renderer.render(scene, camera);
   requestAnimationFrame(tick);
@@ -1254,3 +1255,5 @@ window.addEventListener("keydown", (e) => {
     playClickSound();
   }
 });
+
+tick();
