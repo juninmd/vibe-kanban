@@ -8,6 +8,9 @@ export interface Task {
   assignedTo: string | null;
   interrupted: boolean;
   logs: string[];
+  githubRepo?: string;
+  description?: string;
+  agentType?: string;
   createdAt: number;
   updatedAt: number;
 }

@@ -25,6 +25,10 @@ type Task = {
   assignedTo: string | null;
   interrupted?: boolean;
   logs?: string[];
+  githubRepo?: string;
+  description?: string;
+  agentType?: string;
+  model?: string;
 };
 
 type EventLog = {
@@ -51,12 +55,18 @@ const els = {
   title: document.getElementById("taskTitle") as HTMLInputElement,
   category: document.getElementById("taskCategory") as HTMLSelectElement,
   priority: document.getElementById("taskPriority") as HTMLSelectElement,
+  githubRepo: document.getElementById("taskGithubRepo") as HTMLInputElement,
+  description: document.getElementById("taskDescription") as HTMLTextAreaElement,
+  agentType: document.getElementById("taskAgentType") as HTMLInputElement,
+  agentAssign: document.getElementById("taskAgentAssign") as HTMLSelectElement,
+  agentModel: document.getElementById("taskAgentModel") as HTMLSelectElement,
   driverSelect: document.getElementById("driverSelect") as HTMLSelectElement,
   kanban: document.getElementById("kanbanBoard") as HTMLElement,
   agentsList: document.getElementById("agentsList") as HTMLElement,
   eventLog: document.getElementById("eventLog") as HTMLElement,
   view3d: document.getElementById("view3d") as HTMLElement,
   view2d: document.getElementById("view2d") as HTMLElement,
+  terminalsLayer: document.getElementById("terminalsLayer") as HTMLElement,
   toggleViewBtn: document.getElementById("toggleViewBtn") as HTMLButtonElement,
   seedTasksBtn: document.getElementById("seedTasksBtn") as HTMLButtonElement,
   resetDataBtn: document.getElementById("resetDataBtn") as HTMLButtonElement,
@@ -65,6 +75,29 @@ const els = {
 // Confetti State
 const confettiParticles: any[] = [];
 
+let isOfficeCreated = false;
+export let officeData: { padPositions: THREE.Vector3[] } = { padPositions: [] };
+
+function playSuccessSound() {
+  try {
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(440, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.1);
+    gain.gain.setValueAtTime(0, ctx.currentTime);
+    gain.gain.linearRampToValueAtTime(0.3, ctx.currentTime + 0.05);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.3);
+  } catch (e) {
+    console.log("Audio failed to play", e);
+  }
+}
+
 function updateState(data: any) {
   // Detect completions for celebration
   const newTasks = data.tasks || [];
@@ -72,12 +105,29 @@ function updateState(data: any) {
     const old = previousTasks.find((pt) => pt.id === t.id);
     if (old && old.lane !== "done" && t.lane === "done") {
       spawnConfetti();
+      playSuccessSound();
+      if (old.assignedTo) {
+        // Find the mesh for the agent that finished this
+        const item = agentMeshes.get(old.assignedTo);
+        if (item) {
+          item.phase = "celebrating";
+          item.phaseTimer = 3.0; // seconds
+        }
+      }
     }
   });
   previousTasks = JSON.parse(JSON.stringify(newTasks));
 
   tasks = newTasks;
   agents = data.agents || [];
+
+  // Create office dynamically once we know how many agents there are
+  if (!isOfficeCreated && agents.length > 0) {
+    const data = createOffice(scene, agents.length);
+    officeData.padPositions = data.padPositions;
+    isOfficeCreated = true;
+  }
+
   eventLog = data.events || [];
   render();
 }
@@ -107,8 +157,8 @@ async function apiCall(endpoint: string, method: string, body: any) {
   }
 }
 
-function createTask({ title, source, category, priority }: { title: string; source: string; category: string; priority: string; }) {
-  apiCall("/api/tasks", "POST", { title, source, category, priority });
+function createTask(taskParams: { title: string; source: string; category: string; priority: string; githubRepo?: string; description?: string; agentType?: string; assignedTo?: string; model?: string; }) {
+  apiCall("/api/tasks", "POST", taskParams);
 }
 
 function pickTask(task: Task) {
@@ -136,6 +186,7 @@ function bugFromTask(task: Task) {
     source: "agente",
     category: "testes",
     priority: "alta",
+    githubRepo: task.githubRepo,
   });
 }
 
@@ -162,11 +213,14 @@ function renderKanban() {
 
         card.innerHTML = `
           <strong>#${task.id} ${task.title}</strong>
+          ${task.description ? `<p style="font-size:0.8em; margin: 4px 0">${task.description}</p>` : ""}
           <div class="task-meta">
+            ${task.githubRepo ? `<span class="tag">Repo: ${task.githubRepo}</span>` : ""}
             <span class="tag">${task.category}</span>
             <span class="tag">${task.priority}</span>
             <span class="tag">fonte: ${task.source}</span>
             <span class="tag">agente: ${assigned}</span>
+            ${task.agentType ? `<span class="tag">cli/sdk: ${task.agentType}</span>` : ""}
             ${task.interrupted ? '<span class="tag">interrompido</span>' : ""}
           </div>
           ${lastLog ? `<div style="font-size:0.8em; margin-top:5px; color:#aaa;">> ${lastLog}</div>` : ""}
@@ -240,8 +294,17 @@ els.form.addEventListener("submit", (e) => {
     source: els.source.value,
     category: els.category.value,
     priority: els.priority.value,
+    githubRepo: els.githubRepo?.value.trim(),
+    description: els.description?.value.trim(),
+    agentType: els.agentType?.value.trim(),
+    assignedTo: els.agentAssign?.value || undefined,
+    model: els.agentModel?.value
   });
   els.title.value = "";
+  if (els.description) els.description.value = "";
+  if (els.githubRepo) els.githubRepo.value = "";
+  if (els.agentType) els.agentType.value = "";
+  if (els.agentAssign) els.agentAssign.value = "";
 });
 
 els.toggleViewBtn.addEventListener("click", () => {
@@ -295,20 +358,23 @@ function updateLighting() {
   ambientLight.intensity += (targetAmb - ambientLight.intensity) * 0.05;
 }
 
-const officeData = createOffice(scene);
+// Office data is now populated dynamically when state loads
 
 // Ambient Particles
 const pGeo = new THREE.BufferGeometry();
-const pPos = new Float32Array(600);
-for (let i = 0; i < 600; i++) pPos[i] = (Math.random() - 0.5) * 20;
+const pPos = new Float32Array(1000);
+for (let i = 0; i < 1000; i++) {
+  pPos[i * 3] = (Math.random() - 0.5) * 30; // x
+  pPos[i * 3 + 1] = Math.random() * 8; // y
+  pPos[i * 3 + 2] = (Math.random() - 0.5) * 15; // z
+}
 pGeo.setAttribute("position", new THREE.BufferAttribute(pPos, 3));
-const pMat = new THREE.PointsMaterial({ color: 0x88ccff, size: 0.05, transparent: true, opacity: 0.4 });
+const pMat = new THREE.PointsMaterial({ color: 0x00f0ff, size: 0.05, transparent: true, opacity: 0.6 });
 const particles = new THREE.Points(pGeo, pMat);
 scene.add(particles);
 
 let robotModel: THREE.Group | null = null;
 let robotAnimations: THREE.AnimationClip[] = [];
-let computerModel: THREE.Group | null = null;
 const loader = new GLTFLoader();
 
 loader.load("/models/RobotExpressive.glb", (gltf) => {
@@ -322,22 +388,6 @@ loader.load("/models/RobotExpressive.glb", (gltf) => {
     }
   });
   console.log("Robot animations loaded:", robotAnimations.map(a => a.name));
-});
-
-loader.load("/models/old_computer.glb", (gltf) => {
-  computerModel = gltf.scene;
-  // Scale and adjust the computer model
-  computerModel.scale.set(0.12, 0.12, 0.12); // smaller for the desk
-  computerModel.rotation.y = -Math.PI / 2; // Rotate 90 degrees to face the agent (assuming the model points on X axis)
-
-
-  // Clone it to all desk anchors
-  screenGlows.forEach(anchorGroup => {
-    if (computerModel) {
-      const pcClone = SkeletonUtils.clone(computerModel) as THREE.Group;
-      anchorGroup.add(pcClone);
-    }
-  });
 });
 
 // Confetti System
@@ -402,12 +452,12 @@ controls.enableDamping = true;
 controls.dampingFactor = 0.05;
 controls.maxPolarAngle = Math.PI / 2 - 0.1;
 
-const kanbanMesh = new THREE.Mesh(new THREE.BoxGeometry(8, 4, 0.2), new THREE.MeshStandardMaterial({ color: "#2a376f" }));
-kanbanMesh.position.set(0, 2, -4.2);
+const kanbanMesh = new THREE.Mesh(new THREE.BoxGeometry(12, 6, 0.2), new THREE.MeshStandardMaterial({ color: "#2a376f" }));
+kanbanMesh.position.set(0, 3, -4.2);
 // Add column separators
 for (let i = -1; i <= 1; i++) {
-  const line = new THREE.Mesh(new THREE.BoxGeometry(0.05, 3.8, 0.05), new THREE.MeshStandardMaterial({ color: "#5ea6ff" }));
-  line.position.set(i * 2, 0, 0.11);
+  const line = new THREE.Mesh(new THREE.BoxGeometry(0.075, 5.7, 0.05), new THREE.MeshStandardMaterial({ color: "#5ea6ff" }));
+  line.position.set(i * 3, 0, 0.11);
   kanbanMesh.add(line);
 }
 scene.add(kanbanMesh);
@@ -455,7 +505,9 @@ function createTaskTexture(task: Task) {
   // Status/Meta
   ctx.font = "18px Inter, sans-serif";
   ctx.fillStyle = "#94a3b8";
-  ctx.fillText(`${task.priority.toUpperCase()} • ${task.category}`, 32, 110);
+  let metaStr = `${task.priority.toUpperCase()} • ${task.category}`;
+  if (task.githubRepo) metaStr += ` • ${task.githubRepo}`;
+  ctx.fillText(metaStr, 32, 110);
 
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
@@ -479,7 +531,7 @@ function updateKanban3D() {
 
   // Group tasks by lane to stack them
   const laneCounts: Record<string, number> = { backlog: 0, in_progress: 0, review: 0, done: 0 };
-  const laneX: Record<string, number> = { backlog: -3, in_progress: -1, review: 1, done: 3 };
+  const laneX: Record<string, number> = { backlog: -4.5, in_progress: -1.5, review: 1.5, done: 4.5 }; // 1.5x scale
 
   tasks.forEach(task => {
     const lane = task.lane || "backlog";
@@ -487,12 +539,12 @@ function updateKanban3D() {
 
     const count = laneCounts[lane] || 0;
     const x = laneX[lane] || 0;
-    const y = 1.3 - count * 0.6;
+    const y = 1.95 - count * 0.9;
 
-    if (y < -1.5) return; // Don't overflow board
+    if (y < -2.25) return; // Don't overflow board
 
     // Create card mesh
-    const geometry = new THREE.BoxGeometry(1.8, 0.5, 0.05);
+    const geometry = new THREE.BoxGeometry(2.7, 0.75, 0.05);
     const texture = createTaskTexture(task);
     const material = new THREE.MeshStandardMaterial({
       map: texture,
@@ -510,19 +562,17 @@ function updateKanban3D() {
   });
 }
 
-const computers = officeData.deskPositions;
-const screenGlows = officeData.screenGlows;
-
 const agentMeshes = new Map<string, {
   group: any;
   label?: any;
   target: any;
-  phase: "idle" | "walking_to_board" | "at_board" | "walking_to_desk" | "working" | "walking_from_desk";
+  phase: "idle" | "walking_to_board" | "at_board" | "walking_to_desk" | "working" | "walking_from_desk" | "celebrating";
   phaseTimer: number;
   color: THREE.Color;
   mixer?: THREE.AnimationMixer;
   anims?: Record<string, THREE.AnimationAction>;
   currentAction?: THREE.AnimationAction | null;
+  laser?: THREE.Line;
 }>();
 
 function playAction(item: any, name: string, duration = 0.5) {
@@ -603,7 +653,13 @@ function createAgentMesh(agent: Agent, index: number) {
   label.position.set(0, 3.0, 0); // Higher name tags so they don't clip into the agents' heads
   group.add(label);
 
-  return { group, label, target: group.position.clone(), color, mixer, anims, currentAction: null };
+  const laserMat = new THREE.LineBasicMaterial({ color: 0x00f0ff, transparent: true, opacity: 0.6 });
+  const laserGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, 0)]);
+  const laser = new THREE.Line(laserGeo, laserMat);
+  laser.visible = false;
+  scene.add(laser);
+
+  return { group, label, target: group.position.clone(), color, mixer, anims, currentAction: null, laser };
 }
 
 function updateAgents3D() {
@@ -622,29 +678,25 @@ function updateAgents3D() {
     }
   });
 
-  // Reset glows
-  screenGlows.forEach(s => {
-    if (s.material && (s.material as any).opacity !== undefined) {
-      (s.material as any).opacity = 0.05;
-    }
-  });
-
   agents.forEach((agent, idx) => {
     const item = agentMeshes.get(agent.id);
     if (!item) return;
 
     // Spread agents out more: -8 to +8 roughly
     const spawnPos = new THREE.Vector3(-8 + idx * 3, 0, -1.0);
-    const deskIdx = idx % (computers.length || 1);
+    const pads = officeData.padPositions;
+    const deskIdx = idx % (pads.length || 1);
 
     // Safe check for computers array
-    const deskPos = computers[deskIdx] ? computers[deskIdx].clone() : spawnPos.clone();
+    const deskPos = pads[deskIdx] ? pads[deskIdx].clone() : spawnPos.clone();
     deskPos.y = 0.5;
 
-    // Animation fallback
-    const sitAnim = (item.anims && item.anims["Sitting"]) ? "Sitting" : "Idle";
+    // Working Animation is now standing (Idle) since there's no desk
+    const workingAnim = "Idle";
 
-    if (agent.status === "working") {
+    if (item.phase === "celebrating") {
+      // Logic for celebrating happens inside tick() loop, just skip overriding it here.
+    } else if (agent.status === "working") {
       if (item.phase === "idle" || item.phase === "walking_from_desk") {
         item.phase = "walking_to_desk";
         item.target.copy(deskPos);
@@ -653,17 +705,13 @@ function updateAgents3D() {
         if (item.group.position.distanceTo(item.target) < 0.5) {
           item.phase = "working";
           item.group.position.copy(item.target);
-          playAction(item, sitAnim);
+          playAction(item, workingAnim);
         } else {
           playAction(item, "Walking");
         }
       } else if (item.phase === "working") {
         item.target.copy(deskPos);
-        // Highlight screen safely
-        if (screenGlows[deskIdx] && screenGlows[deskIdx].material && (screenGlows[deskIdx].material as any).opacity !== undefined) {
-          (screenGlows[deskIdx].material as any).opacity = 0.5 + Math.random() * 0.2;
-        }
-        playAction(item, sitAnim, 1.0);
+        playAction(item, workingAnim, 1.0);
       }
     } else {
       // If was working, walk back to kanban. Spread them evenly to prevent stacking.
@@ -714,8 +762,66 @@ function tick() {
   agentMeshes.forEach((item) => {
     item.group.position.lerp(item.target, 0.08);
     if (item.mixer) item.mixer.update(delta);
+
+    if (item.phase === "celebrating") {
+      item.phaseTimer -= delta;
+      playAction(item, "ThumbsUp");
+      if (item.phaseTimer <= 0) {
+        item.phase = "idle";
+        playAction(item, "Idle");
+      }
+    }
+
+    // Laser & Floating Terminal Update
+    const agentData = agents.find((a) => a.id === item.group.userData.agentId) || Object.values(agents)[Array.from(agentMeshes.values()).indexOf(item)]; // Hacky fallback if userData empty
+    let termEl = document.getElementById(`term-${agentData?.id}`);
+
+    if (item.phase === "working" && agentData?.assignedTask && item.laser) {
+      const taskObj = tasks.find((t) => t.id === agentData.assignedTask);
+      const cardMesh = kanbanGroup.children.find((c) => c.userData.taskId === agentData.assignedTask);
+
+      if (cardMesh && taskObj) {
+        // Laser
+        const cardPos = new THREE.Vector3();
+        cardMesh.getWorldPosition(cardPos);
+        const agentPos = new THREE.Vector3();
+        item.group.getWorldPosition(agentPos);
+        agentPos.y += 0.8;
+        item.laser.geometry.setFromPoints([agentPos, cardPos]);
+        item.laser.visible = true;
+
+        // Terminal DOM
+        if (!termEl) {
+          termEl = document.createElement("div");
+          termEl.id = `term-${agentData.id}`;
+          termEl.className = "agent-terminal";
+          els.terminalsLayer?.appendChild(termEl);
+        }
+
+        const screenPos = item.group.position.clone();
+        screenPos.y += 2.0; // above head
+        screenPos.project(camera);
+        const px = (screenPos.x * 0.5 + 0.5) * canvas.clientWidth;
+        const py = (screenPos.y * -0.5 + 0.5) * canvas.clientHeight;
+
+        termEl.style.left = `${px}px`;
+        termEl.style.top = `${py}px`;
+        termEl.style.display = "block";
+
+        const lastLog = taskObj.logs && taskObj.logs.length > 0 ? taskObj.logs[taskObj.logs.length - 1] : "Buscando contexto...";
+        termEl.innerHTML = `<strong>> ${taskObj.title.substring(0, 15)}...</strong><br/><span class="term-log">${lastLog}</span>`;
+
+      } else {
+        item.laser.visible = false;
+        if (termEl) termEl.style.display = "none";
+      }
+    } else {
+      if (item.laser) item.laser.visible = false;
+      if (termEl) termEl.style.display = "none";
+    }
+
     // Spawn trail if moving
-    if (item.phase !== "idle" && item.phase !== "working" && item.phase !== "at_board") {
+    if (item.phase !== "idle" && item.phase !== "working" && item.phase !== "at_board" && item.phase !== "celebrating") {
       if (Math.random() < 0.4) {
         spawnTrail(item.group.position, item.color);
       }
