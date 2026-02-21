@@ -526,9 +526,11 @@ const particles = new THREE.Points(pGeo, pMat);
 scene.add(particles);
 
 let robotModel: THREE.Group | null = null;
+let computerModel: THREE.Group | null = null;
 let robotAnimations: THREE.AnimationClip[] = [];
 const loader = new GLTFLoader();
 let usingFallbackAvatars = false;
+let areComputersSpawned = false;
 
 loader.load("/models/RobotExpressive.glb", (gltf) => {
   robotModel = gltf.scene;
@@ -548,6 +550,56 @@ loader.load("/models/RobotExpressive.glb", (gltf) => {
   usingFallbackAvatars = true;
   rebuildAgentMeshes();
 });
+
+loader.load("/models/old_computer.glb", (gltf) => {
+  computerModel = gltf.scene;
+  computerModel.traverse((child: any) => {
+    if (child.isMesh) {
+      child.castShadow = true;
+      child.receiveShadow = true;
+    }
+  });
+  spawnComputers();
+}, undefined, (error) => {
+  console.error("Falha ao carregar modelo do computador.", error);
+});
+
+function spawnComputers() {
+  if (areComputersSpawned || !isOfficeCreated || !computerModel) return;
+
+  officeData.padPositions.forEach((pos) => {
+    // Desk
+    const deskGeo = new THREE.BoxGeometry(2.0, 1.0, 1.2);
+    const deskMat = new THREE.MeshStandardMaterial({ color: "#1e293b", roughness: 0.2, metalness: 0.5 });
+    const desk = new THREE.Mesh(deskGeo, deskMat);
+    // Position desk slightly behind the pad (pad is at pos.z, agent stands there facing positive Z? No, see below)
+    // In updateAgents3D:
+    // item.group.lookAt(item.target.x, item.group.position.y, item.target.z);
+    // When working: lookAt(..., ..., z - 100); -> Agent looks at NEGATIVE Z.
+    // So the desk should be at NEGATIVE Z relative to the agent.
+    // The pad is at pos.z.
+    // If agent stands at pos.z and looks at Z-100, the desk should be at pos.z - offset.
+
+    // Let's re-verify rotation.
+    // if (item.phase === "working") { item.group.lookAt(..., ..., item.group.position.z - 100); }
+    // So agent faces -Z.
+    // Pad is at Z=2.8.
+    // Desk should be at Z < 2.8. e.g. Z=1.6.
+
+    desk.position.set(pos.x, 0.5, pos.z - 1.2);
+    scene.add(desk);
+
+    // Computer
+    const computer = computerModel!.clone();
+    computer.scale.set(1.5, 1.5, 1.5); // Adjust scale as needed
+    computer.position.set(0, 0.5, 0); // On top of desk
+    // Rotate computer to face the agent (Agent faces -Z, Computer faces +Z)
+    computer.rotation.y = Math.PI;
+    desk.add(computer);
+  });
+
+  areComputersSpawned = true;
+}
 
 // Confetti System
 function spawnConfetti() {

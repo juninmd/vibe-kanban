@@ -4,3 +4,10 @@ server.log
 frontend.log
 .env
 .gemini/
+venv/
+verification/
+__pycache__/
+*.pyc
+vibe_config.json
+vibe_kanban.db
+*.log
