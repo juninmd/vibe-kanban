@@ -1,5 +1,6 @@
 import { spawn, ChildProcessWithoutNullStreams } from "child_process";
 import * as fs from "fs";
+import * as path from "path";
 import { Task, Agent, LLMDriver, DriverContext } from "../types.js";
 
 export class CommandDriver implements LLMDriver {
@@ -14,7 +15,7 @@ export class CommandDriver implements LLMDriver {
 
     async executeTask(task: Task, agent: Agent, ctx: DriverContext): Promise<void> {
         this.taskLogs.set(task.id, []);
-        const basePath = this.getCloneDir();
+        const basePath = path.join(this.getCloneDir(), `task-${task.id}`);
 
         if (!fs.existsSync(basePath)) {
             try {
@@ -24,6 +25,8 @@ export class CommandDriver implements LLMDriver {
                 ctx.onLog(task.id, `Error creating directory: ${e}`);
             }
         }
+
+        ctx.onLog(task.id, `[Sandbox] Executing in isolated directory: ${basePath}`);
 
         let command = "";
         let args: string[] = [];

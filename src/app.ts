@@ -81,6 +81,10 @@ const els = {
   settingsForm: document.getElementById("settingsForm") as HTMLFormElement,
   cancelSettingsBtn: document.getElementById("cancelSettingsBtn") as HTMLButtonElement,
   configCloneDir: document.getElementById("configCloneDir") as HTMLInputElement,
+  envOpenAI: document.getElementById("envOpenAI") as HTMLInputElement,
+  envGemini: document.getElementById("envGemini") as HTMLInputElement,
+  envAnthropic: document.getElementById("envAnthropic") as HTMLInputElement,
+  envGithub: document.getElementById("envGithub") as HTMLInputElement,
   // Stats
   statPending: document.getElementById("statPending") as HTMLElement,
   statDone: document.getElementById("statDone") as HTMLElement,
@@ -443,7 +447,28 @@ els.cancelSettingsBtn.addEventListener("click", () => els.settingsModal.close())
 
 els.settingsForm.addEventListener("submit", async (e) => {
   e.preventDefault();
+  // Save clone dir
   await apiCall("/api/config/clone-dir", "POST", { cloneDir: els.configCloneDir.value });
+
+  // Save env vars
+  const envUpdates: Record<string, string> = {};
+  if (els.envOpenAI.value) envUpdates["OPENAI_API_KEY"] = els.envOpenAI.value;
+  if (els.envGemini.value) envUpdates["GEMINI_API_KEY"] = els.envGemini.value;
+  if (els.envAnthropic.value) envUpdates["ANTHROPIC_API_KEY"] = els.envAnthropic.value;
+  if (els.envGithub.value) envUpdates["GITHUB_TOKEN"] = els.envGithub.value;
+
+  if (Object.keys(envUpdates).length > 0) {
+    await apiCall("/api/settings/env", "POST", envUpdates);
+    showToast("Configurações e API Keys salvas!", "success");
+    // Clear password fields for security
+    els.envOpenAI.value = "";
+    els.envGemini.value = "";
+    els.envAnthropic.value = "";
+    els.envGithub.value = "";
+  } else {
+    showToast("Configurações salvas!", "success");
+  }
+
   els.settingsModal.close();
 });
 
