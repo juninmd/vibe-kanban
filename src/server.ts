@@ -502,6 +502,49 @@ const server = createServer(async (req, res) => {
     return jsonResponse(res, 200, { tasks: DB.getTasks() });
   }
 
+  // POST /api/settings/env
+  if (url === "/api/settings/env" && method === "POST") {
+    const body = await parseBody(req);
+    const envPath = path.resolve(process.cwd(), ".env");
+    let envContent = "";
+
+    try {
+      if (fs.existsSync(envPath)) {
+        envContent = fs.readFileSync(envPath, "utf-8");
+      }
+    } catch (e) { }
+
+    const envLines = envContent.split("\n");
+    const newKeys = Object.keys(body);
+
+    newKeys.forEach(key => {
+      const value = body[key];
+      if (!value) return; // Skip empty values
+
+      // Update process.env
+      process.env[key] = value;
+
+      // Update .env file content
+      const regex = new RegExp(`^${key}=.*`, "m");
+      if (regex.test(envContent)) {
+        envContent = envContent.replace(regex, `${key}=${value}`);
+      } else {
+        envContent += `\n${key}=${value}`;
+      }
+    });
+
+    // Clean up multiple newlines
+    envContent = envContent.replace(/\n\n+/g, "\n").trim();
+
+    try {
+      fs.writeFileSync(envPath, envContent);
+      addEvent("Variáveis de ambiente atualizadas.");
+      return jsonResponse(res, 200, { ok: true });
+    } catch (e) {
+      return jsonResponse(res, 500, { error: "Failed to write .env file" });
+    }
+  }
+
   // POST /api/config
   if (url === "/api/config" && method === "POST") {
     const { driver } = await parseBody(req);
