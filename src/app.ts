@@ -628,29 +628,43 @@ function createAgentMesh(agent: Agent, index: number) {
   group.position.set(-5 + index * 2, 0, -0.5);
   scene.add(group);
 
-  function makeLabelCanvas(text: string) {
+  function makeLabelCanvas(text: string, colorHex: string) {
     const size = 512;
     const canvas = document.createElement("canvas");
     canvas.width = size;
-    canvas.height = 120;
+    canvas.height = 128;
     const ctx = canvas.getContext("2d")!;
-    ctx.fillStyle = "rgba(20,24,38,0.8)";
-    ctx.fillRect(0, 0, canvas.width, canvas.height); // Use simple fillRect to avoid TS roundRect issues
-    ctx.font = "bold 48px Inter, sans-serif";
+
+    // Convert hex to rgba for transparency
+    const r = parseInt(colorHex.slice(1, 3), 16);
+    const g = parseInt(colorHex.slice(3, 5), 16);
+    const b = parseInt(colorHex.slice(5, 7), 16);
+    ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.85)`;
+
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Add a border
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 8;
+    ctx.strokeRect(4, 4, canvas.width-8, canvas.height-8);
+
+    ctx.font = "bold 56px Inter, sans-serif";
     ctx.fillStyle = "#ffffff";
     ctx.textAlign = "center";
-    ctx.fillText(text, canvas.width / 2, 75);
+    ctx.fillText(text, canvas.width / 2, 85);
     return canvas;
   }
 
-  const labelCanvas = makeLabelCanvas(`${agent.model}`);
+  const labelCanvas = makeLabelCanvas(`${agent.model}`, roleColors[agent.role] || "#555555");
   const labelTex = new THREE.CanvasTexture(labelCanvas);
   labelTex.colorSpace = THREE.SRGBColorSpace;
   const labelMat = new THREE.SpriteMaterial({ map: labelTex, transparent: true, depthTest: false });
   const label = new THREE.Sprite(labelMat);
-  label.scale.set(1.8, 0.45, 1);
-  label.renderOrder = 999; // Ensure labels render on top of the board
-  label.position.set(0, 3.0, 0); // Higher name tags so they don't clip into the agents' heads
+  // Scale down to badge size
+  label.scale.set(0.6, 0.15, 1);
+  label.renderOrder = 999;
+  // Position on chest
+  label.position.set(0, 1.35, 0.25);
   group.add(label);
 
   const laserMat = new THREE.LineBasicMaterial({ color: 0x00f0ff, transparent: true, opacity: 0.6 });
