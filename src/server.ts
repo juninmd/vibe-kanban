@@ -402,70 +402,7 @@ const server = createServer(async (req, res) => {
     if (!task) return jsonResponse(res, 404, { error: "Task not found" });
     if (!agent) return jsonResponse(res, 404, { error: "No available agent" });
 
-    // Update state
-    task.assignedTo = agent.id;
-    task.lane = "in_progress";
-    task.interrupted = false;
-    agent.status = "working";
-    agent.assignedTask = task.id;
-    addEvent(`${agent.role} iniciou a tarefa #${task.id}`);
-
-    let executeDriver = agent.tool ? cliDriver : currentDriver;
-
-    // Execute via Driver
-    executeDriver.executeTask(task, agent, {
-      onLog: (tid, msg) => {
-        const t = getTask(tid);
-        if (t) {
-          t.logs.push(msg);
-          // Only log important steps to global event log to avoid spam
-          if (msg.includes("Error") || msg.includes("Completed")) addEvent(`#${tid}: ${msg}`);
-          else broadcastState();
-        }
-      },
-      onComplete: (tid) => {
-        const t = getTask(tid);
-        if (t && t.assignedTo) {
-          const a = getAgent(t.assignedTo);
-          if (a) { a.status = "idle"; a.assignedTask = null; }
-          t.assignedTo = null;
-          t.lane = "done"; // simplified workflow
-          addEvent(`Tarefa #${tid} concluída!`);
-        }
-      },
-      onBugFound: (tid, desc) => {
-        const t = getTask(tid);
-        if (t) {
-          addEvent(`BUG encontrado em #${tid}: ${desc}`);
-          // Create bug task
-          const bugTask: Task = {
-            id: taskIdCounter++,
-            title: `Bug: ${desc}`,
-            source: "system",
-            category: "testes",
-            priority: "alta",
-            lane: "backlog",
-            assignedTo: null,
-            interrupted: false,
-            logs: [],
-            createdAt: Date.now(),
-            updatedAt: Date.now()
-          };
-          state.tasks.push(bugTask);
-          // For now, interrupt original task
-          if (t.assignedTo) {
-            const a = getAgent(t.assignedTo);
-            if (a) { a.status = "idle"; a.assignedTask = null; }
-            t.assignedTo = null;
-            t.lane = "backlog"; // Return to backlog to retry later
-            t.interrupted = true;
-          }
-        }
-      },
-      onInterrupt: (tid) => {
-        // Handled by interrupt endpoint logic mainly
-      }
-    });
+    startTask(task, agent);
 
     return jsonResponse(res, 200, { task, agent });
   }
@@ -560,32 +497,6 @@ const server = createServer(async (req, res) => {
     taskIdCounter = 1;
     addEvent("Sistema resetado.");
     return jsonResponse(res, 200, { ok: true });
-  }
-
-  // Static File Serving
-  if (method === "GET") {
-    let filePath = "";
-    if (url === "/" || url === "/index.html") filePath = "index.html";
-    else if (url === "/styles.css") filePath = "styles.css";
-    else if (url.startsWith("/dist/")) filePath = url.substring(1);
-
-    if (filePath) {
-      const ext = path.extname(filePath);
-      const contentTypes: Record<string, string> = {
-        ".html": "text/html",
-        ".css": "text/css",
-        ".js": "application/javascript"
-      };
-
-      try {
-        const content = await fs.promises.readFile(filePath);
-        res.writeHead(200, { "Content-Type": contentTypes[ext] || "text/plain" });
-        res.end(content);
-        return;
-      } catch (e) {
-        // Fall through to 404
-      }
-    }
   }
 
   jsonResponse(res, 404, { error: "Not found" });

@@ -103,4 +103,33 @@ describe('Vibe Kanban API', async () => {
     const state = await stateRes.json();
     assert.strictEqual(state.tasks.length, 0, 'Tasks should be empty after reset');
   });
+
+  test('POST /api/assign assigns a task', async () => {
+    // 1. Create task
+    const taskRes = await fetch(`${API_URL}/api/tasks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: 'Task to assign', source: 'test', category: 'roadmap' })
+    });
+    const taskData = await taskRes.json();
+    const taskId = taskData.task.id;
+
+    // 2. Assign task
+    const assignRes = await fetch(`${API_URL}/api/assign`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ taskId })
+    });
+    assert.strictEqual(assignRes.status, 200);
+    const assignData = await assignRes.json();
+    assert.strictEqual(assignData.task.assignedTo, assignData.agent.id);
+    assert.strictEqual(assignData.task.lane, 'in_progress');
+  });
+
+  test('GET /index.html returns static file', async () => {
+    const res = await fetch(`${API_URL}/index.html`);
+    assert.strictEqual(res.status, 200);
+    const text = await res.text();
+    assert.ok(text.includes('Vibe Kanban'), 'Should contain title');
+  });
 });

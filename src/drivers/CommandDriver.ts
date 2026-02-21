@@ -1,5 +1,6 @@
 import { spawn, ChildProcessWithoutNullStreams } from "child_process";
 import * as fs from "fs";
+import * as path from "path";
 import { Task, Agent, LLMDriver, DriverContext } from "../types.js";
 
 export class CommandDriver implements LLMDriver {
@@ -14,12 +15,13 @@ export class CommandDriver implements LLMDriver {
 
     async executeTask(task: Task, agent: Agent, ctx: DriverContext): Promise<void> {
         this.taskLogs.set(task.id, []);
-        const basePath = this.getCloneDir();
+        const baseDir = this.getCloneDir();
+        const taskDir = path.join(baseDir, `task-${task.id}`);
 
-        if (!fs.existsSync(basePath)) {
+        if (!fs.existsSync(taskDir)) {
             try {
-                fs.mkdirSync(basePath, { recursive: true });
-                ctx.onLog(task.id, `Created directory: ${basePath}`);
+                fs.mkdirSync(taskDir, { recursive: true });
+                ctx.onLog(task.id, `Created directory: ${taskDir}`);
             } catch (e) {
                 ctx.onLog(task.id, `Error creating directory: ${e}`);
             }
@@ -41,10 +43,10 @@ export class CommandDriver implements LLMDriver {
             return;
         }
 
-        ctx.onLog(task.id, `Starting process: ${command} ${args.join(" ")} in ${basePath}`);
+        ctx.onLog(task.id, `Starting process: ${command} ${args.join(" ")} in ${taskDir}`);
 
         try {
-            const child = spawn(command, args, { cwd: basePath });
+            const child = spawn(command, args, { cwd: taskDir });
             this.runningTasks.set(task.id, child);
 
             child.stdout.on("data", (data) => {
