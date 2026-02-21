@@ -84,38 +84,39 @@
               <option value="media" selected>Média</option>
               <option value="baixa">Baixa</option>
             </select>
-            <label>
-              Repositório (Github)
-              <input id="taskGithubRepo" placeholder="ex: empresa/projeto" />
-            </label>
-            <label>
-              Descrição
-              <textarea id="taskDescription" placeholder="Detalhes do card..." rows="3"></textarea>
-            </label>
-            <label>
-              Tipo de Agente (CLI/Integração)
-              <input id="taskAgentType" placeholder="ex: Gemini CLI, Copilot SDK" />
-            </label>
-            <label>
-              Designar Agente Voluntário (Opcional)
-              <select id="taskAgentAssign">
-                <option value="">- Automático Direcionado -</option>
-                <option value="gemini-coder">Gemini Coder</option>
-                <option value="sec-bot">Sec Bot</option>
-                <option value="perf-optimizer">Perf Optimizer</option>
-                <option value="feature-lead">Feature Lead</option>
-                <option value="qa-bot">QA Bot</option>
-              </select>
-            </label>
-            <label>
-              Modelo Lógico
-              <select id="taskAgentModel">
-                <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
-                <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
-                <option value="claude-3-5-sonnet">Claude 3.5 Sonnet</option>
-              </select>
-            </label>
-            <button type="submit">Adicionar card</button>
+          </label>
+          <label>
+            Repositório (Github)
+            <input id="taskGithubRepo" placeholder="ex: empresa/projeto" />
+          </label>
+          <label>
+            Descrição
+            <textarea id="taskDescription" placeholder="Detalhes do card..." rows="3"></textarea>
+          </label>
+          <label>
+            Tipo de Agente (CLI/Integração)
+            <input id="taskAgentType" placeholder="ex: Gemini CLI, Copilot SDK" />
+          </label>
+          <label>
+            Designar Agente Voluntário (Opcional)
+            <select id="taskAgentAssign">
+              <option value="">- Automático Direcionado -</option>
+              <option value="gemini-coder">Gemini Coder</option>
+              <option value="sec-bot">Sec Bot</option>
+              <option value="perf-optimizer">Perf Optimizer</option>
+              <option value="feature-lead">Feature Lead</option>
+              <option value="qa-bot">QA Bot</option>
+            </select>
+          </label>
+          <label>
+            Modelo Lógico
+            <select id="taskAgentModel">
+              <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+              <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+              <option value="claude-3-5-sonnet">Claude 3.5 Sonnet</option>
+            </select>
+          </label>
+          <button type="submit">Adicionar card</button>
         </form>
       </section>
 
@@ -186,8 +187,9 @@
       <h2>Configurações do Kanban</h2>
       <form id="settingsForm" class="modal-form">
         <label>Diretório padrão para Clones
-          <input id="configCloneDir" required placeholder="C:\Caminho\Para\Clones" />
+          <input id="configCloneDir" required placeholder="./clones ou /home/usuario/clones" />
         </label>
+        <p class="field-hint">Use caminhos compatíveis com Linux/macOS/Windows. Ex.: <code>./clones</code> ou <code>/var/tmp/vibe-clones</code>.</p>
 
         <hr style="border: 0; border-top: 1px solid var(--border); margin: 1rem 0;">
 

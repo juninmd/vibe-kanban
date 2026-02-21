@@ -513,8 +513,9 @@ function updateLighting() {
 
 // Ambient Particles
 const pGeo = new THREE.BufferGeometry();
-const pPos = new Float32Array(1000);
-for (let i = 0; i < 1000; i++) {
+const particleCount = 1000;
+const pPos = new Float32Array(particleCount * 3);
+for (let i = 0; i < particleCount; i++) {
   pPos[i * 3] = (Math.random() - 0.5) * 30; // x
   pPos[i * 3 + 1] = Math.random() * 8; // y
   pPos[i * 3 + 2] = (Math.random() - 0.5) * 15; // z
@@ -956,7 +957,7 @@ function createAgentMesh(agent: Agent, index: number) {
   laser.visible = false;
   scene.add(laser);
 
-  return { group, label, target: group.position.clone(), color, mixer, anims, currentAction: null, laser };
+  return { group, label, target: group.position.clone(), color, mixer, anims, currentAction: null, laser, statusSprite };
 }
 
 function updateAgents3D() {
@@ -1070,20 +1071,22 @@ function tick() {
     item.group.position.lerp(item.target, 0.08);
     if (item.mixer) item.mixer.update(delta);
 
+    const statusMaterial = item.statusSprite?.material as THREE.SpriteMaterial | undefined;
+
     if (item.phase === "celebrating") {
       item.phaseTimer -= delta;
       playAction(item, "ThumbsUp");
-      (item.statusSprite?.material as THREE.SpriteMaterial).map = statusTextures.celebrating;
+      if (statusMaterial) statusMaterial.map = statusTextures.celebrating;
       if (item.phaseTimer <= 0) {
         item.phase = "idle";
         playAction(item, "Idle");
       }
     } else if (item.phase === "working") {
-      (item.statusSprite?.material as THREE.SpriteMaterial).map = statusTextures.working;
+      if (statusMaterial) statusMaterial.map = statusTextures.working;
     } else if (item.phase === "idle") {
-      (item.statusSprite?.material as THREE.SpriteMaterial).map = statusTextures.idle;
+      if (statusMaterial) statusMaterial.map = statusTextures.idle;
     } else {
-      (item.statusSprite?.material as THREE.SpriteMaterial).map = statusTextures.walking;
+      if (statusMaterial) statusMaterial.map = statusTextures.walking;
     }
 
     // Laser & Floating Terminal Update
