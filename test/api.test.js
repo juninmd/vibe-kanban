@@ -2,6 +2,7 @@ import { test, describe, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { setTimeout } from 'timers/promises';
+import { existsSync, rmSync } from 'node:fs';
 
 const API_URL = 'http://localhost:5174';
 
@@ -39,6 +40,8 @@ describe('Vibe Kanban API', async () => {
   });
 
   after(() => {
+    const cloneDir = './test-clones';
+    if (existsSync(cloneDir)) rmSync(cloneDir, { recursive: true, force: true });
     if (serverProcess) serverProcess.kill();
   });
 
@@ -130,5 +133,18 @@ describe('Vibe Kanban API', async () => {
     const state = await stateRes.json();
     assert.equal(state.tasks.length, 0);
     assert.equal(state.agents.length, 6);
+  });
+
+  test('POST /api/config/clone-dir normaliza caminho e cria diretório', async () => {
+    const res = await fetch(`${API_URL}/api/config/clone-dir`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cloneDir: ' ./test-clones/ ' })
+    });
+
+    assert.equal(res.status, 200);
+    const data = await res.json();
+    assert.equal(data.cloneDir, 'test-clones/');
+    assert.equal(existsSync('test-clones'), true);
   });
 });

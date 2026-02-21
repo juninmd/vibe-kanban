@@ -70,12 +70,14 @@ body {
 
 /* Topbar */
 .topbar {
-  height: 64px;
+  min-height: 64px;
   border-bottom: 2px solid var(--border);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 1.5rem;
+  padding: 0.75rem 1.5rem;
+  gap: 1rem;
+  flex-wrap: wrap;
   background: rgba(11, 16, 34, 0.95);
   backdrop-filter: blur(10px);
   z-index: 10;
@@ -99,6 +101,7 @@ body {
 .topbar-actions {
   display: flex;
   gap: 0.75rem;
+  flex-wrap: wrap;
 }
 
 /* Inputs & Buttons */
@@ -163,7 +166,7 @@ button#seedTasksBtn:hover {
 .layout {
   display: grid;
   grid-template-columns: 400px 1fr; /* Wider sidebar for logs */
-  height: calc(100vh - 64px);
+  height: calc(100vh - 80px);
 }
 
 .sidebar {
@@ -563,6 +566,21 @@ label {
   gap: 1.2rem;
 }
 
+.field-hint {
+  margin: -0.5rem 0 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.field-hint code {
+  color: #fff;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  padding: 0.05rem 0.3rem;
+}
+
 .modal-actions {
   display: flex;
   justify-content: flex-end;
@@ -661,4 +679,31 @@ label {
 
 @keyframes fadeOut {
   to { opacity: 0; transform: translateY(-10px); }
+}
+
+@media (max-width: 1200px) {
+  .layout {
+    grid-template-columns: 340px 1fr;
+  }
+}
+
+@media (max-width: 960px) {
+  body {
+    overflow: auto;
+  }
+
+  .layout {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+
+  .sidebar {
+    border-right: 0;
+    border-bottom: 2px solid var(--border);
+    max-height: 55vh;
+  }
+
+  .workspace {
+    min-height: 60vh;
+  }
 }

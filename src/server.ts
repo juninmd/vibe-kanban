@@ -232,6 +232,14 @@ try {
   }
 } catch (e) { }
 
+function sanitizeCloneDir(input: unknown): string {
+  if (typeof input !== "string") return "./clones";
+  const trimmed = input.trim();
+  if (!trimmed) return "./clones";
+
+  return path.normalize(trimmed);
+}
+
 // --- Drivers ---
 const cliDriver = new CommandDriver(() => appConfig.cloneDir);
 const drivers: Record<string, LLMDriver> = {
@@ -327,7 +335,8 @@ const server = createServer(async (req, res) => {
   // POST /api/config/clone-dir
   if (url === "/api/config/clone-dir" && method === "POST") {
     const body = await parseBody(req);
-    appConfig.cloneDir = body.cloneDir || "./clones";
+    appConfig.cloneDir = sanitizeCloneDir(body.cloneDir);
+    fs.mkdirSync(appConfig.cloneDir, { recursive: true });
     fs.writeFileSync(CONFIG_FILE, JSON.stringify(appConfig, null, 2));
     addEvent(`Pasta padrão de clones alterada para: ${appConfig.cloneDir}`);
     return jsonResponse(res, 200, { cloneDir: appConfig.cloneDir });

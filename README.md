@@ -12,20 +12,22 @@ Protótipo inicial de uma sala de orquestração com:
 
 O projeto utiliza um backend em Node.js para gerenciar o estado dos agentes e a fila de tarefas.
 
-1. Instale as dependências:
+1. Instale as dependências (com `pnpm`):
    ```bash
-   npm install
+   pnpm install
    ```
 
 2. Compile o código TypeScript:
    ```bash
-   npm run build
+   pnpm build
    ```
 
 3. Inicie o servidor:
    ```bash
-   npm start
+   pnpm start
    ```
+
+> Dica: para máxima compatibilidade entre Linux/macOS/Windows, prefira caminhos relativos no app (ex.: `./clones`).
 
 4. Acesse a aplicação em `http://localhost:5174`.
 
