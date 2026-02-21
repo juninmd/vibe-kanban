@@ -2,96 +2,62 @@ import { Task, Agent, LLMDriver, DriverContext } from "../types.js";
 import { spawn } from "child_process";
 
 export class ClaudeDriver implements LLMDriver {
-  name: string = "Claude Code";
-  private runningTasks = new Map<number, any>();
+   name: string = "Claude Code";
+   private runningTasks = new Map<number, any>();
 
-  async executeTask(task: Task, agent: Agent, ctx: DriverContext): Promise<void> {
-    const cmd = "claude";
-    const args = ["prompt", task.title, "--model", agent.model];
-    ctx.onLog(task.id, `Running: ${cmd} ${args.join(" ")}`);
+   async executeTask(task: Task, agent: Agent, ctx: DriverContext): Promise<void> {
+      const cmd = "claude";
+      const args = ["prompt", task.title, "--model", agent.model];
+      ctx.onLog(task.id, `Running: ${cmd} ${args.join(" ")}`);
 
-    const child = spawn(cmd, args);
+      const child = spawn(cmd, args);
 
-    child.stdout.on("data", (data) => {
-      ctx.onLog(task.id, data.toString());
-    });
+      child.stdout.on("data", (data) => {
+         ctx.onLog(task.id, data.toString());
+      });
 
-    child.stderr.on("data", (data) => {
-       const msg = data.toString();
-       if (msg.includes("not found") || msg.includes("ENOENT")) {
-          // This might not be enough as spawn error event is separate
-       }
-       ctx.onBugFound(task.id, msg);
-    });
+      child.stderr.on("data", (data) => {
+         const msg = data.toString();
+         if (msg.includes("not found") || msg.includes("ENOENT")) {
+            // This might not be enough as spawn error event is separate
+         }
+         ctx.onBugFound(task.id, msg);
+      });
 
-    child.on("error", (error: any) => {
-        if (error.code === "ENOENT") {
-            ctx.onLog(task.id, "Claude CLI not installed. Falling back to simulation.");
-            this.simulateDevelopment(task, ctx);
+      child.on("error", (error: any) => {
+         if (error.code === "ENOENT") {
+            ctx.onLog(task.id, "Error: Claude CLI not found. Please install 'claude-code'.");
+            ctx.onBugFound(task.id, "Claude not found.");
             return;
-        }
-        ctx.onBugFound(task.id, error.message);
-    });
+         }
+         ctx.onBugFound(task.id, error.message);
+      });
 
-    child.on("close", (code) => {
-        if (code === 0) {
+      child.on("close", (code) => {
+         if (code === 0) {
             ctx.onComplete(task.id);
-        } else {
-             // If exit code is non-zero, it might have failed.
-             // But if we already handled error/simulation, we might duplicate logic.
-             // For now, assume stderr handled it or simulation took over.
-             // If simulation took over, we don't need to do anything here.
-        }
-    });
+         } else {
+            // If exit code is non-zero, it might have failed.
+            // But if we already handled error/simulation, we might duplicate logic.
+            // For now, assume stderr handled it or simulation took over.
+            // If simulation took over, we don't need to do anything here.
+         }
+      });
 
-    this.runningTasks.set(task.id, child);
-    return Promise.resolve();
-  }
+      this.runningTasks.set(task.id, child);
+      return Promise.resolve();
+   }
 
-  private simulateDevelopment(task: Task, ctx: DriverContext) {
-     const steps = [
-        "Thinking deeply about the request...",
-        `Generating artifacts for "${task.title}"...`,
-        "Executing tool use via computer use API...",
-        "Refining implementation details...",
-        "Verifying constraints and safety guidelines..."
-     ];
+   async interruptTask(task: Task): Promise<void> {
+      const child = this.runningTasks.get(task.id);
+      if (child) {
+         if (child.kill) child.kill(); // child process
+         this.runningTasks.delete(task.id);
+      }
+      return Promise.resolve();
+   }
 
-     let stepIndex = 0;
-     const interval = setInterval(() => {
-        if (stepIndex >= steps.length) {
-           clearInterval(interval);
-           this.runningTasks.delete(task.id);
-
-           // 10% chance of finding a bug
-           if (Math.random() < 0.1) {
-              const bugMsg = "Claude: Safety check failed during artifact generation.";
-              ctx.onLog(task.id, bugMsg);
-              ctx.onBugFound(task.id, bugMsg);
-           } else {
-              ctx.onLog(task.id, "Claude: Task completed with high confidence.");
-              ctx.onComplete(task.id);
-           }
-           return;
-        }
-
-        ctx.onLog(task.id, `Claude: ${steps[stepIndex++]}`);
-     }, 1500);
-
-     this.runningTasks.set(task.id, interval);
-  }
-
-  async interruptTask(task: Task): Promise<void> {
-    const processOrTimer = this.runningTasks.get(task.id);
-    if (processOrTimer) {
-      if (processOrTimer.kill) processOrTimer.kill(); // child process
-      else clearInterval(processOrTimer); // interval
-      this.runningTasks.delete(task.id);
-    }
-    return Promise.resolve();
-  }
-
-  getLogs(taskId: number): string[] {
-    return [];
-  }
+   getLogs(taskId: number): string[] {
+      return [];
+   }
 }
