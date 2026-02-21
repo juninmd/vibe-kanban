@@ -241,8 +241,21 @@ const drivers: Record<string, LLMDriver> = {
   opencode: new OpenCodeDriver(),
   claude: new ClaudeDriver(),
 };
-// Default to GeminiDriver for best integration with this environment
-let currentDriver: LLMDriver = drivers.gemini;
+
+function isCommandAvailable(command: string): boolean {
+  try {
+    execSync(`${command} --version`, { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Keep the app functional even when Gemini CLI is not installed.
+let currentDriver: LLMDriver = isCommandAvailable("gemini") ? drivers.gemini : drivers.mock;
+if (currentDriver === drivers.mock) {
+  addEvent("Gemini CLI não encontrado. Driver padrão alterado para Mock automaticamente.");
+}
 
 const server = createServer(async (req, res) => {
   const { method, url } = req as any;
