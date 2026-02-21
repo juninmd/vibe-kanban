@@ -11,10 +11,12 @@ Este roadmap detalha a evolução do Vibe Kanban, consolidando as fases de fidel
 
 ## Fase 2: Fidelidade Visual e Interatividade (Em Andamento 🛠️)
 **Objetivo:** Melhorar a estética e a experiência imersiva na sala 3D.
-- [ ] **Agent Personalities:** Trilhas visuais e cores únicas por papel (Segurança = Escudo Vermelho, Performance = Raio Azul).
+- [x] **Agent Personalities:** Trilhas visuais e ícones de status (Emojis) por papel.
 - [ ] **Pathfinding 3D:** Implementar NavMesh para que os agentes desviem de obstáculos ao caminhar.
-- [ ] **Terminal Integrado (UI):** Adicionar `xterm.js` para visualização real de logs ANSI nos cards.
-- [ ] **Iluminação Dinâmica:** Luzes que reagem à atividade do sistema (brilho intenso durante picos de trabalho).
+- [x] **Terminal Integrado (UI):** Adicionar visualização de logs estilo "Cyberpunk" nos cards.
+- [x] **Iluminação Dinâmica:** Luzes que pulsam com a atividade do sistema.
+- [x] **Feedback Sonoro:** SFX para ações de UI e conclusões.
+- [x] **Dashboard:** Métricas em tempo real na barra lateral.
 
 ## Fase 3: Inteligência Profunda e Segurança (Próximos Passos 🧠)
 **Objetivo:** Dar agência real e isolamento aos agentes.

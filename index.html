@@ -4,11 +4,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Vibe Kanban — Orquestrador de Agentes</title>
+  <title>Vibe Kanban 3D</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🤖</text></svg>">
   <link rel="stylesheet" href="styles.css" />
 </head>
 
 <body>
+  <div id="toast-container" class="toast-container"></div>
   <header class="topbar">
     <h1>Vibe Kanban • Time de Agentes</h1>
     <div class="topbar-actions">
@@ -28,6 +30,24 @@
 
   <main class="layout">
     <aside class="sidebar">
+      <section id="dashboardStats" class="dashboard-stats">
+        <h2>📊 Dashboard</h2>
+        <div class="stat-grid">
+          <div class="stat-item">
+            <span class="stat-label">Pendentes</span>
+            <span class="stat-value" id="statPending">0</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Concluídas</span>
+            <span class="stat-value" id="statDone">0</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Agentes</span>
+            <span class="stat-value" id="statAgents">0</span>
+          </div>
+        </div>
+      </section>
+
       <section>
         <h2>Criar tarefa</h2>
         <form id="taskForm">

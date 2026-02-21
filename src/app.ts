@@ -81,33 +81,65 @@ const els = {
   settingsForm: document.getElementById("settingsForm") as HTMLFormElement,
   cancelSettingsBtn: document.getElementById("cancelSettingsBtn") as HTMLButtonElement,
   configCloneDir: document.getElementById("configCloneDir") as HTMLInputElement,
+  // Stats
+  statPending: document.getElementById("statPending") as HTMLElement,
+  statDone: document.getElementById("statDone") as HTMLElement,
+  statAgents: document.getElementById("statAgents") as HTMLElement,
+  headerStats: document.getElementById("headerStats") as HTMLElement,
+  toastContainer: document.getElementById("toast-container") as HTMLElement,
 };
+
+// --- Toast System ---
+function showToast(message: string, type: "success" | "error" | "info" = "info") {
+  const toast = document.createElement("div");
+  toast.className = `toast ${type}`;
+  toast.textContent = message;
+  els.toastContainer?.appendChild(toast);
+  setTimeout(() => {
+    toast.style.animation = "fadeOut 0.5s forwards";
+    setTimeout(() => toast.remove(), 500);
+  }, 3000);
+}
+
+// --- Sound System ---
+const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+function playTone(freq: number, type: OscillatorType, dur: number, vol: number) {
+  try {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+    gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + dur);
+    osc.start(audioCtx.currentTime);
+    osc.stop(audioCtx.currentTime + dur);
+  } catch (e) { }
+}
+
+function playSuccessSound() { playTone(880, "sine", 0.3, 0.2); playTone(1100, "sine", 0.4, 0.1); }
+function playErrorSound() { playTone(220, "sawtooth", 0.4, 0.3); }
+function playClickSound() { playTone(1200, "triangle", 0.05, 0.05); }
+
+// --- Dashboard Logic ---
+function updateDashboard() {
+  const pending = tasks.filter(t => t.lane !== "done").length;
+  const done = tasks.filter(t => t.lane === "done").length;
+  const activeAgents = agents.filter(a => a.status === "working").length;
+
+  if (els.statPending) els.statPending.textContent = pending.toString();
+  if (els.statDone) els.statDone.textContent = done.toString();
+  if (els.statAgents) els.statAgents.textContent = activeAgents.toString();
+  if (els.headerStats) els.headerStats.textContent = `• ${pending} tarefas ativas`;
+  document.title = `(${pending}) Vibe Kanban 3D`;
+}
 
 // Confetti State
 const confettiParticles: any[] = [];
 
 let isOfficeCreated = false;
 export let officeData: { padPositions: THREE.Vector3[] } = { padPositions: [] };
-
-function playSuccessSound() {
-  try {
-    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.type = "sine";
-    osc.frequency.setValueAtTime(440, ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.1);
-    gain.gain.setValueAtTime(0, ctx.currentTime);
-    gain.gain.linearRampToValueAtTime(0.3, ctx.currentTime + 0.05);
-    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
-    osc.start(ctx.currentTime);
-    osc.stop(ctx.currentTime + 0.3);
-  } catch (e) {
-    console.log("Audio failed to play", e);
-  }
-}
 
 function updateState(data: any) {
   // Detect completions for celebration
@@ -131,6 +163,8 @@ function updateState(data: any) {
 
   tasks = newTasks;
   agents = data.agents || [];
+
+  updateDashboard();
 
   // Create office dynamically once we know how many agents there are
   if (!isOfficeCreated && agents.length > 0) {
@@ -170,14 +204,20 @@ async function apiCall(endpoint: string, method: string, body: any) {
 
 function createTask(taskParams: { title: string; source: string; category: string; priority: string; githubRepo?: string; description?: string; agentType?: string; assignedTo?: string; model?: string; }) {
   apiCall("/api/tasks", "POST", taskParams);
+  playSuccessSound();
+  showToast(`Tarefa criada: ${taskParams.title}`, "success");
 }
 
 function pickTask(task: Task) {
   apiCall("/api/assign", "POST", { taskId: task.id, category: task.category });
+  playClickSound();
+  showToast("Tarefa atribuída", "info");
 }
 
 function interruptTask(task: Task) {
   apiCall("/api/interrupt", "POST", { taskId: task.id });
+  playErrorSound();
+  showToast("Tarefa interrompida", "error");
 }
 
 function moveTask(task: Task, dir: number) {
@@ -426,6 +466,13 @@ const dir = new THREE.DirectionalLight("#b7c6ff", 1.2);
 dir.position.set(5, 8, 3);
 scene.add(dir);
 
+// Holographic Floor Grid
+const gridHelper = new THREE.GridHelper(40, 40, 0x00f0ff, 0x111133);
+gridHelper.position.y = -0.01;
+(gridHelper.material as THREE.Material).transparent = true;
+(gridHelper.material as THREE.Material).opacity = 0.2;
+scene.add(gridHelper);
+
 function updateLighting() {
   const workingCount = agents.filter(a => a.status === "working").length;
   // Target intensity: brighter when busy
@@ -651,9 +698,30 @@ const agentMeshes = new Map<string, {
   anims?: Record<string, THREE.AnimationAction>;
   currentAction?: THREE.AnimationAction | null;
   laser?: THREE.Line;
+  statusSprite?: THREE.Sprite;
 }>();
 
 const visualAlerts = new Map<number, THREE.Sprite>();
+
+function createStatusTexture(emoji: string) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 64;
+  canvas.height = 64;
+  const ctx = canvas.getContext("2d")!;
+  ctx.font = "48px Inter, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(emoji, 32, 34);
+  const tex = new THREE.CanvasTexture(canvas);
+  return tex;
+}
+
+const statusTextures = {
+  idle: createStatusTexture("💤"),
+  working: createStatusTexture("🔨"),
+  celebrating: createStatusTexture("🎉"),
+  walking: createStatusTexture("🚶")
+};
 
 function createAlertIcon(type: "bug" | "perf") {
   const canvas = document.createElement("canvas");
@@ -807,6 +875,12 @@ function createAgentMesh(agent: Agent, index: number) {
   label.position.set(0, 1.35, 0.25);
   group.add(label);
 
+  const statusMat = new THREE.SpriteMaterial({ map: createStatusTexture("💤"), transparent: true, depthTest: false });
+  const statusSprite = new THREE.Sprite(statusMat);
+  statusSprite.scale.set(0.4, 0.4, 1);
+  statusSprite.position.set(0, 2.2, 0); // Above head
+  group.add(statusSprite);
+
   const laserMat = new THREE.LineBasicMaterial({ color: 0x00f0ff, transparent: true, opacity: 0.6 });
   const laserGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, 0)]);
   const laser = new THREE.Line(laserGeo, laserMat);
@@ -920,10 +994,17 @@ function tick() {
     if (item.phase === "celebrating") {
       item.phaseTimer -= delta;
       playAction(item, "ThumbsUp");
+      (item.statusSprite?.material as THREE.SpriteMaterial).map = statusTextures.celebrating;
       if (item.phaseTimer <= 0) {
         item.phase = "idle";
         playAction(item, "Idle");
       }
+    } else if (item.phase === "working") {
+      (item.statusSprite?.material as THREE.SpriteMaterial).map = statusTextures.working;
+    } else if (item.phase === "idle") {
+       (item.statusSprite?.material as THREE.SpriteMaterial).map = statusTextures.idle;
+    } else {
+       (item.statusSprite?.material as THREE.SpriteMaterial).map = statusTextures.walking;
     }
 
     // Laser & Floating Terminal Update
@@ -991,7 +1072,20 @@ function tick() {
   updateVisualAlerts();
   updateConfetti();
   updateTrails();
-  updateLighting();
+  
+  // Pulse lighting based on active agents
+  const activeCount = agents.filter(a => a.status === "working").length;
+  if (activeCount > 0) {
+    const pulse = Math.sin(Date.now() * 0.002) * 0.1;
+    dir.intensity = 1.2 + (activeCount * 0.1) + pulse;
+    ambientLight.intensity = 0.75 + (activeCount * 0.05) + (pulse * 0.5);
+  } else {
+    // Calm breathing when idle
+    const pulse = Math.sin(Date.now() * 0.001) * 0.05;
+    dir.intensity = 1.0 + pulse;
+    ambientLight.intensity = 0.6 + pulse;
+  }
+  
   controls.update();
   renderer.render(scene, camera);
   requestAnimationFrame(tick);
@@ -1115,9 +1209,23 @@ function onPointerDown(event: PointerEvent) {
 
 window.addEventListener('pointerdown', onPointerDown);
 
-// Hide tooltip if clicked elsewhere or moving camera
-controls.addEventListener('start', () => {
-  tooltip.style.display = "none";
-});
+// --- Keyboard Shortcuts ---
+window.addEventListener("keydown", (e) => {
+  if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 
-tick();
+  if (e.key === " ") {
+    e.preventDefault();
+    els.toggleViewBtn.click();
+    playClickSound();
+  }
+  if (e.key === "n" || e.key === "N") {
+    e.preventDefault();
+    els.title.focus();
+    playClickSound();
+  }
+  if (e.key === "Escape") {
+    els.agentModal.close();
+    els.settingsModal.close();
+    playClickSound();
+  }
+});
