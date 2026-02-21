@@ -3,6 +3,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import * as SkeletonUtils from "three/addons/utils/SkeletonUtils.js";
 import { createOffice } from "./office.js";
+import { getLaneSafe, getTaskCardPosition, shouldRenderTaskIn3D } from "./kanbanMath.js";
 
 const API_URL = "";
 
@@ -526,6 +527,7 @@ scene.add(particles);
 let robotModel: THREE.Group | null = null;
 let robotAnimations: THREE.AnimationClip[] = [];
 const loader = new GLTFLoader();
+let usingFallbackAvatars = false;
 
 loader.load("/models/RobotExpressive.glb", (gltf) => {
   robotModel = gltf.scene;
@@ -538,6 +540,12 @@ loader.load("/models/RobotExpressive.glb", (gltf) => {
     }
   });
   console.log("Robot animations loaded:", robotAnimations.map(a => a.name));
+  usingFallbackAvatars = false;
+  rebuildAgentMeshes();
+}, undefined, (error) => {
+  console.error("Falha ao carregar modelo 3D do robô. Usando avatar fallback.", error);
+  usingFallbackAvatars = true;
+  rebuildAgentMeshes();
 });
 
 // Confetti System
@@ -681,17 +689,13 @@ function updateKanban3D() {
 
   // Group tasks by lane to stack them
   const laneCounts: Record<string, number> = { backlog: 0, in_progress: 0, review: 0, done: 0 };
-  const laneX: Record<string, number> = { backlog: -4.5, in_progress: -1.5, review: 1.5, done: 4.5 }; // 1.5x scale
 
   tasks.forEach(task => {
-    const lane = task.lane || "backlog";
-    if (lane === "done" && (laneCounts.done || 0) > 5) return;
-
+    const lane = getLaneSafe(task.lane);
     const count = laneCounts[lane] || 0;
-    const x = laneX[lane] || 0;
-    const y = 1.95 - count * 0.9;
+    const { x, y } = getTaskCardPosition(lane, count);
 
-    if (y < -2.25) return; // Don't overflow board
+    if (!shouldRenderTaskIn3D(lane, count, y)) return;
 
     // Create card mesh
     const geometry = new THREE.BoxGeometry(2.7, 0.75, 0.05);
@@ -725,6 +729,31 @@ const agentMeshes = new Map<string, {
   laser?: THREE.Line;
   statusSprite?: THREE.Sprite;
 }>();
+
+function clearAgentMeshes() {
+  agentMeshes.forEach((item) => {
+    if (item.laser) {
+      scene.remove(item.laser);
+      item.laser.geometry.dispose();
+      (item.laser.material as THREE.Material).dispose();
+    }
+    scene.remove(item.group);
+  });
+  agentMeshes.clear();
+}
+
+function rebuildAgentMeshes() {
+  clearAgentMeshes();
+  agents.forEach((agent, idx) => {
+    const meshData = createAgentMesh(agent, idx);
+    agentMeshes.set(agent.id, {
+      ...meshData,
+      phase: "idle",
+      phaseTimer: 0
+    });
+    playAction(agentMeshes.get(agent.id), "Idle", 0);
+  });
+}
 
 const visualAlerts = new Map<number, THREE.Sprite>();
 
@@ -822,6 +851,7 @@ function playAction(item: any, name: string, duration = 0.5) {
 
 function createAgentMesh(agent: Agent, index: number) {
   const group = new THREE.Group();
+  group.userData.agentId = agent.id;
 
   const roleColors: Record<string, string> = {
     "Product Manager": "#a855f7",
@@ -836,7 +866,7 @@ function createAgentMesh(agent: Agent, index: number) {
   let mixer: THREE.AnimationMixer | undefined;
   let anims: Record<string, THREE.AnimationAction> | undefined;
 
-  if (robotModel) {
+  if (robotModel && !usingFallbackAvatars) {
     const clonedRobot = SkeletonUtils.clone(robotModel) as THREE.Group;
     clonedRobot.scale.set(0.45, 0.45, 0.45); // increased height
     clonedRobot.position.y = 0;
@@ -856,6 +886,20 @@ function createAgentMesh(agent: Agent, index: number) {
     robotAnimations.forEach(clip => {
       anims![clip.name] = mixer!.clipAction(clip);
     });
+  } else {
+    const body = new THREE.Mesh(
+      new THREE.CapsuleGeometry(0.25, 0.8, 4, 8),
+      new THREE.MeshStandardMaterial({ color })
+    );
+    body.position.y = 0.8;
+    group.add(body);
+
+    const head = new THREE.Mesh(
+      new THREE.SphereGeometry(0.22, 16, 16),
+      new THREE.MeshStandardMaterial({ color: "#dbeafe" })
+    );
+    head.position.y = 1.45;
+    group.add(head);
   }
 
   group.position.set(-5 + index * 2, 0, -0.5);
@@ -916,7 +960,17 @@ function createAgentMesh(agent: Agent, index: number) {
 }
 
 function updateAgents3D() {
-  if (!robotModel) return;
+  for (const [agentId, item] of agentMeshes.entries()) {
+    if (!agents.find((a) => a.id === agentId)) {
+      if (item.laser) {
+        scene.remove(item.laser);
+        item.laser.geometry.dispose();
+        (item.laser.material as THREE.Material).dispose();
+      }
+      scene.remove(item.group);
+      agentMeshes.delete(agentId);
+    }
+  }
 
   // Check if we need to create meshes for new agents
   agents.forEach((agent, idx) => {
@@ -1033,7 +1087,7 @@ function tick() {
     }
 
     // Laser & Floating Terminal Update
-    const agentData = agents.find((a) => a.id === item.group.userData.agentId) || Object.values(agents)[Array.from(agentMeshes.values()).indexOf(item)]; // Hacky fallback if userData empty
+    const agentData = agents.find((a) => a.id === item.group.userData.agentId);
     let termEl = document.getElementById(`term-${agentData?.id}`);
 
     if (item.phase === "working" && agentData?.assignedTask && item.laser) {

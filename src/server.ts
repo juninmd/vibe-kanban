@@ -38,28 +38,34 @@ function initializeState(): State {
   };
 }
 
-const state = initializeState();
+initializeState();
 
 // SSE Clients
 let clients: { id: number; res: any }[] = [];
+let broadcastScheduled = false;
 
 // Helper to keep local state and DB in sync
 function updateTask(id: number, updates: Partial<Task>) {
-  const task = state.tasks.find(t => t.id === id);
-  if (task) {
-    Object.assign(task, updates);
-    DB.updateTask(id, updates);
-    broadcastState();
-  }
+  const task = DB.getTask(id);
+  if (!task) return;
+  DB.updateTask(id, updates);
+  scheduleBroadcast();
 }
 
 function updateAgent(id: string, updates: Partial<Agent>) {
-  const agent = state.agents.find(a => a.id === id);
-  if (agent) {
-    Object.assign(agent, updates);
-    DB.updateAgent(id, updates);
+  const agent = DB.getAgent(id);
+  if (!agent) return;
+  DB.updateAgent(id, updates);
+  scheduleBroadcast();
+}
+
+function scheduleBroadcast() {
+  if (broadcastScheduled) return;
+  broadcastScheduled = true;
+  setTimeout(() => {
+    broadcastScheduled = false;
     broadcastState();
-  }
+  }, 50);
 }
 
 function broadcastState() {
@@ -81,7 +87,7 @@ function broadcastState() {
 function addEvent(text: string) {
   const timestamp = new Date().toLocaleTimeString("pt-BR");
   DB.addEvent(timestamp, text);
-  broadcastState();
+  scheduleBroadcast();
 }
 
 function getTask(id: number) { return DB.getTask(id); }
@@ -375,7 +381,7 @@ const server = createServer(async (req, res) => {
     });
 
     // Send initial state
-    res.write(`data: ${JSON.stringify(state)}\n\n`);
+    res.write(`data: ${JSON.stringify({ tasks: DB.getTasks(), agents: DB.getAgents(), events: DB.getEvents() })}\n\n`);
 
     const clientId = Date.now();
     const newClient = {
