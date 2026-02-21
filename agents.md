@@ -4,6 +4,7 @@
 O **Vibe Kanban** é um orquestrador de produtividade que utiliza agentes baseados em LLMs locais e remotos via CLI para executar tarefas reais de desenvolvimento, segurança e performance.
 
 ## Regras de Desenvolvimento
+0. **Gerenciamento de Pacotes**: Use sempre **pnpm** para instalar dependências e executar scripts.
 1. **Sem "Mocks" de Comportamento**: Os drivers não devem simular completion ou logs aleatórios. Se uma ferramenta (CLI) não estiver disponível, o erro deve ser reportado de forma clara ao usuário.
 2. **Agentes Dinâmicos**: A criação de agentes deve ser feita via UI/API, permitindo a seleção de ferramentas (ex: Gemini CLI, Ollama) e modelos disponíveis no sistema do host.
 3. **Persistência de Configuração**: Configurações como o diretório de clones (`cloneDir`) devem ser persistidas em `vibe_config.json`.

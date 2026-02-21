@@ -1,0 +1,162 @@
+import Database from "better-sqlite3";
+import { Task, Agent, EventLog } from "./types.js";
+
+const db = new Database("vibe_kanban.db");
+
+// Initialize tables
+db.exec(`
+  CREATE TABLE IF NOT EXISTS tasks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    source TEXT NOT NULL,
+    category TEXT NOT NULL,
+    priority TEXT NOT NULL,
+    lane TEXT NOT NULL,
+    assignedTo TEXT,
+    interrupted BOOLEAN NOT NULL DEFAULT 0,
+    logs TEXT NOT NULL DEFAULT '[]',
+    githubRepo TEXT,
+    description TEXT,
+    agentType TEXT,
+    createdAt INTEGER NOT NULL,
+    updatedAt INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS agents (
+    id TEXT PRIMARY KEY,
+    role TEXT NOT NULL,
+    model TEXT NOT NULL,
+    category TEXT NOT NULL,
+    status TEXT NOT NULL,
+    assignedTask INTEGER,
+    tool TEXT,
+    terminalId TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp TEXT NOT NULL,
+    text TEXT NOT NULL
+  );
+`);
+
+export const DB = {
+  // Tasks
+  getTasks(): Task[] {
+    const rows = db.prepare("SELECT * FROM tasks ORDER BY createdAt DESC").all();
+    return rows.map((row: any) => ({
+      ...row,
+      interrupted: !!row.interrupted,
+      logs: JSON.parse(row.logs)
+    }));
+  },
+
+  getTask(id: number): Task | undefined {
+    const row = db.prepare("SELECT * FROM tasks WHERE id = ?").get(id) as any;
+    if (!row) return undefined;
+    return {
+      ...row,
+      interrupted: !!row.interrupted,
+      logs: JSON.parse(row.logs)
+    };
+  },
+
+  createTask(task: Partial<Task>): Task {
+    const now = Date.now();
+    const result = db.prepare(`
+      INSERT INTO tasks (title, source, category, priority, lane, assignedTo, interrupted, logs, githubRepo, description, agentType, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      task.title,
+      task.source || "user",
+      task.category || "misc",
+      task.priority || "media",
+      task.lane || "backlog",
+      task.assignedTo || null,
+      task.interrupted ? 1 : 0,
+      JSON.stringify(task.logs || []),
+      task.githubRepo || null,
+      task.description || null,
+      task.agentType || null,
+      task.createdAt || now,
+      task.updatedAt || now
+    );
+    return this.getTask(Number(result.lastInsertRowid))!;
+  },
+
+  updateTask(id: number, updates: Partial<Task>): void {
+    const task = this.getTask(id);
+    if (!task) return;
+
+    const updatedTask = { ...task, ...updates, updatedAt: Date.now() };
+    db.prepare(`
+      UPDATE tasks SET
+        title = ?, source = ?, category = ?, priority = ?, lane = ?,
+        assignedTo = ?, interrupted = ?, logs = ?, githubRepo = ?,
+        description = ?, agentType = ?, updatedAt = ?
+      WHERE id = ?
+    `).run(
+      updatedTask.title,
+      updatedTask.source,
+      updatedTask.category,
+      updatedTask.priority,
+      updatedTask.lane,
+      updatedTask.assignedTo,
+      updatedTask.interrupted ? 1 : 0,
+      JSON.stringify(updatedTask.logs),
+      updatedTask.githubRepo,
+      updatedTask.description,
+      updatedTask.agentType,
+      updatedTask.updatedAt,
+      id
+    );
+  },
+
+  // Agents
+  getAgents(): Agent[] {
+    return db.prepare("SELECT * FROM agents").all() as Agent[];
+  },
+
+  getAgent(id: string): Agent | undefined {
+    return db.prepare("SELECT * FROM agents WHERE id = ?").get(id) as Agent;
+  },
+
+  saveAgent(agent: Agent): void {
+    db.prepare(`
+      INSERT OR REPLACE INTO agents (id, role, model, category, status, assignedTask, tool, terminalId)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      agent.id,
+      agent.role,
+      agent.model,
+      agent.category,
+      agent.status,
+      agent.assignedTask,
+      agent.tool,
+      agent.terminalId
+    );
+  },
+
+  updateAgent(id: string, updates: Partial<Agent>): void {
+    const agent = this.getAgent(id);
+    if (!agent) return;
+
+    const updatedAgent = { ...agent, ...updates };
+    this.saveAgent(updatedAgent);
+  },
+
+  // Events
+  getEvents(limit = 50): EventLog[] {
+    return db.prepare("SELECT timestamp, text FROM events ORDER BY id DESC LIMIT ?").all(limit) as EventLog[];
+  },
+
+  addEvent(timestamp: string, text: string): void {
+    db.prepare("INSERT INTO events (timestamp, text) VALUES (?, ?)").run(timestamp, text);
+  },
+
+  reset(): void {
+    db.prepare("DELETE FROM tasks").run();
+    db.prepare("DELETE FROM agents").run();
+    db.prepare("DELETE FROM events").run();
+  }
+};
