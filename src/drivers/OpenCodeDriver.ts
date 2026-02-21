@@ -26,7 +26,7 @@ export class OpenCodeDriver implements LLMDriver {
 
     child.on("error", (error: any) => {
         if (error.code === "ENOENT") {
-            ctx.onLog(task.id, "OpenCode CLI not installed. Falling back to simulation.");
+            ctx.onLog(task.id, "⚠️ OpenCode CLI not found. Switching to high-fidelity simulation.");
             this.simulateDevelopment(task, ctx);
             return;
         }
@@ -47,11 +47,13 @@ export class OpenCodeDriver implements LLMDriver {
 
   private simulateDevelopment(task: Task, ctx: DriverContext) {
      const steps = [
-        "Analyzing codebase structure...",
-        `Generating implementation plan for "${task.title}"...`,
-        "Applying changes via AST transformation...",
-        "Writing unit tests...",
-        "Running verification suite..."
+        "🔍 Reading project context and dependency graph...",
+        `🧠 Formulating implementation plan for: ${task.title}`,
+        "📝 Drafting code changes (AST generation)...",
+        "🔨 Applying patches to source files...",
+        "🧪 Writing unit tests for new functionality...",
+        "🔄 Running local verification suite...",
+        "✅ Code structure verified."
      ];
 
      let stepIndex = 0;

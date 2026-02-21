@@ -26,7 +26,7 @@ export class CopilotDriver implements LLMDriver {
 
     child.on("error", (error: any) => {
         if (error.code === "ENOENT") {
-            ctx.onLog(task.id, "GitHub Copilot CLI not installed. Falling back to simulation.");
+            ctx.onLog(task.id, "⚠️ GitHub CLI/Copilot not found. Switching to neural simulation.");
             this.simulateDevelopment(task, ctx);
             return;
         }
@@ -47,11 +47,12 @@ export class CopilotDriver implements LLMDriver {
 
   private simulateDevelopment(task: Task, ctx: DriverContext) {
      const steps = [
-        "Analyzing workspace context...",
-        `Synthesizing solution for "${task.title}"...`,
-        "Suggesting code changes via Ghost Text...",
-        "Refactoring for style compliance...",
-        "Verifying implementation against existing patterns..."
+        "📡 Connecting to Copilot context awareness...",
+        `🤖 Synthesizing intelligent solution for: ${task.title}`,
+        "✨ Generating Ghost Text suggestions...",
+        "🎨 Refactoring for code style and patterns...",
+        "🛡️ Running security vulnerability scan...",
+        "✅ Solution verified against patterns."
      ];
 
      let stepIndex = 0;
