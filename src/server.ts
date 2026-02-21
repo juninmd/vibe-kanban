@@ -16,12 +16,12 @@ const PORT = process.env.PORT ? Number(process.env.PORT) : 5174;
 
 // --- State and Persistence ---
 const INITIAL_AGENTS: Agent[] = [
-  { id: "pm", role: "Product Manager", model: "gpt-4.1", category: "roadmap", status: "idle", assignedTask: null },
-  { id: "sec", role: "Segurança", model: "o3-mini", category: "seguranca", status: "idle", assignedTask: null },
-  { id: "perf", role: "Performance", model: "gpt-4o", category: "performance", status: "idle", assignedTask: null },
-  { id: "func", role: "Novas Funcionalidades", model: "gpt-4.1-mini", category: "funcionalidades", status: "idle", assignedTask: null },
-  { id: "tests", role: "Testes", model: "o1", category: "testes", status: "idle", assignedTask: null },
-  { id: "feat", role: "Novas Features", model: "codex-mini", category: "features", status: "idle", assignedTask: null },
+  { id: "pm", role: "Product Manager", model: "gemini-2.0-flash", category: "roadmap", status: "idle", assignedTask: null },
+  { id: "sec", role: "Segurança", model: "gemini-2.0-flash", category: "seguranca", status: "idle", assignedTask: null },
+  { id: "perf", role: "Performance", model: "gemini-2.0-flash", category: "performance", status: "idle", assignedTask: null },
+  { id: "func", role: "Novas Funcionalidades", model: "gemini-2.0-flash", category: "funcionalidades", status: "idle", assignedTask: null },
+  { id: "tests", role: "Testes", model: "gemini-2.0-pro-exp-02-05", category: "testes", status: "idle", assignedTask: null },
+  { id: "feat", role: "Novas Features", model: "gemini-2.0-flash-thinking-exp-01-21", category: "features", status: "idle", assignedTask: null },
 ];
 
 function initializeState(): State {
@@ -77,17 +77,6 @@ function broadcastState() {
     }
   });
 }
-
-// Driver selection
-const drivers: Record<string, LLMDriver> = {
-  mock: new MockDriver(),
-  gemini: new GeminiDriver(),
-  copilot: new CopilotDriver(),
-  opencode: new OpenCodeDriver(),
-  claude: new ClaudeDriver(),
-};
-// Default to OpenCodeDriver as requested, falling back to mock behavior internally if CLI missing
-let currentDriver: LLMDriver = drivers.opencode;
 
 function addEvent(text: string) {
   const timestamp = new Date().toLocaleTimeString("pt-BR");
@@ -237,8 +226,17 @@ try {
   }
 } catch (e) { }
 
-// --- Server ---
+// --- Drivers ---
 const cliDriver = new CommandDriver(() => appConfig.cloneDir);
+const drivers: Record<string, LLMDriver> = {
+  mock: new MockDriver(),
+  gemini: new GeminiDriver(() => appConfig.cloneDir),
+  copilot: new CopilotDriver(),
+  opencode: new OpenCodeDriver(),
+  claude: new ClaudeDriver(),
+};
+// Default to GeminiDriver for best integration with this environment
+let currentDriver: LLMDriver = drivers.gemini;
 
 const server = createServer(async (req, res) => {
   const { method, url } = req as any;
@@ -344,7 +342,7 @@ const server = createServer(async (req, res) => {
         models = lines.map(l => l.split(/\s+/)[0]);
       } catch { }
     } else if (tool === "gemini") {
-      models = ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash-thinking-exp-01-21", "gemini-2.5-pro-exp", "gemini-2.5-flash-exp"];
+      models = ["gemini-2.0-flash", "gemini-2.0-flash-lite-preview", "gemini-2.0-pro-exp-02-05", "gemini-2.0-flash-thinking-exp-01-21", "gemini-1.5-flash", "gemini-1.5-pro"];
     }
     return jsonResponse(res, 200, { models });
   }

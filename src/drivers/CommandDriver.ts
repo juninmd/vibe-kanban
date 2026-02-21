@@ -34,7 +34,7 @@ export class CommandDriver implements LLMDriver {
             args = ["run", agent.model, prompt];
         } else if (agent.tool === "gemini") {
             command = "gemini";
-            args = [prompt];
+            args = ["-p", prompt, "-m", agent.model || "gemini-2.0-flash", "--yolo"];
         } else {
             ctx.onLog(task.id, `Unknown tool configured for agent: ${agent.tool}`);
             ctx.onComplete(task.id);

@@ -653,6 +653,68 @@ const agentMeshes = new Map<string, {
   laser?: THREE.Line;
 }>();
 
+const visualAlerts = new Map<number, THREE.Sprite>();
+
+function createAlertIcon(type: "bug" | "perf") {
+  const canvas = document.createElement("canvas");
+  canvas.width = 128;
+  canvas.height = 128;
+  const ctx = canvas.getContext("2d")!;
+
+  ctx.fillStyle = type === "bug" ? "#ef4444" : "#eab308";
+  ctx.beginPath();
+  ctx.arc(64, 64, 60, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.font = "bold 80px Inter, sans-serif";
+  ctx.fillStyle = "white";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(type === "bug" ? "!" : "⚡", 64, 68);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
+  const sprite = new THREE.Sprite(mat);
+  sprite.scale.set(0.6, 0.6, 1);
+  return sprite;
+}
+
+function updateVisualAlerts() {
+  tasks.forEach(task => {
+    const isBug = task.category === "testes" && task.lane !== "done";
+    const isPerf = task.category === "performance" && task.lane !== "done";
+
+    if ((isBug || isPerf) && !visualAlerts.has(task.id)) {
+      const icon = createAlertIcon(isBug ? "bug" : "perf");
+      scene.add(icon);
+      visualAlerts.set(task.id, icon);
+    }
+  });
+
+  // Remove fixed alerts
+  for (const [taskId, sprite] of visualAlerts.entries()) {
+    const task = tasks.find(t => t.id === taskId);
+    if (!task || task.lane === "done") {
+      scene.remove(sprite);
+      if (sprite.material.map) sprite.material.map.dispose();
+      sprite.material.dispose();
+      visualAlerts.delete(taskId);
+    } else {
+      // Position alert above the card on the board
+      const cardMesh = kanbanGroup.children.find(c => c.userData.taskId === taskId);
+      if (cardMesh) {
+        const worldPos = new THREE.Vector3();
+        cardMesh.getWorldPosition(worldPos);
+        sprite.position.copy(worldPos);
+        sprite.position.y += 0.6;
+        sprite.position.z += 0.2;
+        // Floating effect
+        sprite.position.y += Math.sin(Date.now() * 0.005) * 0.1;
+      }
+    }
+  }
+}
+
 function playAction(item: any, name: string, duration = 0.5) {
   if (!item.anims) return;
   const action = item.anims[name] || item.anims["Idle"];
@@ -882,6 +944,10 @@ function tick() {
         item.laser.geometry.setFromPoints([agentPos, cardPos]);
         item.laser.visible = true;
 
+        // Change laser color based on task category
+        const laserColor = taskObj.category === "testes" ? 0xef4444 : (taskObj.category === "performance" ? 0xeab308 : 0x00f0ff);
+        (item.laser.material as THREE.LineBasicMaterial).color.setHex(laserColor);
+
         // Terminal DOM
         if (!termEl) {
           termEl = document.createElement("div");
@@ -922,6 +988,7 @@ function tick() {
 
   if (typeof particles !== "undefined") particles.rotation.y += 0.0005;
 
+  updateVisualAlerts();
   updateConfetti();
   updateTrails();
   updateLighting();

@@ -18,6 +18,10 @@ O **Vibe Kanban** é um orquestrador de produtividade que utiliza agentes basead
 - **Transparência**: Todo output do terminal deve ser capturado e exibido no log da tarefa para que o usuário possa auditar o que o agente está fazendo.
 - **Gestão de Erros**: Falhas de conexão ou ausência de ferramentas devem ser tratadas como erros de execução, não como "sucesso simulado".
 
+## Desenvolvimento Contínuo
+- **Implementação do Roadmap**: Todas as funcionalidades listadas como pendentes no `ROADMAP.md` (Fases 2, 3 e 4) devem ser priorizadas e implementadas seguindo as diretrizes deste documento.
+- **Isolamento e Segurança**: A prioridade imediata é a transição para execução em sandbox (Docker) para garantir a integridade do sistema host.
+
 ## Estrutura de Pastas
 - `src/drivers`: Implementações de ponte entre o servidor e as LLMs.
 - `clones/`: Diretório padrão (configurável) onde os agentes realizam o trabalho.
