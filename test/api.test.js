@@ -63,7 +63,7 @@ describe('Vibe Kanban API', async () => {
       body: JSON.stringify({
         title: 'Test Task',
         source: 'test',
-        category: 'testes',
+        category: 'test',
         priority: 'media',
         githubRepo: 'acme/vibe'
       })
