@@ -3,6 +3,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import * as SkeletonUtils from "three/addons/utils/SkeletonUtils.js";
 import { createOffice } from "./office.js";
+import { getLaneSafe, getTaskCardPosition, shouldRenderTaskIn3D } from "./kanbanMath.js";
 
 const API_URL = "";
 
@@ -81,33 +82,69 @@ const els = {
   settingsForm: document.getElementById("settingsForm") as HTMLFormElement,
   cancelSettingsBtn: document.getElementById("cancelSettingsBtn") as HTMLButtonElement,
   configCloneDir: document.getElementById("configCloneDir") as HTMLInputElement,
+  envOpenAI: document.getElementById("envOpenAI") as HTMLInputElement,
+  envGemini: document.getElementById("envGemini") as HTMLInputElement,
+  envAnthropic: document.getElementById("envAnthropic") as HTMLInputElement,
+  envGithub: document.getElementById("envGithub") as HTMLInputElement,
+  // Stats
+  statPending: document.getElementById("statPending") as HTMLElement,
+  statDone: document.getElementById("statDone") as HTMLElement,
+  statAgents: document.getElementById("statAgents") as HTMLElement,
+  headerStats: document.getElementById("headerStats") as HTMLElement,
+  toastContainer: document.getElementById("toast-container") as HTMLElement,
 };
+
+// --- Toast System ---
+function showToast(message: string, type: "success" | "error" | "info" = "info") {
+  const toast = document.createElement("div");
+  toast.className = `toast ${type}`;
+  toast.textContent = message;
+  els.toastContainer?.appendChild(toast);
+  setTimeout(() => {
+    toast.style.animation = "fadeOut 0.5s forwards";
+    setTimeout(() => toast.remove(), 500);
+  }, 3000);
+}
+
+// --- Sound System ---
+const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+function playTone(freq: number, type: OscillatorType, dur: number, vol: number) {
+  try {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+    gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + dur);
+    osc.start(audioCtx.currentTime);
+    osc.stop(audioCtx.currentTime + dur);
+  } catch (e) { }
+}
+
+function playSuccessSound() { playTone(880, "sine", 0.3, 0.2); playTone(1100, "sine", 0.4, 0.1); }
+function playErrorSound() { playTone(220, "sawtooth", 0.4, 0.3); }
+function playClickSound() { playTone(1200, "triangle", 0.05, 0.05); }
+
+// --- Dashboard Logic ---
+function updateDashboard() {
+  const pending = tasks.filter(t => t.lane !== "done").length;
+  const done = tasks.filter(t => t.lane === "done").length;
+  const activeAgents = agents.filter(a => a.status === "working").length;
+
+  if (els.statPending) els.statPending.textContent = pending.toString();
+  if (els.statDone) els.statDone.textContent = done.toString();
+  if (els.statAgents) els.statAgents.textContent = activeAgents.toString();
+  if (els.headerStats) els.headerStats.textContent = `• ${pending} tarefas ativas`;
+  document.title = `(${pending}) Vibe Kanban 3D`;
+}
 
 // Confetti State
 const confettiParticles: any[] = [];
 
 let isOfficeCreated = false;
 export let officeData: { padPositions: THREE.Vector3[] } = { padPositions: [] };
-
-function playSuccessSound() {
-  try {
-    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.type = "sine";
-    osc.frequency.setValueAtTime(440, ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.1);
-    gain.gain.setValueAtTime(0, ctx.currentTime);
-    gain.gain.linearRampToValueAtTime(0.3, ctx.currentTime + 0.05);
-    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
-    osc.start(ctx.currentTime);
-    osc.stop(ctx.currentTime + 0.3);
-  } catch (e) {
-    console.log("Audio failed to play", e);
-  }
-}
 
 function updateState(data: any) {
   // Detect completions for celebration
@@ -131,6 +168,8 @@ function updateState(data: any) {
 
   tasks = newTasks;
   agents = data.agents || [];
+
+  updateDashboard();
 
   // Create office dynamically once we know how many agents there are
   if (!isOfficeCreated && agents.length > 0) {
@@ -170,14 +209,20 @@ async function apiCall(endpoint: string, method: string, body: any) {
 
 function createTask(taskParams: { title: string; source: string; category: string; priority: string; githubRepo?: string; description?: string; agentType?: string; assignedTo?: string; model?: string; }) {
   apiCall("/api/tasks", "POST", taskParams);
+  playSuccessSound();
+  showToast(`Tarefa criada: ${taskParams.title}`, "success");
 }
 
 function pickTask(task: Task) {
   apiCall("/api/assign", "POST", { taskId: task.id, category: task.category });
+  playClickSound();
+  showToast("Tarefa atribuída", "info");
 }
 
 function interruptTask(task: Task) {
   apiCall("/api/interrupt", "POST", { taskId: task.id });
+  playErrorSound();
+  showToast("Tarefa interrompida", "error");
 }
 
 function moveTask(task: Task, dir: number) {
@@ -195,7 +240,7 @@ function bugFromTask(task: Task) {
   createTask({
     title: `Bug reportado em: ${task.title}`,
     source: "agente",
-    category: "testes",
+    category: "bug",
     priority: "alta",
     githubRepo: task.githubRepo,
   });
@@ -326,9 +371,9 @@ els.toggleViewBtn.addEventListener("click", () => {
 els.seedTasksBtn.addEventListener("click", () => {
   [
     ["Planejar sprint de IA colaborativa", "product_manager", "roadmap", "alta"],
-    ["Auditar permissões do backend", "product_manager", "seguranca", "alta"],
+    ["Auditar permissões do backend", "product_manager", "security", "alta"],
     ["Otimizar render do quadro 3D", "usuario", "performance", "media"],
-    ["Criar painel de métricas de agente", "usuario", "funcionalidades", "media"]
+    ["Criar painel de métricas de agente", "usuario", "feature", "media"]
   ].forEach(([title, source, category, priority]) =>
     createTask({ title: title as string, source: source as string, category: category as string, priority: priority as string }),
   );
@@ -403,7 +448,28 @@ els.cancelSettingsBtn.addEventListener("click", () => els.settingsModal.close())
 
 els.settingsForm.addEventListener("submit", async (e) => {
   e.preventDefault();
+  // Save clone dir
   await apiCall("/api/config/clone-dir", "POST", { cloneDir: els.configCloneDir.value });
+
+  // Save env vars
+  const envUpdates: Record<string, string> = {};
+  if (els.envOpenAI.value) envUpdates["OPENAI_API_KEY"] = els.envOpenAI.value;
+  if (els.envGemini.value) envUpdates["GEMINI_API_KEY"] = els.envGemini.value;
+  if (els.envAnthropic.value) envUpdates["ANTHROPIC_API_KEY"] = els.envAnthropic.value;
+  if (els.envGithub.value) envUpdates["GITHUB_TOKEN"] = els.envGithub.value;
+
+  if (Object.keys(envUpdates).length > 0) {
+    await apiCall("/api/settings/env", "POST", envUpdates);
+    showToast("Configurações e API Keys salvas!", "success");
+    // Clear password fields for security
+    els.envOpenAI.value = "";
+    els.envGemini.value = "";
+    els.envAnthropic.value = "";
+    els.envGithub.value = "";
+  } else {
+    showToast("Configurações salvas!", "success");
+  }
+
   els.settingsModal.close();
 });
 
@@ -426,6 +492,13 @@ const dir = new THREE.DirectionalLight("#b7c6ff", 1.2);
 dir.position.set(5, 8, 3);
 scene.add(dir);
 
+// Holographic Floor Grid
+const gridHelper = new THREE.GridHelper(40, 40, 0x00f0ff, 0x111133);
+gridHelper.position.y = -0.01;
+(gridHelper.material as THREE.Material).transparent = true;
+(gridHelper.material as THREE.Material).opacity = 0.2;
+scene.add(gridHelper);
+
 function updateLighting() {
   const workingCount = agents.filter(a => a.status === "working").length;
   // Target intensity: brighter when busy
@@ -440,8 +513,9 @@ function updateLighting() {
 
 // Ambient Particles
 const pGeo = new THREE.BufferGeometry();
-const pPos = new Float32Array(1000);
-for (let i = 0; i < 1000; i++) {
+const particleCount = 1000;
+const pPos = new Float32Array(particleCount * 3);
+for (let i = 0; i < particleCount; i++) {
   pPos[i * 3] = (Math.random() - 0.5) * 30; // x
   pPos[i * 3 + 1] = Math.random() * 8; // y
   pPos[i * 3 + 2] = (Math.random() - 0.5) * 15; // z
@@ -452,8 +526,11 @@ const particles = new THREE.Points(pGeo, pMat);
 scene.add(particles);
 
 let robotModel: THREE.Group | null = null;
+let computerModel: THREE.Group | null = null;
 let robotAnimations: THREE.AnimationClip[] = [];
 const loader = new GLTFLoader();
+let usingFallbackAvatars = false;
+let areComputersSpawned = false;
 
 loader.load("/models/RobotExpressive.glb", (gltf) => {
   robotModel = gltf.scene;
@@ -466,7 +543,63 @@ loader.load("/models/RobotExpressive.glb", (gltf) => {
     }
   });
   console.log("Robot animations loaded:", robotAnimations.map(a => a.name));
+  usingFallbackAvatars = false;
+  rebuildAgentMeshes();
+}, undefined, (error) => {
+  console.error("Falha ao carregar modelo 3D do robô. Usando avatar fallback.", error);
+  usingFallbackAvatars = true;
+  rebuildAgentMeshes();
 });
+
+loader.load("/models/old_computer.glb", (gltf) => {
+  computerModel = gltf.scene;
+  computerModel.traverse((child: any) => {
+    if (child.isMesh) {
+      child.castShadow = true;
+      child.receiveShadow = true;
+    }
+  });
+  spawnComputers();
+}, undefined, (error) => {
+  console.error("Falha ao carregar modelo do computador.", error);
+});
+
+function spawnComputers() {
+  if (areComputersSpawned || !isOfficeCreated || !computerModel) return;
+
+  officeData.padPositions.forEach((pos) => {
+    // Desk
+    const deskGeo = new THREE.BoxGeometry(2.0, 1.0, 1.2);
+    const deskMat = new THREE.MeshStandardMaterial({ color: "#1e293b", roughness: 0.2, metalness: 0.5 });
+    const desk = new THREE.Mesh(deskGeo, deskMat);
+    // Position desk slightly behind the pad (pad is at pos.z, agent stands there facing positive Z? No, see below)
+    // In updateAgents3D:
+    // item.group.lookAt(item.target.x, item.group.position.y, item.target.z);
+    // When working: lookAt(..., ..., z - 100); -> Agent looks at NEGATIVE Z.
+    // So the desk should be at NEGATIVE Z relative to the agent.
+    // The pad is at pos.z.
+    // If agent stands at pos.z and looks at Z-100, the desk should be at pos.z - offset.
+
+    // Let's re-verify rotation.
+    // if (item.phase === "working") { item.group.lookAt(..., ..., item.group.position.z - 100); }
+    // So agent faces -Z.
+    // Pad is at Z=2.8.
+    // Desk should be at Z < 2.8. e.g. Z=1.6.
+
+    desk.position.set(pos.x, 0.5, pos.z - 1.2);
+    scene.add(desk);
+
+    // Computer
+    const computer = computerModel!.clone();
+    computer.scale.set(1.5, 1.5, 1.5); // Adjust scale as needed
+    computer.position.set(0, 0.5, 0); // On top of desk
+    // Rotate computer to face the agent (Agent faces -Z, Computer faces +Z)
+    computer.rotation.y = Math.PI;
+    desk.add(computer);
+  });
+
+  areComputersSpawned = true;
+}
 
 // Confetti System
 function spawnConfetti() {
@@ -554,11 +687,11 @@ function createTaskTexture(task: Task) {
   // Background
   const categoryColors: Record<string, string> = {
     roadmap: "#a855f7",
-    seguranca: "#ef4444",
+    security: "#ef4444",
     performance: "#f97316",
-    funcionalidades: "#3b82f6",
-    testes: "#22c55e",
-    features: "#06b6d4"
+    feature: "#3b82f6",
+    test: "#22c55e",
+    bug: "#06b6d4"
   };
 
   ctx.fillStyle = categoryColors[task.category] || "#64748b";
@@ -592,52 +725,66 @@ function createTaskTexture(task: Task) {
   return tex;
 }
 
-function updateKanban3D() {
-  // Clear old meshes
-  while (kanbanGroup.children.length > 0) {
-    const child = kanbanGroup.children[0];
-    if ((child as any).geometry) (child as any).geometry.dispose();
-    if ((child as any).material) {
-      if (Array.isArray((child as any).material)) (child as any).material.forEach((m: any) => { if (m.map) m.map.dispose(); m.dispose(); });
-      else {
-        if ((child as any).material.map) (child as any).material.map.dispose();
-        (child as any).material.dispose();
-      }
-    }
-    kanbanGroup.remove(child);
-  }
+const taskMeshes = new Map<number, THREE.Mesh>();
 
-  // Group tasks by lane to stack them
+function updateKanban3D() {
+  const visibleTaskIds = new Set<number>();
   const laneCounts: Record<string, number> = { backlog: 0, in_progress: 0, review: 0, done: 0 };
-  const laneX: Record<string, number> = { backlog: -4.5, in_progress: -1.5, review: 1.5, done: 4.5 }; // 1.5x scale
 
   tasks.forEach(task => {
-    const lane = task.lane || "backlog";
-    if (lane === "done" && (laneCounts.done || 0) > 5) return;
-
+    const lane = getLaneSafe(task.lane);
     const count = laneCounts[lane] || 0;
-    const x = laneX[lane] || 0;
-    const y = 1.95 - count * 0.9;
+    const { x, y } = getTaskCardPosition(lane, count);
 
-    if (y < -2.25) return; // Don't overflow board
+    if (shouldRenderTaskIn3D(lane, count, y)) {
+        visibleTaskIds.add(task.id);
 
-    // Create card mesh
-    const geometry = new THREE.BoxGeometry(2.7, 0.75, 0.05);
-    const texture = createTaskTexture(task);
-    const material = new THREE.MeshStandardMaterial({
-      map: texture,
-      emissive: 0x222222,
-      emissiveMap: texture,
-      emissiveIntensity: 0.4
-    });
+        let mesh = taskMeshes.get(task.id);
+        const signature = `${task.title}-${task.category}-${task.priority}-${task.assignedTo || ''}`;
 
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.set(x, y, 0.15); // Move off surface
-    mesh.userData = { taskId: task.id };
-    kanbanGroup.add(mesh);
+        if (!mesh) {
+            // Create
+            const geometry = new THREE.BoxGeometry(2.7, 0.75, 0.05);
+            const texture = createTaskTexture(task);
+            const material = new THREE.MeshStandardMaterial({
+              map: texture,
+              emissive: 0x222222,
+              emissiveMap: texture,
+              emissiveIntensity: 0.4
+            });
+            mesh = new THREE.Mesh(geometry, material);
+            mesh.userData = { taskId: task.id, signature };
+            kanbanGroup.add(mesh);
+            taskMeshes.set(task.id, mesh);
+        } else {
+             // Update texture if changed
+             if (mesh.userData.signature !== signature) {
+                 const oldTex = (mesh.material as THREE.MeshStandardMaterial).map;
+                 if (oldTex) oldTex.dispose();
+                 const newTex = createTaskTexture(task);
+                 (mesh.material as THREE.MeshStandardMaterial).map = newTex;
+                 (mesh.material as THREE.MeshStandardMaterial).emissiveMap = newTex;
+                 mesh.userData.signature = signature;
+                 (mesh.material as THREE.MeshStandardMaterial).needsUpdate = true;
+             }
+        }
+
+        mesh.position.set(x, y, 0.15);
+    }
 
     laneCounts[lane] = count + 1;
   });
+
+  // Cleanup invisible/removed tasks
+  for (const [id, mesh] of taskMeshes.entries()) {
+      if (!visibleTaskIds.has(id)) {
+          kanbanGroup.remove(mesh);
+          if (mesh.geometry) mesh.geometry.dispose();
+          if ((mesh.material as THREE.MeshStandardMaterial).map) (mesh.material as THREE.MeshStandardMaterial).map!.dispose();
+          if ((mesh.material as THREE.MeshStandardMaterial).dispose) (mesh.material as THREE.MeshStandardMaterial).dispose();
+          taskMeshes.delete(id);
+      }
+  }
 }
 
 const agentMeshes = new Map<string, {
@@ -651,7 +798,115 @@ const agentMeshes = new Map<string, {
   anims?: Record<string, THREE.AnimationAction>;
   currentAction?: THREE.AnimationAction | null;
   laser?: THREE.Line;
+  statusSprite?: THREE.Sprite;
 }>();
+
+function clearAgentMeshes() {
+  agentMeshes.forEach((item) => {
+    if (item.laser) {
+      scene.remove(item.laser);
+      item.laser.geometry.dispose();
+      (item.laser.material as THREE.Material).dispose();
+    }
+    scene.remove(item.group);
+  });
+  agentMeshes.clear();
+}
+
+function rebuildAgentMeshes() {
+  clearAgentMeshes();
+  agents.forEach((agent, idx) => {
+    const meshData = createAgentMesh(agent, idx);
+    agentMeshes.set(agent.id, {
+      ...meshData,
+      phase: "idle",
+      phaseTimer: 0
+    });
+    playAction(agentMeshes.get(agent.id), "Idle", 0);
+  });
+}
+
+const visualAlerts = new Map<number, THREE.Sprite>();
+
+function createStatusTexture(emoji: string) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 64;
+  canvas.height = 64;
+  const ctx = canvas.getContext("2d")!;
+  ctx.font = "48px Inter, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(emoji, 32, 34);
+  const tex = new THREE.CanvasTexture(canvas);
+  return tex;
+}
+
+const statusTextures = {
+  idle: createStatusTexture("💤"),
+  working: createStatusTexture("🔨"),
+  celebrating: createStatusTexture("🎉"),
+  walking: createStatusTexture("🚶")
+};
+
+function createAlertIcon(type: "bug" | "perf") {
+  const canvas = document.createElement("canvas");
+  canvas.width = 128;
+  canvas.height = 128;
+  const ctx = canvas.getContext("2d")!;
+
+  ctx.fillStyle = type === "bug" ? "#ef4444" : "#eab308";
+  ctx.beginPath();
+  ctx.arc(64, 64, 60, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.font = "bold 80px Inter, sans-serif";
+  ctx.fillStyle = "white";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(type === "bug" ? "!" : "⚡", 64, 68);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
+  const sprite = new THREE.Sprite(mat);
+  sprite.scale.set(0.6, 0.6, 1);
+  return sprite;
+}
+
+function updateVisualAlerts() {
+  tasks.forEach(task => {
+    const isBug = (task.category === "bug" || task.category === "test") && task.lane !== "done";
+    const isPerf = task.category === "performance" && task.lane !== "done";
+
+    if ((isBug || isPerf) && !visualAlerts.has(task.id)) {
+      const icon = createAlertIcon(isBug ? "bug" : "perf");
+      scene.add(icon);
+      visualAlerts.set(task.id, icon);
+    }
+  });
+
+  // Remove fixed alerts
+  for (const [taskId, sprite] of visualAlerts.entries()) {
+    const task = tasks.find(t => t.id === taskId);
+    if (!task || task.lane === "done") {
+      scene.remove(sprite);
+      if (sprite.material.map) sprite.material.map.dispose();
+      sprite.material.dispose();
+      visualAlerts.delete(taskId);
+    } else {
+      // Position alert above the card on the board
+      const cardMesh = kanbanGroup.children.find(c => c.userData.taskId === taskId);
+      if (cardMesh) {
+        const worldPos = new THREE.Vector3();
+        cardMesh.getWorldPosition(worldPos);
+        sprite.position.copy(worldPos);
+        sprite.position.y += 0.6;
+        sprite.position.z += 0.2;
+        // Floating effect
+        sprite.position.y += Math.sin(Date.now() * 0.005) * 0.1;
+      }
+    }
+  }
+}
 
 function playAction(item: any, name: string, duration = 0.5) {
   if (!item.anims) return;
@@ -667,21 +922,22 @@ function playAction(item: any, name: string, duration = 0.5) {
 
 function createAgentMesh(agent: Agent, index: number) {
   const group = new THREE.Group();
+  group.userData.agentId = agent.id;
 
   const roleColors: Record<string, string> = {
     "Product Manager": "#a855f7",
     "Segurança": "#ef4444",
     "Performance": "#f97316",
-    "Novas Funcionalidades": "#3b82f6",
-    "Testes": "#22c55e",
-    "Novas Features": "#06b6d4"
+    "Feature Builder": "#3b82f6",
+    "QA": "#22c55e",
+    "Correções / Bugs": "#06b6d4"
   };
   const color = new THREE.Color(roleColors[agent.role] || "#888888");
 
   let mixer: THREE.AnimationMixer | undefined;
   let anims: Record<string, THREE.AnimationAction> | undefined;
 
-  if (robotModel) {
+  if (robotModel && !usingFallbackAvatars) {
     const clonedRobot = SkeletonUtils.clone(robotModel) as THREE.Group;
     clonedRobot.scale.set(0.45, 0.45, 0.45); // increased height
     clonedRobot.position.y = 0;
@@ -701,6 +957,20 @@ function createAgentMesh(agent: Agent, index: number) {
     robotAnimations.forEach(clip => {
       anims![clip.name] = mixer!.clipAction(clip);
     });
+  } else {
+    const body = new THREE.Mesh(
+      new THREE.CapsuleGeometry(0.25, 0.8, 4, 8),
+      new THREE.MeshStandardMaterial({ color })
+    );
+    body.position.y = 0.8;
+    group.add(body);
+
+    const head = new THREE.Mesh(
+      new THREE.SphereGeometry(0.22, 16, 16),
+      new THREE.MeshStandardMaterial({ color: "#dbeafe" })
+    );
+    head.position.y = 1.45;
+    group.add(head);
   }
 
   group.position.set(-5 + index * 2, 0, -0.5);
@@ -724,7 +994,7 @@ function createAgentMesh(agent: Agent, index: number) {
     // Add a border
     ctx.strokeStyle = "#ffffff";
     ctx.lineWidth = 8;
-    ctx.strokeRect(4, 4, canvas.width-8, canvas.height-8);
+    ctx.strokeRect(4, 4, canvas.width - 8, canvas.height - 8);
 
     ctx.font = "bold 56px Inter, sans-serif";
     ctx.fillStyle = "#ffffff";
@@ -745,17 +1015,33 @@ function createAgentMesh(agent: Agent, index: number) {
   label.position.set(0, 1.35, 0.25);
   group.add(label);
 
+  const statusMat = new THREE.SpriteMaterial({ map: createStatusTexture("💤"), transparent: true, depthTest: false });
+  const statusSprite = new THREE.Sprite(statusMat);
+  statusSprite.scale.set(0.4, 0.4, 1);
+  statusSprite.position.set(0, 2.2, 0); // Above head
+  group.add(statusSprite);
+
   const laserMat = new THREE.LineBasicMaterial({ color: 0x00f0ff, transparent: true, opacity: 0.6 });
   const laserGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, 0)]);
   const laser = new THREE.Line(laserGeo, laserMat);
   laser.visible = false;
   scene.add(laser);
 
-  return { group, label, target: group.position.clone(), color, mixer, anims, currentAction: null, laser };
+  return { group, label, target: group.position.clone(), color, mixer, anims, currentAction: null, laser, statusSprite };
 }
 
 function updateAgents3D() {
-  if (!robotModel) return;
+  for (const [agentId, item] of agentMeshes.entries()) {
+    if (!agents.find((a) => a.id === agentId)) {
+      if (item.laser) {
+        scene.remove(item.laser);
+        item.laser.geometry.dispose();
+        (item.laser.material as THREE.Material).dispose();
+      }
+      scene.remove(item.group);
+      agentMeshes.delete(agentId);
+    }
+  }
 
   // Check if we need to create meshes for new agents
   agents.forEach((agent, idx) => {
@@ -855,17 +1141,26 @@ function tick() {
     item.group.position.lerp(item.target, 0.08);
     if (item.mixer) item.mixer.update(delta);
 
+    const statusMaterial = item.statusSprite?.material as THREE.SpriteMaterial | undefined;
+
     if (item.phase === "celebrating") {
       item.phaseTimer -= delta;
       playAction(item, "ThumbsUp");
+      if (statusMaterial) statusMaterial.map = statusTextures.celebrating;
       if (item.phaseTimer <= 0) {
         item.phase = "idle";
         playAction(item, "Idle");
       }
+    } else if (item.phase === "working") {
+      if (statusMaterial) statusMaterial.map = statusTextures.working;
+    } else if (item.phase === "idle") {
+      if (statusMaterial) statusMaterial.map = statusTextures.idle;
+    } else {
+      if (statusMaterial) statusMaterial.map = statusTextures.walking;
     }
 
     // Laser & Floating Terminal Update
-    const agentData = agents.find((a) => a.id === item.group.userData.agentId) || Object.values(agents)[Array.from(agentMeshes.values()).indexOf(item)]; // Hacky fallback if userData empty
+    const agentData = agents.find((a) => a.id === item.group.userData.agentId);
     let termEl = document.getElementById(`term-${agentData?.id}`);
 
     if (item.phase === "working" && agentData?.assignedTask && item.laser) {
@@ -881,6 +1176,10 @@ function tick() {
         agentPos.y += 0.8;
         item.laser.geometry.setFromPoints([agentPos, cardPos]);
         item.laser.visible = true;
+
+        // Change laser color based on task category
+        const laserColor = (taskObj.category === "test" || taskObj.category === "bug") ? 0xef4444 : (taskObj.category === "performance" ? 0xeab308 : 0x00f0ff);
+        (item.laser.material as THREE.LineBasicMaterial).color.setHex(laserColor);
 
         // Terminal DOM
         if (!termEl) {
@@ -922,9 +1221,23 @@ function tick() {
 
   if (typeof particles !== "undefined") particles.rotation.y += 0.0005;
 
+  updateVisualAlerts();
   updateConfetti();
   updateTrails();
-  updateLighting();
+
+  // Pulse lighting based on active agents
+  const activeCount = agents.filter(a => a.status === "working").length;
+  if (activeCount > 0) {
+    const pulse = Math.sin(Date.now() * 0.002) * 0.1;
+    dir.intensity = 1.2 + (activeCount * 0.1) + pulse;
+    ambientLight.intensity = 0.75 + (activeCount * 0.05) + (pulse * 0.5);
+  } else {
+    // Calm breathing when idle
+    const pulse = Math.sin(Date.now() * 0.001) * 0.05;
+    dir.intensity = 1.0 + pulse;
+    ambientLight.intensity = 0.6 + pulse;
+  }
+
   controls.update();
   renderer.render(scene, camera);
   requestAnimationFrame(tick);
@@ -1048,9 +1361,25 @@ function onPointerDown(event: PointerEvent) {
 
 window.addEventListener('pointerdown', onPointerDown);
 
-// Hide tooltip if clicked elsewhere or moving camera
-controls.addEventListener('start', () => {
-  tooltip.style.display = "none";
+// --- Keyboard Shortcuts ---
+window.addEventListener("keydown", (e) => {
+  if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
+  if (e.key === " ") {
+    e.preventDefault();
+    els.toggleViewBtn.click();
+    playClickSound();
+  }
+  if (e.key === "n" || e.key === "N") {
+    e.preventDefault();
+    els.title.focus();
+    playClickSound();
+  }
+  if (e.key === "Escape") {
+    els.agentModal.close();
+    els.settingsModal.close();
+    playClickSound();
+  }
 });
 
 tick();

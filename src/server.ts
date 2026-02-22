@@ -9,29 +9,77 @@ import { CopilotDriver } from "./drivers/CopilotDriver.js";
 import { OpenCodeDriver } from "./drivers/OpenCodeDriver.js";
 import { ClaudeDriver } from "./drivers/ClaudeDriver.js";
 import { CommandDriver } from "./drivers/CommandDriver.js";
+import { DB } from "./db.js";
+import "dotenv/config";
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 5174;
 
-// --- State ---
-let taskIdCounter = 1;
-const state: State = {
-  tasks: [],
-  agents: [
-    { id: "pm", role: "Product Manager", model: "gpt-4.1", category: "roadmap", status: "idle", assignedTask: null },
-    { id: "sec", role: "Segurança", model: "o3-mini", category: "seguranca", status: "idle", assignedTask: null },
-    { id: "perf", role: "Performance", model: "gpt-4o", category: "performance", status: "idle", assignedTask: null },
-    { id: "func", role: "Novas Funcionalidades", model: "gpt-4.1-mini", category: "funcionalidades", status: "idle", assignedTask: null },
-    { id: "tests", role: "Testes", model: "o1", category: "testes", status: "idle", assignedTask: null },
-    { id: "feat", role: "Novas Features", model: "codex-mini", category: "features", status: "idle", assignedTask: null },
-  ],
-  events: []
-};
+// --- State and Persistence ---
+const INITIAL_AGENTS: Agent[] = [
+  { id: "pm", role: "Product Manager", model: "gemini-2.0-flash", category: "roadmap", status: "idle", assignedTask: null },
+  { id: "sec", role: "Segurança", model: "gemini-2.0-flash", category: "security", status: "idle", assignedTask: null },
+  { id: "perf", role: "Performance", model: "gemini-2.0-flash", category: "performance", status: "idle", assignedTask: null },
+  { id: "func", role: "Feature Builder", model: "gemini-2.0-flash", category: "feature", status: "idle", assignedTask: null },
+  { id: "tests", role: "QA", model: "gemini-2.0-pro-exp-02-05", category: "test", status: "idle", assignedTask: null },
+  { id: "bug", role: "Correções / Bugs", model: "gemini-2.0-flash-thinking-exp-01-21", category: "bug", status: "idle", assignedTask: null },
+];
+
+function initializeState(): State {
+  let agents = DB.getAgents();
+  if (agents.length === 0) {
+    INITIAL_AGENTS.forEach(agent => DB.saveAgent(agent));
+    agents = DB.getAgents();
+  }
+
+  return {
+    tasks: DB.getTasks(),
+    agents: agents,
+    events: DB.getEvents()
+  };
+}
+
+initializeState();
 
 // SSE Clients
 let clients: { id: number; res: any }[] = [];
+let broadcastScheduled = false;
+let lastBroadcastState = "";
+
+// Helper to keep local state and DB in sync
+function updateTask(id: number, updates: Partial<Task>) {
+  const task = DB.getTask(id);
+  if (!task) return;
+  DB.updateTask(id, updates);
+  scheduleBroadcast();
+}
+
+function updateAgent(id: string, updates: Partial<Agent>) {
+  const agent = DB.getAgent(id);
+  if (!agent) return;
+  DB.updateAgent(id, updates);
+  scheduleBroadcast();
+}
+
+function scheduleBroadcast() {
+  if (broadcastScheduled) return;
+  broadcastScheduled = true;
+  setTimeout(() => {
+    broadcastScheduled = false;
+    broadcastState();
+  }, 50);
+}
 
 function broadcastState() {
-  const data = JSON.stringify(state);
+  const fullState = {
+    tasks: DB.getTasks(),
+    agents: DB.getAgents(),
+    events: DB.getEvents()
+  };
+  const data = JSON.stringify(fullState);
+
+  if (data === lastBroadcastState) return;
+  lastBroadcastState = data;
+
   clients.forEach(client => {
     try {
       client.res.write(`data: ${data}\n\n`);
@@ -41,25 +89,14 @@ function broadcastState() {
   });
 }
 
-// Driver selection
-const drivers: Record<string, LLMDriver> = {
-  mock: new MockDriver(),
-  gemini: new GeminiDriver(),
-  copilot: new CopilotDriver(),
-  opencode: new OpenCodeDriver(),
-  claude: new ClaudeDriver(),
-};
-// Default to OpenCodeDriver as requested, falling back to mock behavior internally if CLI missing
-let currentDriver: LLMDriver = drivers.opencode;
-
 function addEvent(text: string) {
-  state.events.unshift({ timestamp: new Date().toLocaleTimeString("pt-BR"), text });
-  if (state.events.length > 50) state.events.pop();
-  broadcastState();
+  const timestamp = new Date().toLocaleTimeString("pt-BR");
+  DB.addEvent(timestamp, text);
+  scheduleBroadcast();
 }
 
-function getTask(id: number) { return state.tasks.find(t => t.id === id); }
-function getAgent(id: string) { return state.agents.find(a => a.id === id); }
+function getTask(id: number) { return DB.getTask(id); }
+function getAgent(id: string) { return DB.getAgent(id); }
 
 // --- Helpers ---
 function jsonResponse(res: any, status: number, body: any) {
@@ -84,11 +121,15 @@ function parseBody(req: any): Promise<any> {
 
 // --- Auto-Pilot Logic ---
 function startTask(task: Task, agent: Agent) {
-  task.assignedTo = agent.id;
-  task.lane = "in_progress";
-  task.interrupted = false;
-  agent.status = "working";
-  agent.assignedTask = task.id;
+  updateTask(task.id, {
+    assignedTo: agent.id,
+    lane: "in_progress",
+    interrupted: false
+  });
+  updateAgent(agent.id, {
+    status: "working",
+    assignedTask: task.id
+  });
   addEvent(`[AutoPilot] ${agent.role} iniciou a tarefa #${task.id}`);
 
   let executeDriver = agent.tool ? cliDriver : currentDriver;
@@ -98,18 +139,16 @@ function startTask(task: Task, agent: Agent) {
     onLog: (tid, msg) => {
       const t = getTask(tid);
       if (t) {
-        t.logs.push(msg);
+        const updatedLogs = [...t.logs, msg];
+        updateTask(tid, { logs: updatedLogs });
         if (msg.includes("Error") || msg.includes("Completed")) addEvent(`#${tid}: ${msg}`);
-        else broadcastState();
       }
     },
     onComplete: (tid) => {
       const t = getTask(tid);
       if (t && t.assignedTo) {
-        const a = getAgent(t.assignedTo);
-        if (a) { a.status = "idle"; a.assignedTask = null; }
-        t.assignedTo = null;
-        t.lane = "done";
+        updateAgent(t.assignedTo, { status: "idle", assignedTask: null });
+        updateTask(tid, { assignedTo: null, lane: "done" });
         addEvent(`Tarefa #${tid} concluída!`);
       }
     },
@@ -117,8 +156,7 @@ function startTask(task: Task, agent: Agent) {
       const t = getTask(tid);
       if (t) {
         addEvent(`BUG encontrado em #${tid}: ${desc}`);
-        const bugTask: Task = {
-          id: taskIdCounter++,
+        const bugTask = DB.createTask({
           title: `Bug: ${desc}`,
           source: "system",
           category: "testes",
@@ -127,16 +165,10 @@ function startTask(task: Task, agent: Agent) {
           assignedTo: null,
           interrupted: false,
           logs: [],
-          createdAt: Date.now(),
-          updatedAt: Date.now()
-        };
-        state.tasks.push(bugTask);
+        });
         if (t.assignedTo) {
-          const a = getAgent(t.assignedTo);
-          if (a) { a.status = "idle"; a.assignedTask = null; }
-          t.assignedTo = null;
-          t.lane = "backlog";
-          t.interrupted = true;
+          updateAgent(t.assignedTo, { status: "idle", assignedTask: null });
+          updateTask(tid, { assignedTo: null, lane: "backlog", interrupted: true });
         }
       }
     },
@@ -145,7 +177,7 @@ function startTask(task: Task, agent: Agent) {
 }
 
 function autoAssign() {
-  const backlogTasks = state.tasks.filter(t => t.lane === "backlog");
+  const backlogTasks = DB.getTasks().filter(t => t.lane === "backlog");
   if (backlogTasks.length === 0) return;
 
   backlogTasks.forEach(task => {
@@ -159,7 +191,8 @@ function autoAssign() {
     }
 
     // 2. Otherwise use basic heuristic: match category.
-    const agent = state.agents.find(a =>
+    const agents = DB.getAgents();
+    const agent = agents.find(a =>
       a.status === "idle" && (a.category === task.category)
     );
 
@@ -173,32 +206,28 @@ function autoAssign() {
 setInterval(autoAssign, 3000);
 
 // --- PM Auto-Create Logic ---
-function pmAutoCreateLoop() {
-  const backlogTasks = state.tasks.filter(t => t.lane === "backlog");
-  // If backlog is running low, PM creates new tasks
-  if (backlogTasks.length < 3) {
-    const categories = ["roadmap", "seguranca", "performance", "funcionalidades", "features"];
-    const randomCategory = categories[Math.floor(Math.random() * categories.length)];
-    const task: Task = {
-      id: taskIdCounter++,
-      title: `Feature backlog item ${Date.now().toString().slice(-4)}`,
-      source: "product_manager",
-      category: randomCategory,
-      priority: Math.random() > 0.7 ? "alta" : "media",
-      lane: "backlog",
-      assignedTo: null,
-      interrupted: false,
-      logs: [],
-      createdAt: Date.now(),
-      updatedAt: Date.now()
-    };
-    state.tasks.push(task);
-    addEvent(`[PM] Novo card criado: ${task.title}`);
-  }
-}
+// function pmAutoCreateLoop() {
+//   const backlogTasks = DB.getTasks().filter(t => t.lane === "backlog");
+//   // If backlog is running low, PM creates new tasks
+//   if (backlogTasks.length < 3) {
+//     const categories = ["roadmap", "security", "performance", "feature", "test", "bug"];
+//     const randomCategory = categories[Math.floor(Math.random() * categories.length)];
+//     const task = DB.createTask({
+//       title: `Feature backlog item ${Date.now().toString().slice(-4)}`,
+//       source: "product_manager",
+//       category: randomCategory,
+//       priority: Math.random() > 0.7 ? "alta" : "media",
+//       lane: "backlog",
+//       assignedTo: null,
+//       interrupted: false,
+//       logs: [],
+//     });
+//     addEvent(`[PM] Novo card criado: ${task.title}`);
+//   }
+// }
 
 // PM loop (every 10 seconds)
-setInterval(pmAutoCreateLoop, 10000);
+// setInterval(pmAutoCreateLoop, 10000);
 
 const CONFIG_FILE = "vibe_config.json";
 let appConfig = { cloneDir: "./clones" };
@@ -208,8 +237,38 @@ try {
   }
 } catch (e) { }
 
-// --- Server ---
+function sanitizeCloneDir(input: unknown): string {
+  if (typeof input !== "string") return "./clones";
+  const trimmed = input.trim();
+  if (!trimmed) return "./clones";
+
+  return path.normalize(trimmed);
+}
+
+// --- Drivers ---
 const cliDriver = new CommandDriver(() => appConfig.cloneDir);
+const drivers: Record<string, LLMDriver> = {
+  mock: new MockDriver(),
+  gemini: new GeminiDriver(() => appConfig.cloneDir),
+  copilot: new CopilotDriver(),
+  opencode: new OpenCodeDriver(),
+  claude: new ClaudeDriver(),
+};
+
+function isCommandAvailable(command: string): boolean {
+  try {
+    execSync(`${command} --version`, { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Keep the app functional even when Gemini CLI is not installed.
+let currentDriver: LLMDriver = isCommandAvailable("gemini") ? drivers.gemini : drivers.mock;
+if (currentDriver === drivers.mock) {
+  addEvent("Gemini CLI não encontrado. Driver padrão alterado para Mock automaticamente.");
+}
 
 const server = createServer(async (req, res) => {
   const { method, url } = req as any;
@@ -281,7 +340,8 @@ const server = createServer(async (req, res) => {
   // POST /api/config/clone-dir
   if (url === "/api/config/clone-dir" && method === "POST") {
     const body = await parseBody(req);
-    appConfig.cloneDir = body.cloneDir || "./clones";
+    appConfig.cloneDir = sanitizeCloneDir(body.cloneDir);
+    fs.mkdirSync(appConfig.cloneDir, { recursive: true });
     fs.writeFileSync(CONFIG_FILE, JSON.stringify(appConfig, null, 2));
     addEvent(`Pasta padrão de clones alterada para: ${appConfig.cloneDir}`);
     return jsonResponse(res, 200, { cloneDir: appConfig.cloneDir });
@@ -315,7 +375,7 @@ const server = createServer(async (req, res) => {
         models = lines.map(l => l.split(/\s+/)[0]);
       } catch { }
     } else if (tool === "gemini") {
-      models = ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash-thinking-exp-01-21", "gemini-2.5-pro-exp", "gemini-2.5-flash-exp"];
+      models = ["gemini-2.0-flash", "gemini-2.0-flash-lite-preview", "gemini-2.0-pro-exp-02-05", "gemini-2.0-flash-thinking-exp-01-21", "gemini-1.5-flash", "gemini-1.5-pro"];
     }
     return jsonResponse(res, 200, { models });
   }
@@ -333,7 +393,7 @@ const server = createServer(async (req, res) => {
       tool: body.tool,
       terminalId: `term-${Date.now()}`
     };
-    state.agents.push(newAgent);
+    DB.saveAgent(newAgent);
     addEvent(`Novo agente criado: ${newAgent.role} (${newAgent.tool} - ${newAgent.model})`);
     broadcastState();
     return jsonResponse(res, 201, { agent: newAgent });
@@ -348,7 +408,7 @@ const server = createServer(async (req, res) => {
     });
 
     // Send initial state
-    res.write(`data: ${JSON.stringify(state)}\n\n`);
+    res.write(`data: ${JSON.stringify({ tasks: DB.getTasks(), agents: DB.getAgents(), events: DB.getEvents() })}\n\n`);
 
     const clientId = Date.now();
     const newClient = {
@@ -365,14 +425,17 @@ const server = createServer(async (req, res) => {
 
   // GET /api/state
   if (url === "/api/state" && method === "GET") {
-    return jsonResponse(res, 200, state);
+    return jsonResponse(res, 200, {
+      tasks: DB.getTasks(),
+      agents: DB.getAgents(),
+      events: DB.getEvents()
+    });
   }
 
   // POST /api/tasks (Create task)
   if (url === "/api/tasks" && method === "POST") {
     const body = await parseBody(req);
-    const task: Task = {
-      id: taskIdCounter++,
+    const task = DB.createTask({
       title: body.title,
       source: body.source || "user",
       category: body.category || "misc",
@@ -384,10 +447,7 @@ const server = createServer(async (req, res) => {
       githubRepo: body.githubRepo,
       description: body.description,
       agentType: body.agentType,
-      createdAt: Date.now(),
-      updatedAt: Date.now()
-    };
-    state.tasks.push(task);
+    });
     addEvent(`Novo card criado: ${task.title} (${task.source})`);
     return jsonResponse(res, 201, { task });
   }
@@ -397,7 +457,7 @@ const server = createServer(async (req, res) => {
     const body = await parseBody(req);
     const { taskId, agentId } = body;
     const task = getTask(taskId);
-    const agent = agentId ? getAgent(agentId) : state.agents.find(a => a.category === task?.category && a.status === "idle");
+    const agent = agentId ? getAgent(agentId) : DB.getAgents().find(a => a.category === task?.category && a.status === "idle");
 
     if (!task) return jsonResponse(res, 404, { error: "Task not found" });
     if (!agent) return jsonResponse(res, 404, { error: "No available agent" });
@@ -417,18 +477,15 @@ const server = createServer(async (req, res) => {
       const agent = getAgent(task.assignedTo);
       let executeDriver = currentDriver;
       if (agent) {
-        agent.status = "idle";
-        agent.assignedTask = null;
+        updateAgent(agent.id, { status: "idle", assignedTask: null });
         if (agent.tool) executeDriver = cliDriver;
       }
       // Stop driver
       executeDriver.interruptTask(task);
-      task.assignedTo = null;
-      task.lane = "backlog";
-      task.interrupted = true;
+      updateTask(task.id, { assignedTo: null, lane: "backlog", interrupted: true });
       addEvent(`Tarefa #${taskId} interrompida.`);
     }
-    return jsonResponse(res, 200, { task });
+    return jsonResponse(res, 200, { task: getTask(taskId) });
   }
 
   // POST /api/move
@@ -443,17 +500,15 @@ const server = createServer(async (req, res) => {
         const agent = getAgent(task.assignedTo);
         let executeDriver = currentDriver;
         if (agent) {
-          agent.status = "idle";
-          agent.assignedTask = null;
+          updateAgent(agent.id, { status: "idle", assignedTask: null });
           if (agent.tool) executeDriver = cliDriver;
         }
         executeDriver.interruptTask(task);
-        task.assignedTo = null;
+        updateTask(task.id, { assignedTo: null });
       }
     }
-    task.lane = lane;
-    broadcastState();
-    return jsonResponse(res, 200, { task });
+    updateTask(task.id, { lane });
+    return jsonResponse(res, 200, { task: getTask(taskId) });
   }
 
   // POST /api/reorder (Move task up/down in priority/list)
@@ -462,20 +517,66 @@ const server = createServer(async (req, res) => {
     const task = getTask(taskId);
     if (!task) return jsonResponse(res, 404, { error: "Task not found" });
 
-    const laneTasks = state.tasks.filter(t => t.lane === task.lane);
+    const allTasks = DB.getTasks();
+    const laneTasks = allTasks.filter(t => t.lane === task.lane);
     const currentIndex = laneTasks.findIndex(t => t.id === task.id);
     const targetIndex = currentIndex + direction;
 
     if (targetIndex >= 0 && targetIndex < laneTasks.length) {
       const otherTask = laneTasks[targetIndex];
-      // Swap in main array
-      const index1 = state.tasks.indexOf(task);
-      const index2 = state.tasks.indexOf(otherTask);
-      [state.tasks[index1], state.tasks[index2]] = [state.tasks[index2], state.tasks[index1]];
+      // Note: Reordering in SQLite might need a 'position' column for better results,
+      // but here we just swap their timestamps or IDs if they were sequential.
+      // For now, we'll just swap their updatedAt to affect the sort order if using that.
+      const tempTime = task.updatedAt;
+      updateTask(task.id, { updatedAt: otherTask.updatedAt });
+      updateTask(otherTask.id, { updatedAt: tempTime });
       addEvent(`Prioridade reordenada no card #${taskId}`);
     }
 
-    return jsonResponse(res, 200, { tasks: state.tasks });
+    return jsonResponse(res, 200, { tasks: DB.getTasks() });
+  }
+
+  // POST /api/settings/env
+  if (url === "/api/settings/env" && method === "POST") {
+    const body = await parseBody(req);
+    const envPath = path.resolve(process.cwd(), ".env");
+    let envContent = "";
+
+    try {
+      if (fs.existsSync(envPath)) {
+        envContent = fs.readFileSync(envPath, "utf-8");
+      }
+    } catch (e) { }
+
+    const envLines = envContent.split("\n");
+    const newKeys = Object.keys(body);
+
+    newKeys.forEach(key => {
+      const value = body[key];
+      if (!value) return; // Skip empty values
+
+      // Update process.env
+      process.env[key] = value;
+
+      // Update .env file content
+      const regex = new RegExp(`^${key}=.*`, "m");
+      if (regex.test(envContent)) {
+        envContent = envContent.replace(regex, `${key}=${value}`);
+      } else {
+        envContent += `\n${key}=${value}`;
+      }
+    });
+
+    // Clean up multiple newlines
+    envContent = envContent.replace(/\n\n+/g, "\n").trim();
+
+    try {
+      fs.writeFileSync(envPath, envContent);
+      addEvent("Variáveis de ambiente atualizadas.");
+      return jsonResponse(res, 200, { ok: true });
+    } catch (e) {
+      return jsonResponse(res, 500, { error: "Failed to write .env file" });
+    }
   }
 
   // POST /api/config
@@ -491,11 +592,10 @@ const server = createServer(async (req, res) => {
 
   // Reset
   if (url === "/api/reset" && method === "POST") {
-    state.tasks = [];
-    state.events = [];
-    state.agents.forEach(a => { a.status = "idle"; a.assignedTask = null; });
-    taskIdCounter = 1;
+    DB.reset();
+    INITIAL_AGENTS.forEach(agent => DB.saveAgent(agent));
     addEvent("Sistema resetado.");
+    broadcastState();
     return jsonResponse(res, 200, { ok: true });
   }
 

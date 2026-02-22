@@ -1,44 +1,31 @@
-import { test, describe, before, after } from 'node:test';
-import assert from 'node:assert';
+import { test, describe, before, after, beforeEach } from 'node:test';
+import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { setTimeout } from 'timers/promises';
+import { existsSync, rmSync } from 'node:fs';
 
 const API_URL = 'http://localhost:5174';
 
 describe('Vibe Kanban API', async () => {
   let serverProcess;
 
-  // Function to wait for server to be ready
   async function waitForServer() {
-    let attempts = 0;
-    while (attempts < 20) {
+    for (let attempts = 0; attempts < 30; attempts++) {
       try {
         const res = await fetch(`${API_URL}/api/state`);
         if (res.ok) return true;
-      } catch (e) {
-        // ignore
+      } catch {
+        // retry
       }
-      await setTimeout(500);
-      attempts++;
+      await setTimeout(300);
     }
     return false;
   }
 
-  // Start server before tests
   before(async () => {
-    // Start the server
-    console.log('Starting server...');
     serverProcess = spawn('node', ['dist/server.js'], {
-      stdio: 'pipe', // capture output
+      stdio: 'pipe',
       env: { ...process.env, PORT: '5174' }
-    });
-
-    serverProcess.stdout.on('data', (data) => {
-      // console.log(`server stdout: ${data}`);
-    });
-
-    serverProcess.stderr.on('data', (data) => {
-      console.error(`server stderr: ${data}`);
     });
 
     const ready = await waitForServer();
@@ -46,50 +33,93 @@ describe('Vibe Kanban API', async () => {
       serverProcess.kill();
       throw new Error('Server failed to start');
     }
-    console.log('Server started.');
   });
 
-  // Stop server after tests
+  beforeEach(async () => {
+    await fetch(`${API_URL}/api/reset`, { method: 'POST' });
+  });
+
   after(() => {
-    if (serverProcess) {
-        console.log('Stopping server...');
-        serverProcess.kill();
-    }
+    const cloneDir = './test-clones';
+    if (existsSync(cloneDir)) rmSync(cloneDir, { recursive: true, force: true });
+    if (serverProcess) serverProcess.kill();
   });
 
   test('GET /api/state returns valid initial state', async () => {
     const res = await fetch(`${API_URL}/api/state`);
-    assert.strictEqual(res.status, 200);
+    assert.equal(res.status, 200);
     const data = await res.json();
 
-    assert.ok(Array.isArray(data.tasks), 'tasks should be an array');
-    assert.ok(Array.isArray(data.agents), 'agents should be an array');
-    assert.ok(Array.isArray(data.events), 'events should be an array');
-    assert.strictEqual(data.agents.length, 6, 'Should have 6 agents');
+    assert.ok(Array.isArray(data.tasks));
+    assert.ok(Array.isArray(data.agents));
+    assert.ok(Array.isArray(data.events));
+    assert.equal(data.agents.length, 6);
   });
 
-  test('POST /api/tasks creates a new task', async () => {
-    const newTask = {
-      title: 'Test Task',
-      source: 'test',
-      category: 'testes',
-      priority: 'media'
-    };
-
+  test('POST /api/tasks creates and persists a card', async () => {
     const res = await fetch(`${API_URL}/api/tasks`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newTask)
+      body: JSON.stringify({
+        title: 'Test Task',
+        source: 'test',
+        category: 'test',
+        priority: 'media',
+        githubRepo: 'acme/vibe'
+      })
     });
 
-    assert.strictEqual(res.status, 201);
+    assert.equal(res.status, 201);
     const data = await res.json();
-    assert.strictEqual(data.task.title, 'Test Task');
-    assert.strictEqual(data.task.lane, 'backlog');
+    assert.equal(data.task.title, 'Test Task');
+    assert.equal(data.task.lane, 'backlog');
+
+    const state = await (await fetch(`${API_URL}/api/state`)).json();
+    assert.equal(state.tasks.length, 1);
+    assert.equal(state.tasks[0].githubRepo, 'acme/vibe');
   });
 
-  test('POST /api/reset resets the state', async () => {
-    // Add a task first to ensure something to reset
+  test('POST /api/assign sends task to in_progress and links agent', async () => {
+    const taskRes = await fetch(`${API_URL}/api/tasks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: 'Perf Task', category: 'performance' })
+    });
+    const { task } = await taskRes.json();
+
+    const assignRes = await fetch(`${API_URL}/api/assign`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ taskId: task.id })
+    });
+
+    assert.equal(assignRes.status, 200);
+    const payload = await assignRes.json();
+    assert.equal(payload.task.lane, 'in_progress');
+    assert.ok(payload.task.assignedTo);
+    assert.equal(payload.agent.status, 'working');
+  });
+
+  test('POST /api/move updates lane transitions', async () => {
+    const taskRes = await fetch(`${API_URL}/api/tasks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: 'Roadmap task', category: 'roadmap' })
+    });
+    const { task } = await taskRes.json();
+
+    const moveRes = await fetch(`${API_URL}/api/move`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ taskId: task.id, lane: 'review' })
+    });
+
+    assert.equal(moveRes.status, 200);
+    const moved = await moveRes.json();
+    assert.equal(moved.task.lane, 'review');
+  });
+
+  test('POST /api/reset clears all tasks', async () => {
     await fetch(`${API_URL}/api/tasks`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -97,11 +127,25 @@ describe('Vibe Kanban API', async () => {
     });
 
     const res = await fetch(`${API_URL}/api/reset`, { method: 'POST' });
-    assert.strictEqual(res.status, 200);
+    assert.equal(res.status, 200);
 
     const stateRes = await fetch(`${API_URL}/api/state`);
     const state = await stateRes.json();
-    assert.strictEqual(state.tasks.length, 0, 'Tasks should be empty after reset');
+    assert.equal(state.tasks.length, 0);
+    assert.equal(state.agents.length, 6);
+  });
+
+  test('POST /api/config/clone-dir normaliza caminho e cria diretório', async () => {
+    const res = await fetch(`${API_URL}/api/config/clone-dir`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cloneDir: ' ./test-clones/ ' })
+    });
+
+    assert.equal(res.status, 200);
+    const data = await res.json();
+    assert.equal(data.cloneDir, 'test-clones/');
+    assert.equal(existsSync('test-clones'), true);
   });
 
   test('POST /api/assign assigns a task', async () => {

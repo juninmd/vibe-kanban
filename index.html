@@ -4,11 +4,17 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Vibe Kanban — Orquestrador de Agentes</title>
+  <title>Vibe Kanban 3D</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🤖</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css" />
 </head>
 
 <body>
+  <div class="scanlines"></div>
+  <div id="toast-container" class="toast-container"></div>
   <header class="topbar">
     <h1>Vibe Kanban • Time de Agentes</h1>
     <div class="topbar-actions">
@@ -28,6 +34,24 @@
 
   <main class="layout">
     <aside class="sidebar">
+      <section id="dashboardStats" class="dashboard-stats">
+        <h2>📊 Dashboard</h2>
+        <div class="stat-grid">
+          <div class="stat-item">
+            <span class="stat-label">Pendentes</span>
+            <span class="stat-value" id="statPending">0</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Concluídas</span>
+            <span class="stat-value" id="statDone">0</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Agentes</span>
+            <span class="stat-value" id="statAgents">0</span>
+          </div>
+        </div>
+      </section>
+
       <section>
         <h2>Criar tarefa</h2>
         <form id="taskForm">
@@ -46,11 +70,11 @@
             Categoria
             <select id="taskCategory">
               <option value="roadmap">Roadmap</option>
-              <option value="seguranca">Segurança</option>
+              <option value="security">Segurança</option>
               <option value="performance">Performance</option>
-              <option value="funcionalidades">Funcionalidades</option>
-              <option value="testes">Testes</option>
-              <option value="features">Features</option>
+              <option value="feature">Feature Builder</option>
+              <option value="test">QA / Testes</option>
+              <option value="bug">Correções / Bugs</option>
             </select>
           </label>
           <label>
@@ -60,38 +84,42 @@
               <option value="media" selected>Média</option>
               <option value="baixa">Baixa</option>
             </select>
-            <label>
-              Repositório (Github)
-              <input id="taskGithubRepo" placeholder="ex: empresa/projeto" />
-            </label>
-            <label>
-              Descrição
-              <textarea id="taskDescription" placeholder="Detalhes do card..." rows="3"></textarea>
-            </label>
-            <label>
-              Tipo de Agente (CLI/Integração)
-              <input id="taskAgentType" placeholder="ex: Gemini CLI, Copilot SDK" />
-            </label>
-            <label>
-              Designar Agente Voluntário (Opcional)
-              <select id="taskAgentAssign">
-                <option value="">- Automático Direcionado -</option>
-                <option value="gemini-coder">Gemini Coder</option>
-                <option value="sec-bot">Sec Bot</option>
-                <option value="perf-optimizer">Perf Optimizer</option>
-                <option value="feature-lead">Feature Lead</option>
-                <option value="qa-bot">QA Bot</option>
-              </select>
-            </label>
-            <label>
-              Modelo Lógico
-              <select id="taskAgentModel">
-                <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
-                <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
-                <option value="claude-3-5-sonnet">Claude 3.5 Sonnet</option>
-              </select>
-            </label>
-            <button type="submit">Adicionar card</button>
+          </label>
+          <label>
+            Repositório (Github)
+            <input id="taskGithubRepo" placeholder="ex: empresa/projeto" />
+          </label>
+          <label>
+            Descrição
+            <textarea id="taskDescription" placeholder="Detalhes do card..." rows="3"></textarea>
+          </label>
+          <label>
+            Tipo de Agente (CLI/Integração)
+            <input id="taskAgentType" placeholder="ex: Gemini CLI, Copilot SDK" />
+          </label>
+          <label>
+            Designar Agente Voluntário (Opcional)
+            <select id="taskAgentAssign">
+              <option value="">- Automático Direcionado -</option>
+              <option value="pm">Product Manager</option>
+              <option value="sec">Security Agent</option>
+              <option value="perf">Perf Optimizer</option>
+              <option value="func">Feature Builder</option>
+              <option value="tests">QA Bot</option>
+              <option value="bug">Bug Fixer</option>
+            </select>
+          </label>
+          <label>
+            Modelo Lógico
+            <select id="taskAgentModel">
+              <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
+              <option value="gemini-2.0-pro-exp-02-05">Gemini 2.0 Pro</option>
+              <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+              <option value="claude-3-5-sonnet">Claude 3.5 Sonnet</option>
+              <option value="gpt-4o">GPT-4o</option>
+            </select>
+          </label>
+          <button type="submit">Adicionar card</button>
         </form>
       </section>
 
@@ -130,11 +158,11 @@
         <label>Categoria
           <select id="agentCategory">
             <option value="roadmap">Roadmap</option>
-            <option value="seguranca">Segurança</option>
+            <option value="security">Segurança</option>
             <option value="performance">Performance</option>
-            <option value="funcionalidades">Funcionalidades</option>
-            <option value="testes">Testes</option>
-            <option value="features">Features</option>
+            <option value="feature">Feature Builder</option>
+            <option value="test">QA / Testes</option>
+            <option value="bug">Correções / Bugs</option>
             <option value="misc">Geral</option>
           </select>
         </label>
@@ -162,11 +190,29 @@
       <h2>Configurações do Kanban</h2>
       <form id="settingsForm" class="modal-form">
         <label>Diretório padrão para Clones
-          <input id="configCloneDir" required placeholder="C:\Caminho\Para\Clones" />
+          <input id="configCloneDir" required placeholder="./clones ou /home/usuario/clones" />
         </label>
+        <p class="field-hint">Use caminhos compatíveis com Linux/macOS/Windows. Ex.: <code>./clones</code> ou <code>/var/tmp/vibe-clones</code>.</p>
+
+        <hr style="border: 0; border-top: 1px solid var(--border); margin: 1rem 0;">
+
+        <h3>Variáveis de Ambiente (API Keys)</h3>
+        <label>OpenAI API Key
+          <input id="envOpenAI" type="password" placeholder="sk-..." />
+        </label>
+        <label>Gemini API Key
+          <input id="envGemini" type="password" placeholder="AIza..." />
+        </label>
+        <label>Anthropic API Key
+          <input id="envAnthropic" type="password" placeholder="sk-ant-..." />
+        </label>
+        <label>Github Token
+          <input id="envGithub" type="password" placeholder="ghp_..." />
+        </label>
+
         <div class="modal-actions">
           <button type="button" id="cancelSettingsBtn">Cancelar</button>
-          <button type="submit" class="primary-btn">Salvar</button>
+          <button type="submit" class="primary-btn">Salvar Configurações</button>
         </div>
       </form>
     </div>
