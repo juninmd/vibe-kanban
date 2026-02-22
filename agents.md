@@ -1,28 +1,40 @@
-# Projeto Vibe Kanban: Definições e Regras
+# AGENTS.md — Vibe Kanban
 
-## Objetivo do Projeto
-O **Vibe Kanban** é um orquestrador de produtividade que utiliza agentes baseados em LLMs locais e remotos via CLI para executar tarefas reais de desenvolvimento, segurança e performance.
+## Objetivo
+Padronizar a atuação de agentes no Vibe Kanban para entregas reais, auditáveis e com foco em performance.
 
-## Regras de Desenvolvimento
-0. **Gerenciamento de Pacotes**: Use sempre **pnpm** para instalar dependências e executar scripts.
-1. **Sem "Mocks" de Comportamento**: Os drivers não devem simular completion ou logs aleatórios. Se uma ferramenta (CLI) não estiver disponível, o erro deve ser reportado de forma clara ao usuário.
-2. **Agentes Dinâmicos**: A criação de agentes deve ser feita via UI/API, permitindo a seleção de ferramentas (ex: Gemini CLI, Ollama) e modelos disponíveis no sistema do host.
-3. **Persistência de Configuração**: Configurações como o diretório de clones (`cloneDir`) devem ser persistidas em `vibe_config.json`.
-4. **Isolamento de Tarefas**: Cada tarefa deve ter seu próprio log de eventos e, quando aplicável, ser executada em um diretório isolado dentro da pasta de clones.
-5. **Drivers Reais**:
-   - `CommandDriver`: Driver principal para execução de comandos arbitrários no terminal.
-   - `GeminiDriver`, `CopilotDriver`, `OpenCodeDriver`: Devem ser mantidos como estruturas de desenvolvimento para integrações específicas, mas sem lógica de simulação/mock.
+## Regras operacionais
+1. **Pacotes e scripts:** usar sempre `pnpm`.
+2. **Sem simulação silenciosa:** se CLI/ferramenta não existir, registrar erro real no log.
+3. **Single source of truth:** estado de tarefas/agentes/eventos deve vir do backend.
+4. **Persistência obrigatória:** configuração de execução deve viver em `vibe_config.json`.
+5. **Observabilidade:** ações dos agentes precisam deixar trilha clara em eventos e logs por tarefa.
 
-## Expectativas dos Agentes
-- **Autonomia**: Os agentes devem ser capazes de clonar repositórios, ler o código e sugerir alterações ou reportar bugs.
-- **Transparência**: Todo output do terminal deve ser capturado e exibido no log da tarefa para que o usuário possa auditar o que o agente está fazendo.
-- **Gestão de Erros**: Falhas de conexão ou ausência de ferramentas devem ser tratadas como erros de execução, não como "sucesso simulado".
+## Princípios de performance
+- Reduzir trabalho repetitivo por ciclo (evitar scans e cópias profundas desnecessárias).
+- Agrupar atualizações para diminuir re-renderizações e broadcasts.
+- Processar apenas o que mudou sempre que possível.
+- Limitar volume visual de logs/eventos no frontend para manter UI responsiva.
 
-## Desenvolvimento Contínuo
-- **Implementação do Roadmap**: Todas as funcionalidades listadas como pendentes no `ROADMAP.md` (Fases 2, 3 e 4) devem ser priorizadas e implementadas seguindo as diretrizes deste documento.
-- **Isolamento e Segurança**: A prioridade imediata é a transição para execução em sandbox (Docker) para garantir a integridade do sistema host.
+## Roadmap de execução por rodadas
+### Rodada 1 (implementada)
+- Otimizar auto-assign no backend para evitar leituras repetidas de agentes no mesmo ciclo.
+- Trocar cópia profunda de tarefas no frontend por mapa leve de estado anterior.
+- Fazer batch de render no frontend com `requestAnimationFrame`.
+- Pré-indexar tarefas por lane e agentes por id durante renderização do Kanban.
+- Limitar render de eventos para evitar degradação com histórico grande.
 
-## Estrutura de Pastas
-- `src/drivers`: Implementações de ponte entre o servidor e as LLMs.
-- `clones/`: Diretório padrão (configurável) onde os agentes realizam o trabalho.
-- `dist/`: Código compilado.
+### Rodada 2
+- Introduzir atualização incremental no DOM do Kanban (diff por card).
+- Criar métricas de tempo de render e tempo de ciclo de auto-assign.
+- Adicionar paginação/virtualização para listas longas de eventos.
+
+### Rodada 3
+- Mover loops internos de automação para fila orientada a eventos.
+- Revisar acesso ao SQLite com índices e consultas especializadas por lane/status.
+- Avaliar troca de SSE para canal bidirecional quando houver colaboração multiusuário intensa.
+
+## Estrutura de referência
+- `src/server.ts`: orquestração backend, auto-assign, SSE, drivers.
+- `src/app.ts`: UI 2D/3D, renderização, integração de estado.
+- `ROADMAP.md`: visão macro das fases do produto.

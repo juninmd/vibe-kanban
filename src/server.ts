@@ -179,27 +179,38 @@ function startTask(task: Task, agent: Agent) {
 function autoAssign() {
   const backlogTasks = DB.getTasks().filter(t => t.lane === "backlog");
   if (backlogTasks.length === 0) return;
+  const agents = DB.getAgents();
+  const agentsById = new Map(agents.map(agent => [agent.id, agent]));
+  const idleAgentsByCategory = new Map<string, Agent[]>();
 
-  backlogTasks.forEach(task => {
+  agents
+    .filter(agent => agent.status === "idle")
+    .forEach(agent => {
+      const bucket = idleAgentsByCategory.get(agent.category) || [];
+      bucket.push(agent);
+      idleAgentsByCategory.set(agent.category, bucket);
+    });
+
+  for (const task of backlogTasks) {
     // 1. If manually assigned:
     if (task.assignedTo) {
-      const assignedAgent = getAgent(task.assignedTo);
+      const assignedAgent = agentsById.get(task.assignedTo);
       if (assignedAgent && assignedAgent.status === "idle") {
         startTask(task, assignedAgent);
+        assignedAgent.status = "working";
       }
-      return; // Stop here for explicitly assigned tasks (wait until agent is free)
+      continue; // Stop here for explicitly assigned tasks (wait until agent is free)
     }
 
     // 2. Otherwise use basic heuristic: match category.
-    const agents = DB.getAgents();
-    const agent = agents.find(a =>
-      a.status === "idle" && (a.category === task.category)
-    );
+    const availableAgents = idleAgentsByCategory.get(task.category);
+    const agent = availableAgents?.find(a => a.status === "idle");
 
     if (agent) {
       startTask(task, agent);
+      agent.status = "working";
     }
-  });
+  }
 }
 
 // Start Auto-Pilot loop (every 3 seconds)

@@ -48,7 +48,8 @@ const laneLabels: Record<string, string> = {
 let agents: Agent[] = [];
 let tasks: Task[] = [];
 let eventLog: EventLog[] = [];
-let previousTasks: Task[] = []; // To track changes
+let previousTaskState = new Map<number, { lane: string; assignedTo: string | null }>(); // Para rastrear mudanças e detectar transições
+let renderQueued = false;
 
 const els = {
   form: document.getElementById("taskForm") as HTMLFormElement,
@@ -149,8 +150,9 @@ export let officeData: { padPositions: THREE.Vector3[] } = { padPositions: [] };
 function updateState(data: any) {
   // Detect completions for celebration
   const newTasks = data.tasks || [];
+  const nextTaskState = new Map<number, { lane: string; assignedTo: string | null }>();
   newTasks.forEach((t: Task) => {
-    const old = previousTasks.find((pt) => pt.id === t.id);
+    const old = previousTaskState.get(t.id);
     if (old && old.lane !== "done" && t.lane === "done") {
       spawnConfetti();
       playSuccessSound();
@@ -163,8 +165,9 @@ function updateState(data: any) {
         }
       }
     }
+    nextTaskState.set(t.id, { lane: t.lane, assignedTo: t.assignedTo ?? null });
   });
-  previousTasks = JSON.parse(JSON.stringify(newTasks));
+  previousTaskState = nextTaskState;
 
   tasks = newTasks;
   agents = data.agents || [];
@@ -179,7 +182,16 @@ function updateState(data: any) {
   }
 
   eventLog = data.events || [];
-  render();
+  scheduleRender();
+}
+
+function scheduleRender() {
+  if (renderQueued) return;
+  renderQueued = true;
+  requestAnimationFrame(() => {
+    renderQueued = false;
+    render();
+  });
 }
 
 async function fetchState() {
@@ -248,24 +260,26 @@ function bugFromTask(task: Task) {
 
 function renderKanban() {
   els.kanban.innerHTML = "";
+  const agentsById = new Map(agents.map((agent) => [agent.id, agent.role]));
+  const tasksByLane = new Map<string, Task[]>();
+
+  tasks.forEach((task) => {
+    if (!tasksByLane.has(task.lane)) tasksByLane.set(task.lane, []);
+    tasksByLane.get(task.lane)!.push(task);
+  });
 
   lanes.forEach((lane) => {
     const col = document.createElement("div");
     col.className = "column";
     col.innerHTML = `<h3>${laneLabels[lane]}</h3>`;
 
-    tasks
-      .filter((task) => task.lane === lane)
-      .forEach((task) => {
+    (tasksByLane.get(lane) || []).forEach((task) => {
         const card = document.createElement("article");
         card.className = `task-card priority-${task.priority}`;
-        const assigned = task.assignedTo ? agents.find((a) => a.id === task.assignedTo)?.role : "-";
+        const assigned = task.assignedTo ? agentsById.get(task.assignedTo) ?? "-" : "-";
 
         // Logs preview
         const lastLog = task.logs && task.logs.length > 0 ? task.logs[task.logs.length - 1] : "";
-
-        // Highlight auto-assigned tasks
-        const isAuto = task.source === "system" || (!task.source && task.assignedTo);
 
         card.innerHTML = `
           <strong>#${task.id} ${task.title}</strong>
@@ -331,7 +345,11 @@ function addEvent(text: string) {
   // renderEvents();
 }
 function renderEvents() {
-  els.eventLog.innerHTML = eventLog.map((e) => `<li>${e.timestamp} — ${e.text}</li>`).join("");
+  const maxEvents = 200;
+  els.eventLog.innerHTML = eventLog
+    .slice(0, maxEvents)
+    .map((e) => `<li>${e.timestamp} — ${e.text}</li>`)
+    .join("");
 }
 
 function render() {
