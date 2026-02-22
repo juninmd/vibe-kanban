@@ -463,7 +463,8 @@ const server = createServer(async (req, res) => {
     if (!agent) return jsonResponse(res, 404, { error: "No available agent" });
 
     startTask(task, agent);
-    return jsonResponse(res, 200, { task: getTask(taskId), agent: getAgent(agent.id) });
+
+    return jsonResponse(res, 200, { task, agent });
   }
 
   // POST /api/interrupt
@@ -596,32 +597,6 @@ const server = createServer(async (req, res) => {
     addEvent("Sistema resetado.");
     broadcastState();
     return jsonResponse(res, 200, { ok: true });
-  }
-
-  // Static File Serving
-  if (method === "GET") {
-    let filePath = "";
-    if (url === "/" || url === "/index.html") filePath = "index.html";
-    else if (url === "/styles.css") filePath = "styles.css";
-    else if (url.startsWith("/dist/")) filePath = url.substring(1);
-
-    if (filePath) {
-      const ext = path.extname(filePath);
-      const contentTypes: Record<string, string> = {
-        ".html": "text/html",
-        ".css": "text/css",
-        ".js": "application/javascript"
-      };
-
-      try {
-        const content = await fs.promises.readFile(filePath);
-        res.writeHead(200, { "Content-Type": contentTypes[ext] || "text/plain" });
-        res.end(content);
-        return;
-      } catch (e) {
-        // Fall through to 404
-      }
-    }
   }
 
   jsonResponse(res, 404, { error: "Not found" });

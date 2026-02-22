@@ -15,12 +15,13 @@ export class CommandDriver implements LLMDriver {
 
     async executeTask(task: Task, agent: Agent, ctx: DriverContext): Promise<void> {
         this.taskLogs.set(task.id, []);
-        const basePath = path.join(this.getCloneDir(), `task-${task.id}`);
+        const baseDir = this.getCloneDir();
+        const taskDir = path.join(baseDir, `task-${task.id}`);
 
-        if (!fs.existsSync(basePath)) {
+        if (!fs.existsSync(taskDir)) {
             try {
-                fs.mkdirSync(basePath, { recursive: true });
-                ctx.onLog(task.id, `Created directory: ${basePath}`);
+                fs.mkdirSync(taskDir, { recursive: true });
+                ctx.onLog(task.id, `Created directory: ${taskDir}`);
             } catch (e) {
                 ctx.onLog(task.id, `Error creating directory: ${e}`);
             }
@@ -62,10 +63,10 @@ Do not output hypothetical logs. Output the actual file content needed to solve 
             return;
         }
 
-        ctx.onLog(task.id, `Starting process: ${command} ${args.join(" ")} in ${basePath}`);
+        ctx.onLog(task.id, `Starting process: ${command} ${args.join(" ")} in ${taskDir}`);
 
         try {
-            const child = spawn(command, args, { cwd: basePath });
+            const child = spawn(command, args, { cwd: taskDir });
             this.runningTasks.set(task.id, child);
 
             child.stdout.on("data", (data) => {
