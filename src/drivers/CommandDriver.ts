@@ -27,7 +27,7 @@ export class CommandDriver implements LLMDriver {
             }
         }
 
-        ctx.onLog(task.id, `[Sandbox] Executing in isolated directory: ${basePath}`);
+        ctx.onLog(task.id, `[Sandbox] Executing in isolated directory: ${taskDir}`);
 
         let command = "";
         let args: string[] = [];
@@ -100,7 +100,7 @@ Do not output hypothetical logs. Output the actual file content needed to solve 
                     if (content.startsWith("\n")) content = content.substring(1);
 
                     try {
-                        const filePath = path.join(basePath, filename);
+                        const filePath = path.join(taskDir, filename);
                         const fileDir = path.dirname(filePath);
                         if (!fs.existsSync(fileDir)) fs.mkdirSync(fileDir, { recursive: true });
 

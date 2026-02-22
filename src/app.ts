@@ -1014,10 +1014,11 @@ function createAgentMesh(agent: Agent, index: number) {
     ctx.lineWidth = 8;
     ctx.strokeRect(4, 4, canvas.width - 8, canvas.height - 8);
 
-    ctx.font = "bold 56px Inter, sans-serif";
+    ctx.font = "bold 72px Inter, sans-serif";
     ctx.fillStyle = "#ffffff";
     ctx.textAlign = "center";
-    ctx.fillText(text, canvas.width / 2, 85);
+    ctx.textBaseline = "middle";
+    ctx.fillText(text, canvas.width / 2, canvas.height / 2);
     return canvas;
   }
 

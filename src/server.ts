@@ -1,7 +1,7 @@
 import { createServer } from "http";
 import * as fs from "fs";
 import * as path from "path";
-import { execSync } from "child_process";
+import { execSync, exec } from "child_process";
 import { Task, Agent, State, EventLog, LLMDriver } from "./types.js";
 import { MockDriver } from "./drivers/MockDriver.js";
 import { GeminiDriver } from "./drivers/GeminiDriver.js";
@@ -217,28 +217,65 @@ function autoAssign() {
 setInterval(autoAssign, 3000);
 
 // --- PM Auto-Create Logic ---
-// function pmAutoCreateLoop() {
-//   const backlogTasks = DB.getTasks().filter(t => t.lane === "backlog");
-//   // If backlog is running low, PM creates new tasks
-//   if (backlogTasks.length < 3) {
-//     const categories = ["roadmap", "security", "performance", "feature", "test", "bug"];
-//     const randomCategory = categories[Math.floor(Math.random() * categories.length)];
-//     const task = DB.createTask({
-//       title: `Feature backlog item ${Date.now().toString().slice(-4)}`,
-//       source: "product_manager",
-//       category: randomCategory,
-//       priority: Math.random() > 0.7 ? "alta" : "media",
-//       lane: "backlog",
-//       assignedTo: null,
-//       interrupted: false,
-//       logs: [],
-//     });
-//     addEvent(`[PM] Novo card criado: ${task.title}`);
-//   }
-// }
+function generateRoadmapTasks() {
+  const backlogTasks = DB.getTasks().filter(t => t.lane === "backlog");
 
-// PM loop (every 10 seconds)
-// setInterval(pmAutoCreateLoop, 10000);
+  // Only generate if we are running low on tasks
+  if (backlogTasks.length >= 3) return;
+
+  // Use Gemini CLI if available
+  if (!isCommandAvailable("gemini")) return;
+
+  const prompt = `
+    You are a Product Manager for a software project called "Vibe Kanban 3D".
+    The project is a 3D Task Orchestrator with AI agents.
+    Current roles: Product Manager, Security, Performance, Feature Builder, QA, Bug Fixer.
+
+    Generate 2 realistic, high-value tasks for the backlog.
+    Categories must be one of: "roadmap", "security", "performance", "feature", "test", "bug".
+    Priorities: "alta", "media", "baixa".
+
+    Return ONLY a JSON array with objects containing: title, category, priority, description.
+    Example: [{"title": "Optimize 3D rendering", "category": "performance", "priority": "alta", "description": "Reduce draw calls..."}]
+    Do not output markdown code blocks. Just the raw JSON string.
+  `;
+
+  exec(`gemini -p '${prompt.replace(/'/g, "'\\''")}' -m gemini-2.0-flash --yolo`, (error, stdout, stderr) => {
+      if (error) {
+          console.error("PM Auto-create failed:", stderr);
+          return;
+      }
+      try {
+          const cleanJson = stdout.replace(/```json/g, "").replace(/```/g, "").trim();
+          const newTasks = JSON.parse(cleanJson);
+          if (Array.isArray(newTasks)) {
+              let count = 0;
+              newTasks.forEach((t: any) => {
+                  if (t.title && t.category) {
+                      DB.createTask({
+                          title: t.title,
+                          source: "product_manager",
+                          category: t.category,
+                          priority: t.priority || "media",
+                          lane: "backlog",
+                          assignedTo: null,
+                          interrupted: false,
+                          logs: [],
+                          description: t.description
+                      });
+                      count++;
+                  }
+              });
+              if (count > 0) addEvent(`[PM] Adicionou ${count} novas tarefas ao backlog.`);
+          }
+      } catch (e) {
+          console.error("PM Failed to parse JSON:", e);
+      }
+  });
+}
+
+// PM loop (every 60 seconds)
+setInterval(generateRoadmapTasks, 60000);
 
 const CONFIG_FILE = "vibe_config.json";
 let appConfig = { cloneDir: "./clones" };
@@ -363,6 +400,7 @@ const server = createServer(async (req, res) => {
   // GET /api/tools
   if (url === "/api/tools" && method === "GET") {
     const tools: { id: string; name: string }[] = [];
+    tools.push({ id: "mock", name: "Mock Driver" });
     try {
       execSync("gemini --version", { stdio: "ignore" });
       tools.push({ id: "gemini", name: "Gemini CLI" });
@@ -387,6 +425,8 @@ const server = createServer(async (req, res) => {
       } catch { }
     } else if (tool === "gemini") {
       models = ["gemini-2.0-flash", "gemini-2.0-flash-lite-preview", "gemini-2.0-pro-exp-02-05", "gemini-2.0-flash-thinking-exp-01-21", "gemini-1.5-flash", "gemini-1.5-pro"];
+    } else if (tool === "mock") {
+      models = ["mock-model-v1", "mock-gpt-4", "mock-claude"];
     }
     return jsonResponse(res, 200, { models });
   }
@@ -475,7 +515,10 @@ const server = createServer(async (req, res) => {
 
     startTask(task, agent);
 
-    return jsonResponse(res, 200, { task, agent });
+    const updatedTask = getTask(task.id);
+    const updatedAgent = getAgent(agent.id);
+
+    return jsonResponse(res, 200, { task: updatedTask, agent: updatedAgent });
   }
 
   // POST /api/interrupt
