@@ -30,7 +30,25 @@ export class CommandDriver implements LLMDriver {
 
         let command = "";
         let args: string[] = [];
-        const prompt = `Task: ${task.title}\nDescription: ${task.description || ""}\nSource: ${task.source}\nProvide a brief execution log of the actions you would take to complete this task.`;
+        let fullOutput = "";
+
+        const prompt = `Task: ${task.title}
+Description: ${task.description || ""}
+Source: ${task.source}
+
+You are an autonomous coding agent. Your goal is to complete the task by writing code.
+To create or overwrite a file, use the following format exactly:
+
+<<<FILE:filename.ext>>>
+file content here
+<<<END>>>
+
+Example:
+<<<FILE:hello.py>>>
+print("Hello World")
+<<<END>>>
+
+Do not output hypothetical logs. Output the actual file content needed to solve the task.`;
 
         if (agent.tool === "ollama") {
             command = "ollama";
@@ -51,10 +69,12 @@ export class CommandDriver implements LLMDriver {
             this.runningTasks.set(task.id, child);
 
             child.stdout.on("data", (data) => {
-                const text = data.toString().trim();
-                if (text) {
-                    this.appendLog(task.id, text);
-                    ctx.onLog(task.id, text);
+                const text = data.toString();
+                fullOutput += text;
+                const trimmed = text.trim();
+                if (trimmed) {
+                    this.appendLog(task.id, trimmed);
+                    ctx.onLog(task.id, trimmed);
                 }
             });
 
@@ -68,8 +88,31 @@ export class CommandDriver implements LLMDriver {
 
             child.on("close", (code) => {
                 this.runningTasks.delete(task.id);
+
+                // Parse files
+                const fileRegex = /<<<FILE:(.+?)>>>([\s\S]+?)<<<END>>>/g;
+                let match;
+                let filesCreated = 0;
+                while ((match = fileRegex.exec(fullOutput)) !== null) {
+                    const filename = match[1].trim();
+                    let content = match[2];
+                    if (content.startsWith("\n")) content = content.substring(1);
+
+                    try {
+                        const filePath = path.join(basePath, filename);
+                        const fileDir = path.dirname(filePath);
+                        if (!fs.existsSync(fileDir)) fs.mkdirSync(fileDir, { recursive: true });
+
+                        fs.writeFileSync(filePath, content);
+                        ctx.onLog(task.id, `[FILE] Wrote ${filename}`);
+                        filesCreated++;
+                    } catch(e: any) {
+                         ctx.onLog(task.id, `[ERROR] Failed to write ${filename}: ${e.message}`);
+                    }
+                }
+
                 if (code === 0) {
-                    ctx.onLog(task.id, "Process completed successfully.");
+                    ctx.onLog(task.id, `Process completed. Files created: ${filesCreated}`);
                     ctx.onComplete(task.id);
                 } else {
                     ctx.onLog(task.id, `Process exited with code ${code}`);
