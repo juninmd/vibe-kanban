@@ -725,22 +725,10 @@ function createTaskTexture(task: Task) {
   return tex;
 }
 
-function updateKanban3D() {
-  // Clear old meshes
-  while (kanbanGroup.children.length > 0) {
-    const child = kanbanGroup.children[0];
-    if ((child as any).geometry) (child as any).geometry.dispose();
-    if ((child as any).material) {
-      if (Array.isArray((child as any).material)) (child as any).material.forEach((m: any) => { if (m.map) m.map.dispose(); m.dispose(); });
-      else {
-        if ((child as any).material.map) (child as any).material.map.dispose();
-        (child as any).material.dispose();
-      }
-    }
-    kanbanGroup.remove(child);
-  }
+const taskMeshes = new Map<number, THREE.Mesh>();
 
-  // Group tasks by lane to stack them
+function updateKanban3D() {
+  const visibleTaskIds = new Set<number>();
   const laneCounts: Record<string, number> = { backlog: 0, in_progress: 0, review: 0, done: 0 };
 
   tasks.forEach(task => {
@@ -748,25 +736,55 @@ function updateKanban3D() {
     const count = laneCounts[lane] || 0;
     const { x, y } = getTaskCardPosition(lane, count);
 
-    if (!shouldRenderTaskIn3D(lane, count, y)) return;
+    if (shouldRenderTaskIn3D(lane, count, y)) {
+        visibleTaskIds.add(task.id);
 
-    // Create card mesh
-    const geometry = new THREE.BoxGeometry(2.7, 0.75, 0.05);
-    const texture = createTaskTexture(task);
-    const material = new THREE.MeshStandardMaterial({
-      map: texture,
-      emissive: 0x222222,
-      emissiveMap: texture,
-      emissiveIntensity: 0.4
-    });
+        let mesh = taskMeshes.get(task.id);
+        const signature = `${task.title}-${task.category}-${task.priority}-${task.assignedTo || ''}`;
 
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.set(x, y, 0.15); // Move off surface
-    mesh.userData = { taskId: task.id };
-    kanbanGroup.add(mesh);
+        if (!mesh) {
+            // Create
+            const geometry = new THREE.BoxGeometry(2.7, 0.75, 0.05);
+            const texture = createTaskTexture(task);
+            const material = new THREE.MeshStandardMaterial({
+              map: texture,
+              emissive: 0x222222,
+              emissiveMap: texture,
+              emissiveIntensity: 0.4
+            });
+            mesh = new THREE.Mesh(geometry, material);
+            mesh.userData = { taskId: task.id, signature };
+            kanbanGroup.add(mesh);
+            taskMeshes.set(task.id, mesh);
+        } else {
+             // Update texture if changed
+             if (mesh.userData.signature !== signature) {
+                 const oldTex = (mesh.material as THREE.MeshStandardMaterial).map;
+                 if (oldTex) oldTex.dispose();
+                 const newTex = createTaskTexture(task);
+                 (mesh.material as THREE.MeshStandardMaterial).map = newTex;
+                 (mesh.material as THREE.MeshStandardMaterial).emissiveMap = newTex;
+                 mesh.userData.signature = signature;
+                 (mesh.material as THREE.MeshStandardMaterial).needsUpdate = true;
+             }
+        }
+
+        mesh.position.set(x, y, 0.15);
+    }
 
     laneCounts[lane] = count + 1;
   });
+
+  // Cleanup invisible/removed tasks
+  for (const [id, mesh] of taskMeshes.entries()) {
+      if (!visibleTaskIds.has(id)) {
+          kanbanGroup.remove(mesh);
+          if (mesh.geometry) mesh.geometry.dispose();
+          if ((mesh.material as THREE.MeshStandardMaterial).map) (mesh.material as THREE.MeshStandardMaterial).map!.dispose();
+          if ((mesh.material as THREE.MeshStandardMaterial).dispose) (mesh.material as THREE.MeshStandardMaterial).dispose();
+          taskMeshes.delete(id);
+      }
+  }
 }
 
 const agentMeshes = new Map<string, {
