@@ -48,7 +48,7 @@ const laneLabels: Record<string, string> = {
 let agents: Agent[] = [];
 let tasks: Task[] = [];
 let eventLog: EventLog[] = [];
-let previousTaskState = new Map<number, { lane: string; assignedTo: string | null }>();
+let previousTaskState = new Map<number, { lane: string; assignedTo: string | null }>(); // Para rastrear mudanças e detectar transições
 let renderQueued = false;
 
 const els = {
