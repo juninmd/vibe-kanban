@@ -17,11 +17,11 @@ const PORT = process.env.PORT ? Number(process.env.PORT) : 5174;
 // --- State and Persistence ---
 const INITIAL_AGENTS: Agent[] = [
   { id: "pm", role: "Product Manager", model: "gemini-2.0-flash", category: "roadmap", status: "idle", assignedTask: null },
-  { id: "sec", role: "Segurança", model: "gemini-2.0-flash", category: "seguranca", status: "idle", assignedTask: null },
+  { id: "sec", role: "Segurança", model: "gemini-2.0-flash", category: "security", status: "idle", assignedTask: null },
   { id: "perf", role: "Performance", model: "gemini-2.0-flash", category: "performance", status: "idle", assignedTask: null },
-  { id: "func", role: "Novas Funcionalidades", model: "gemini-2.0-flash", category: "funcionalidades", status: "idle", assignedTask: null },
-  { id: "tests", role: "Testes", model: "gemini-2.0-pro-exp-02-05", category: "testes", status: "idle", assignedTask: null },
-  { id: "feat", role: "Novas Features", model: "gemini-2.0-flash-thinking-exp-01-21", category: "features", status: "idle", assignedTask: null },
+  { id: "func", role: "Feature Builder", model: "gemini-2.0-flash", category: "feature", status: "idle", assignedTask: null },
+  { id: "tests", role: "QA", model: "gemini-2.0-pro-exp-02-05", category: "test", status: "idle", assignedTask: null },
+  { id: "bug", role: "Correções / Bugs", model: "gemini-2.0-flash-thinking-exp-01-21", category: "bug", status: "idle", assignedTask: null },
 ];
 
 function initializeState(): State {
@@ -205,7 +205,7 @@ function pmAutoCreateLoop() {
   const backlogTasks = DB.getTasks().filter(t => t.lane === "backlog");
   // If backlog is running low, PM creates new tasks
   if (backlogTasks.length < 3) {
-    const categories = ["roadmap", "seguranca", "performance", "funcionalidades", "features"];
+    const categories = ["roadmap", "security", "performance", "feature", "test", "bug"];
     const randomCategory = categories[Math.floor(Math.random() * categories.length)];
     const task = DB.createTask({
       title: `Feature backlog item ${Date.now().toString().slice(-4)}`,

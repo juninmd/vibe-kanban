@@ -240,7 +240,7 @@ function bugFromTask(task: Task) {
   createTask({
     title: `Bug reportado em: ${task.title}`,
     source: "agente",
-    category: "testes",
+    category: "bug",
     priority: "alta",
     githubRepo: task.githubRepo,
   });
@@ -371,9 +371,9 @@ els.toggleViewBtn.addEventListener("click", () => {
 els.seedTasksBtn.addEventListener("click", () => {
   [
     ["Planejar sprint de IA colaborativa", "product_manager", "roadmap", "alta"],
-    ["Auditar permissões do backend", "product_manager", "seguranca", "alta"],
+    ["Auditar permissões do backend", "product_manager", "security", "alta"],
     ["Otimizar render do quadro 3D", "usuario", "performance", "media"],
-    ["Criar painel de métricas de agente", "usuario", "funcionalidades", "media"]
+    ["Criar painel de métricas de agente", "usuario", "feature", "media"]
   ].forEach(([title, source, category, priority]) =>
     createTask({ title: title as string, source: source as string, category: category as string, priority: priority as string }),
   );
@@ -687,11 +687,11 @@ function createTaskTexture(task: Task) {
   // Background
   const categoryColors: Record<string, string> = {
     roadmap: "#a855f7",
-    seguranca: "#ef4444",
+    security: "#ef4444",
     performance: "#f97316",
-    funcionalidades: "#3b82f6",
-    testes: "#22c55e",
-    features: "#06b6d4"
+    feature: "#3b82f6",
+    test: "#22c55e",
+    bug: "#06b6d4"
   };
 
   ctx.fillStyle = categoryColors[task.category] || "#64748b";
@@ -856,7 +856,7 @@ function createAlertIcon(type: "bug" | "perf") {
 
 function updateVisualAlerts() {
   tasks.forEach(task => {
-    const isBug = task.category === "testes" && task.lane !== "done";
+    const isBug = (task.category === "bug" || task.category === "test") && task.lane !== "done";
     const isPerf = task.category === "performance" && task.lane !== "done";
 
     if ((isBug || isPerf) && !visualAlerts.has(task.id)) {
@@ -910,9 +910,9 @@ function createAgentMesh(agent: Agent, index: number) {
     "Product Manager": "#a855f7",
     "Segurança": "#ef4444",
     "Performance": "#f97316",
-    "Novas Funcionalidades": "#3b82f6",
-    "Testes": "#22c55e",
-    "Novas Features": "#06b6d4"
+    "Feature Builder": "#3b82f6",
+    "QA": "#22c55e",
+    "Correções / Bugs": "#06b6d4"
   };
   const color = new THREE.Color(roleColors[agent.role] || "#888888");
 
@@ -1160,7 +1160,7 @@ function tick() {
         item.laser.visible = true;
 
         // Change laser color based on task category
-        const laserColor = taskObj.category === "testes" ? 0xef4444 : (taskObj.category === "performance" ? 0xeab308 : 0x00f0ff);
+        const laserColor = (taskObj.category === "test" || taskObj.category === "bug") ? 0xef4444 : (taskObj.category === "performance" ? 0xeab308 : 0x00f0ff);
         (item.laser.material as THREE.LineBasicMaterial).color.setHex(laserColor);
 
         // Terminal DOM
