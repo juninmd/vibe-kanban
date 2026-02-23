@@ -2,6 +2,7 @@ import { Task, Agent, LLMDriver, DriverContext } from "../types.js";
 import { spawn } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
+import { getProjectContext, extractAndWriteFiles } from "../utils/fileUtils.js";
 
 export class GeminiDriver implements LLMDriver {
    name: string = "Gemini CLI Driver";
@@ -18,13 +19,17 @@ export class GeminiDriver implements LLMDriver {
          fs.mkdirSync(basePath, { recursive: true });
       }
 
+      const projectContext = getProjectContext(basePath);
       const cmd = "gemini";
+
       // Construct a robust prompt for the agent
       const prompt = `
 Task: ${task.title}
 Description: ${task.description || "No description provided."}
 Category: ${task.category}
 Priority: ${task.priority}
+
+${projectContext}
 
 You are an autonomous coding agent. Your goal is to complete the task by writing code.
 To create or overwrite a file, use the following format exactly:
@@ -40,6 +45,7 @@ print("Hello World")
 
 Do not output hypothetical logs. Output the actual file content needed to solve the task.`;
 
+      // Use --stream to avoid waiting for full generation before logging (if supported by CLI, but here we capture stdout on data)
       const args = ["-p", prompt, "-m", agent.model, "--yolo"];
       
       let fullOutput = "";
@@ -60,9 +66,6 @@ Do not output hypothetical logs. Output the actual file content needed to solve 
             const text = data.toString().trim();
             if (text) {
                ctx.onLog(task.id, `[DEBUG] ${text}`);
-               if (text.toLowerCase().includes("error") || text.toLowerCase().includes("failed")) {
-                  // Some stderr is just info/debug in gemini-cli, but we'll log it
-               }
             }
          });
 
@@ -80,26 +83,7 @@ Do not output hypothetical logs. Output the actual file content needed to solve 
             this.runningTasks.delete(task.id);
 
             // Parse files
-            const fileRegex = /<<<FILE:(.+?)>>>([\s\S]+?)<<<END>>>/g;
-            let match;
-            let filesCreated = 0;
-            while ((match = fileRegex.exec(fullOutput)) !== null) {
-               const filename = match[1].trim();
-               let content = match[2];
-               if (content.startsWith("\n")) content = content.substring(1);
-
-               try {
-                   const filePath = path.join(basePath, filename);
-                   const fileDir = path.dirname(filePath);
-                   if (!fs.existsSync(fileDir)) fs.mkdirSync(fileDir, { recursive: true });
-
-                   fs.writeFileSync(filePath, content);
-                   ctx.onLog(task.id, `[FILE] Wrote ${filename}`);
-                   filesCreated++;
-               } catch(e: any) {
-                    ctx.onLog(task.id, `[ERROR] Failed to write ${filename}: ${e.message}`);
-               }
-            }
+            const filesCreated = extractAndWriteFiles(fullOutput, basePath, ctx, task.id);
 
             if (code === 0) {
                ctx.onLog(task.id, `Gemini CLI finished successfully. Files created: ${filesCreated}`);

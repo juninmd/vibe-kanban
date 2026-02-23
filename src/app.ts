@@ -1002,30 +1002,37 @@ function createAgentMesh(agent: Agent, index: number) {
   scene.add(group);
 
   function makeLabelCanvas(text: string, colorHex: string) {
-    const size = 512;
     const canvas = document.createElement("canvas");
-    canvas.width = size;
-    canvas.height = 128;
+    canvas.width = 1024;
+    canvas.height = 256;
     const ctx = canvas.getContext("2d")!;
 
     // Convert hex to rgba for transparency
     const r = parseInt(colorHex.slice(1, 3), 16);
     const g = parseInt(colorHex.slice(3, 5), 16);
     const b = parseInt(colorHex.slice(5, 7), 16);
-    ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.85)`;
+    ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.9)`;
 
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    // Rounded rect background for badge look
+    ctx.beginPath();
+    ctx.roundRect(0, 0, canvas.width, canvas.height, 40);
+    ctx.fill();
 
     // Add a border
     ctx.strokeStyle = "#ffffff";
-    ctx.lineWidth = 8;
-    ctx.strokeRect(4, 4, canvas.width - 8, canvas.height - 8);
+    ctx.lineWidth = 16;
+    ctx.stroke();
 
-    ctx.font = "bold 80px Inter, sans-serif";
+    ctx.font = "bold 160px 'Share Tech Mono', monospace";
     ctx.fillStyle = "#ffffff";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+    // Shadow for better readability
+    ctx.shadowColor = "rgba(0,0,0,0.8)";
+    ctx.shadowBlur = 10;
+    ctx.shadowOffsetX = 4;
+    ctx.shadowOffsetY = 4;
+    ctx.fillText(text, canvas.width / 2, canvas.height / 2 + 10);
     return canvas;
   }
 
