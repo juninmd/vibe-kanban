@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vibe-kanban
+  namespace: vibe-kanban
+  labels:
+    app: vibe-kanban
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vibe-kanban
+  template:
+    metadata:
+      labels:
+        app: vibe-kanban
+    spec:
+      containers:
+        - name: app
+          image: vibe-kanban:kind
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5174
+              name: http
+          env:
+            - name: PORT
+              value: "5174"
+          readinessProbe:
+            httpGet:
+              path: /api/state
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /api/state
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            timeoutSeconds: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            readOnlyRootFilesystem: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
