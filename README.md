@@ -32,6 +32,38 @@ O projeto utiliza um backend em Node.js para gerenciar o estado dos agentes e a 
 
 4. Acesse a aplicação em `http://localhost:5174`.
 
+
+## Rodando com kind (Kubernetes local)
+
+Pré-requisitos:
+- `kind`
+- `kubectl`
+- `docker`
+
+1. Suba o cluster local, build da imagem e deploy:
+   ```bash
+   ./scripts/kind-up.sh
+   ```
+
+2. Faça o port-forward para acessar no navegador:
+   ```bash
+   kubectl -n vibe-kanban port-forward svc/vibe-kanban 5174:5174
+   ```
+
+3. Abra `http://localhost:5174`.
+
+4. Para ver logs da aplicação:
+   ```bash
+   kubectl -n vibe-kanban logs -f deploy/vibe-kanban
+   ```
+
+5. Para remover o cluster local:
+   ```bash
+   ./scripts/kind-down.sh
+   ```
+
+> Observação: os manifests estão em `k8s/` e usam a imagem local `vibe-kanban:kind` com `imagePullPolicy: IfNotPresent`.
+
 ## Estrutura
 
 - `index.html`: layout principal (painel lateral, visão 3D e kanban 2D).

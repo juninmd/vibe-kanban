@@ -8,7 +8,9 @@
     "start": "node dist/server.js",
     "test": "node --test test/unit/*.test.js test/api.test.js",
     "test:e2e": "playwright test",
-    "test:all": "pnpm test && pnpm test:e2e"
+    "test:all": "pnpm test && pnpm test:e2e",
+    "kind:up": "./scripts/kind-up.sh",
+    "kind:down": "./scripts/kind-down.sh"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
