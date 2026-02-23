@@ -154,6 +154,10 @@ export const DB = {
     db.prepare("INSERT INTO events (timestamp, text) VALUES (?, ?)").run(timestamp, text);
   },
 
+  clearDoneTasks(): void {
+    db.prepare("DELETE FROM tasks WHERE lane = 'done'").run();
+  },
+
   reset(): void {
     db.prepare("DELETE FROM tasks").run();
     db.prepare("DELETE FROM agents").run();

@@ -72,6 +72,7 @@ const els = {
   toggleViewBtn: document.getElementById("toggleViewBtn") as HTMLButtonElement,
   seedTasksBtn: document.getElementById("seedTasksBtn") as HTMLButtonElement,
   resetDataBtn: document.getElementById("resetDataBtn") as HTMLButtonElement,
+  clearDoneBtn: document.getElementById("clearDoneBtn") as HTMLButtonElement,
   createAgentBtn: document.getElementById("createAgentBtn") as HTMLButtonElement,
   settingsBtn: document.getElementById("settingsBtn") as HTMLButtonElement,
   agentModal: document.getElementById("agentModal") as HTMLDialogElement,
@@ -400,6 +401,12 @@ els.seedTasksBtn.addEventListener("click", () => {
 els.resetDataBtn.addEventListener("click", () => {
   if (confirm("Tem certeza que deseja apagar todos os dados do servidor?")) {
     apiCall("/api/reset", "POST", {});
+  }
+});
+
+els.clearDoneBtn?.addEventListener("click", () => {
+  if (confirm("Tem certeza que deseja limpar todas as tarefas concluídas?")) {
+    apiCall("/api/tasks/clear-done", "POST", {});
   }
 });
 
@@ -1219,7 +1226,10 @@ function tick() {
         termEl.style.display = "block";
 
         const lastLog = taskObj.logs && taskObj.logs.length > 0 ? taskObj.logs[taskObj.logs.length - 1] : "Buscando contexto...";
-        termEl.innerHTML = `<strong>> ${taskObj.title.substring(0, 15)}...</strong><br/><span class="term-log">${lastLog}</span>`;
+        const newHTML = `<strong>> ${taskObj.title.substring(0, 15)}...</strong><br/><span class="term-log">${lastLog}</span>`;
+        if (termEl.innerHTML !== newHTML) {
+          termEl.innerHTML = newHTML;
+        }
 
       } else {
         item.laser.visible = false;
