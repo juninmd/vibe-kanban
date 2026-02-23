@@ -7,6 +7,7 @@ import { MockDriver } from "./drivers/MockDriver.js";
 import { GeminiDriver } from "./drivers/GeminiDriver.js";
 import { CopilotDriver } from "./drivers/CopilotDriver.js";
 import { OpenCodeDriver } from "./drivers/OpenCodeDriver.js";
+import { OpenAIDriver } from "./drivers/OpenAIDriver.js";
 import { ClaudeDriver } from "./drivers/ClaudeDriver.js";
 import { CommandDriver } from "./drivers/CommandDriver.js";
 import { DB } from "./db.js";
@@ -16,12 +17,12 @@ const PORT = process.env.PORT ? Number(process.env.PORT) : 5174;
 
 // --- State and Persistence ---
 const INITIAL_AGENTS: Agent[] = [
-  { id: "pm", role: "Product Manager", model: "gemini-2.0-flash", category: "roadmap", status: "idle", assignedTask: null },
-  { id: "sec", role: "Segurança", model: "gemini-2.0-flash", category: "security", status: "idle", assignedTask: null },
-  { id: "perf", role: "Performance", model: "gemini-2.0-flash", category: "performance", status: "idle", assignedTask: null },
-  { id: "func", role: "Feature Builder", model: "gemini-2.0-flash", category: "feature", status: "idle", assignedTask: null },
-  { id: "tests", role: "QA", model: "gemini-2.0-pro-exp-02-05", category: "test", status: "idle", assignedTask: null },
-  { id: "bug", role: "Correções / Bugs", model: "gemini-2.0-flash-thinking-exp-01-21", category: "bug", status: "idle", assignedTask: null },
+  { id: "pm", role: "Product Manager", model: "gpt-4o", category: "roadmap", status: "idle", assignedTask: null },
+  { id: "sec", role: "Segurança", model: "gpt-4o", category: "security", status: "idle", assignedTask: null },
+  { id: "perf", role: "Performance", model: "gpt-4o", category: "performance", status: "idle", assignedTask: null },
+  { id: "func", role: "Novas Funcionalidades", model: "gpt-4o", category: "feature", status: "idle", assignedTask: null },
+  { id: "tests", role: "Testes", model: "gpt-4o", category: "test", status: "idle", assignedTask: null },
+  { id: "bug", role: "Correções / Bugs", model: "gpt-4o", category: "bug", status: "idle", assignedTask: null },
 ];
 
 function initializeState(): State {
@@ -217,19 +218,16 @@ function autoAssign() {
 setInterval(autoAssign, 3000);
 
 // --- PM Auto-Create Logic ---
-function generateRoadmapTasks() {
+async function generateRoadmapTasks() {
   const backlogTasks = DB.getTasks().filter(t => t.lane === "backlog");
 
   // Only generate if we are running low on tasks
   if (backlogTasks.length >= 3) return;
 
-  // Use Gemini CLI if available
-  if (!isCommandAvailable("gemini")) return;
-
   const prompt = `
     You are a Product Manager for a software project called "Vibe Kanban 3D".
     The project is a 3D Task Orchestrator with AI agents.
-    Current roles: Product Manager, Security, Performance, Feature Builder, QA, Bug Fixer.
+    Current roles: Product Manager, Security, Performance, Novas Funcionalidades, Testes, Correções / Bugs.
 
     Generate 2 realistic, high-value tasks for the backlog.
     Categories must be one of: "roadmap", "security", "performance", "feature", "test", "bug".
@@ -240,13 +238,9 @@ function generateRoadmapTasks() {
     Do not output markdown code blocks. Just the raw JSON string.
   `;
 
-  exec(`gemini -p '${prompt.replace(/'/g, "'\\''")}' -m gemini-2.0-flash --yolo`, (error, stdout, stderr) => {
-      if (error) {
-          console.error("PM Auto-create failed:", stderr);
-          return;
-      }
+  const processTasks = (jsonStr: string) => {
       try {
-          const cleanJson = stdout.replace(/```json/g, "").replace(/```/g, "").trim();
+          const cleanJson = jsonStr.replace(/```json/g, "").replace(/```/g, "").trim();
           const newTasks = JSON.parse(cleanJson);
           if (Array.isArray(newTasks)) {
               let count = 0;
@@ -271,7 +265,41 @@ function generateRoadmapTasks() {
       } catch (e) {
           console.error("PM Failed to parse JSON:", e);
       }
-  });
+  };
+
+  // 1. Try OpenAI if Key is present
+  if (process.env.OPENAI_API_KEY) {
+      try {
+          const res = await fetch("https://api.openai.com/v1/chat/completions", {
+              method: "POST",
+              headers: {
+                  "Content-Type": "application/json",
+                  "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`
+              },
+              body: JSON.stringify({
+                  model: "gpt-4o",
+                  messages: [{ role: "system", content: prompt }]
+              })
+          });
+          const data = await res.json();
+          const content = data.choices?.[0]?.message?.content;
+          if (content) processTasks(content);
+      } catch (e) {
+          console.error("PM OpenAI Auto-create failed:", e);
+      }
+      return;
+  }
+
+  // 2. Fallback to Gemini CLI
+  if (isCommandAvailable("gemini")) {
+      exec(`gemini -p '${prompt.replace(/'/g, "'\\''")}' -m gemini-2.0-flash --yolo`, (error, stdout, stderr) => {
+          if (error) {
+              console.error("PM Auto-create failed:", stderr);
+              return;
+          }
+          processTasks(stdout);
+      });
+  }
 }
 
 // PM loop (every 60 seconds)
@@ -299,8 +327,9 @@ const drivers: Record<string, LLMDriver> = {
   mock: new MockDriver(),
   gemini: new GeminiDriver(() => appConfig.cloneDir),
   copilot: new CopilotDriver(),
-  opencode: new OpenCodeDriver(),
+  opencode: new OpenCodeDriver(() => appConfig.cloneDir),
   claude: new ClaudeDriver(),
+  openai: new OpenAIDriver(() => appConfig.cloneDir),
 };
 
 function isCommandAvailable(command: string): boolean {
