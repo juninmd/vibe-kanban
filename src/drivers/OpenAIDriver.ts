@@ -1,6 +1,7 @@
 import { Task, Agent, LLMDriver, DriverContext } from "../types.js";
 import * as fs from "fs";
 import * as path from "path";
+import { getProjectContext, extractAndWriteFiles } from "../utils/fileUtils.js";
 
 export class OpenAIDriver implements LLMDriver {
    name: string = "OpenAI Codex (GPT-4)";
@@ -22,11 +23,15 @@ export class OpenAIDriver implements LLMDriver {
          fs.mkdirSync(basePath, { recursive: true });
       }
 
+      const projectContext = getProjectContext(basePath);
+
       const prompt = `
 Task: ${task.title}
 Description: ${task.description || "No description provided."}
 Category: ${task.category}
 Priority: ${task.priority}
+
+${projectContext}
 
 You are an autonomous coding agent. Your goal is to complete the task by writing code.
 To create or overwrite a file, use the following format exactly:
@@ -54,8 +59,8 @@ Do not output hypothetical logs. Output the actual file content needed to solve 
               body: JSON.stringify({
                   model: agent.model || "gpt-4o",
                   messages: [
-                      { role: "system", content: prompt },
-                      { role: "user", content: "Please proceed with the task." }
+                      { role: "system", content: "You are a helpful coding assistant." },
+                      { role: "user", content: prompt }
                   ]
               })
           });
@@ -65,35 +70,20 @@ Do not output hypothetical logs. Output the actual file content needed to solve 
               throw new Error(`OpenAI API Error: ${res.status} ${errText}`);
           }
 
-          const data = await res.json();
+          const data: any = await res.json();
           const content = data.choices?.[0]?.message?.content || "";
 
           ctx.onLog(task.id, "Received response from OpenAI.");
 
           // Parse files
-          const fileRegex = /<<<FILE:(.+?)>>>([\s\S]+?)<<<END>>>/g;
-          let match;
-          let filesCreated = 0;
-          while ((match = fileRegex.exec(content)) !== null) {
-             const filename = match[1].trim();
-             let fileContent = match[2];
-             if (fileContent.startsWith("\n")) fileContent = fileContent.substring(1);
+          const filesCreated = extractAndWriteFiles(content, basePath, ctx, task.id);
 
-             try {
-                 const filePath = path.join(basePath, filename);
-                 const fileDir = path.dirname(filePath);
-                 if (!fs.existsSync(fileDir)) fs.mkdirSync(fileDir, { recursive: true });
-
-                 fs.writeFileSync(filePath, fileContent);
-                 ctx.onLog(task.id, `[FILE] Wrote ${filename}`);
-                 filesCreated++;
-             } catch(e: any) {
-                  ctx.onLog(task.id, `[ERROR] Failed to write ${filename}: ${e.message}`);
-             }
+          if (filesCreated === 0) {
+              ctx.onLog(task.id, "No files were created. Response: " + content.substring(0, 200) + "...");
+          } else {
+              ctx.onLog(task.id, `Task completed. Files created: ${filesCreated}`);
+              ctx.onComplete(task.id);
           }
-
-          ctx.onLog(task.id, `Task completed. Files created: ${filesCreated}`);
-          ctx.onComplete(task.id);
 
       } catch (e: any) {
           ctx.onLog(task.id, `Exception: ${e.message}`);

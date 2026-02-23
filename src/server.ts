@@ -324,7 +324,7 @@ function sanitizeCloneDir(input: unknown): string {
 // --- Drivers ---
 const cliDriver = new CommandDriver(() => appConfig.cloneDir);
 const drivers: Record<string, LLMDriver> = {
-  mock: new MockDriver(),
+  mock: new MockDriver(() => appConfig.cloneDir),
   gemini: new GeminiDriver(() => appConfig.cloneDir),
   copilot: new CopilotDriver(),
   opencode: new OpenCodeDriver(() => appConfig.cloneDir),
