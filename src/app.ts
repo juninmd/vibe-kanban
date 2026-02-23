@@ -953,8 +953,8 @@ function createAgentMesh(agent: Agent, index: number) {
     "Product Manager": "#a855f7",
     "Segurança": "#ef4444",
     "Performance": "#f97316",
-    "Feature Builder": "#3b82f6",
-    "QA": "#22c55e",
+    "Novas Funcionalidades": "#3b82f6",
+    "Testes": "#22c55e",
     "Correções / Bugs": "#06b6d4"
   };
   const color = new THREE.Color(roleColors[agent.role] || "#888888");
@@ -1021,7 +1021,7 @@ function createAgentMesh(agent: Agent, index: number) {
     ctx.lineWidth = 8;
     ctx.strokeRect(4, 4, canvas.width - 8, canvas.height - 8);
 
-    ctx.font = "bold 72px Inter, sans-serif";
+    ctx.font = "bold 80px Inter, sans-serif";
     ctx.fillStyle = "#ffffff";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
