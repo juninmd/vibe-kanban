@@ -644,6 +644,14 @@ const server = createServer(async (req, res) => {
     return jsonResponse(res, 400, { error: "Invalid driver" });
   }
 
+  // POST /api/tasks/clear-done
+  if (url === "/api/tasks/clear-done" && method === "POST") {
+    DB.clearDoneTasks();
+    addEvent("Tarefas concluídas foram limpas.");
+    broadcastState();
+    return jsonResponse(res, 200, { ok: true });
+  }
+
   // Reset
   if (url === "/api/reset" && method === "POST") {
     DB.reset();

@@ -170,6 +170,43 @@ describe('Vibe Kanban API', async () => {
     assert.strictEqual(assignData.task.lane, 'in_progress');
   });
 
+  test('POST /api/tasks/clear-done deletes only done tasks', async () => {
+    // 1. Create a task in backlog
+    await fetch(`${API_URL}/api/tasks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: 'Task Backlog', source: 'test', category: 'roadmap', lane: 'backlog' })
+    });
+
+    // 2. Create a task and move to done
+    const taskRes = await fetch(`${API_URL}/api/tasks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: 'Task Done', source: 'test', category: 'roadmap' })
+    });
+    const taskData = await taskRes.json();
+    await fetch(`${API_URL}/api/move`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ taskId: taskData.task.id, lane: 'done' })
+    });
+
+    // 3. Call clear-done
+    const clearRes = await fetch(`${API_URL}/api/tasks/clear-done`, {
+      method: 'POST'
+    });
+    assert.equal(clearRes.status, 200);
+
+    // 4. Verify state
+    const stateRes = await fetch(`${API_URL}/api/state`);
+    const state = await stateRes.json();
+    const backlogTask = state.tasks.find(t => t.title === 'Task Backlog');
+    const doneTask = state.tasks.find(t => t.title === 'Task Done');
+
+    assert.ok(backlogTask, 'Backlog task should remain');
+    assert.ok(!doneTask, 'Done task should be deleted');
+  });
+
   test('GET /index.html returns static file', async () => {
     const res = await fetch(`${API_URL}/index.html`);
     assert.strictEqual(res.status, 200);
