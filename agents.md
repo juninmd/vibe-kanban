@@ -16,23 +16,46 @@ Padronizar a atuação de agentes no Vibe Kanban para entregas reais, auditávei
 - Processar apenas o que mudou sempre que possível.
 - Limitar volume visual de logs/eventos no frontend para manter UI responsiva.
 
+## Arquitetura de Orquestração (Inspirada em ComposioHQ)
+
+Para evoluir a capacidade de entrega autônoma, o Vibe Kanban adotará padrões de orquestração avançada:
+
+### 1. Isolamento via Workspaces
+Cada tarefa deve ser executada em um ambiente isolado.
+- **Git Worktrees:** Utilizar worktrees para permitir que múltiplos agentes trabalhem em features diferentes simultaneamente sem conflitos de branch no mesmo diretório.
+- **Ambientes Efêmeros:** O ambiente de execução (runtime) deve ser criado sob demanda e descartado após a conclusão ou falha da tarefa.
+
+### 2. Reatores (Event-Driven Architecture)
+O sistema deve reagir a eventos externos e internos do ciclo de desenvolvimento, não apenas a comandos diretos.
+- **Trigger `ci-failed`:** Se o CI falhar, um agente deve ser automaticamente despachado para corrigir o erro, analisando os logs.
+- **Trigger `changes-requested`:** Comentários em PRs devem gerar novas sub-tarefas para o agente responsável.
+- **Trigger `conflict-detected`:** Detecção de conflitos de merge deve acionar um agente especialista em resolução de conflitos.
+
+### 3. Plugin Architecture
+A estrutura deve permitir a troca fácil de componentes ("Batteries Included but Swappable").
+- **Providers de LLM:** Interface agnóstica para OpenAI, Anthropic, Gemini, ou modelos locais (Ollama).
+- **Runtimes:** Suporte plugável para execução em Docker, Sandbox seguro ou Localhost.
+- **Ferramentas:** Capacidade de adicionar novas skills aos agentes (ex: acesso a banco de dados, web browsing) via configuração.
+
+### 4. Parallel Agents
+Suporte nativo para execução paralela de múltiplos agentes em tarefas distintas, coordenados pelo "Product Manager" para evitar colisão de escopo.
+
 ## Roadmap de execução por rodadas
-### Rodada 1 (implementada)
-- Otimizar auto-assign no backend para evitar leituras repetidas de agentes no mesmo ciclo.
-- Trocar cópia profunda de tarefas no frontend por mapa leve de estado anterior.
-- Fazer batch de render no frontend com `requestAnimationFrame`.
-- Pré-indexar tarefas por lane e agentes por id durante renderização do Kanban.
-- Limitar render de eventos para evitar degradação com histórico grande.
+
+### Rodada 1 (Atual)
+- Otimizar auto-assign no backend.
+- Renderização eficiente no Frontend (Map de estado, requestAnimationFrame).
+- Estrutura básica de Drivers (Mock, OpenAI, OpenCode).
 
 ### Rodada 2
-- Introduzir atualização incremental no DOM do Kanban (diff por card).
-- Criar métricas de tempo de render e tempo de ciclo de auto-assign.
-- Adicionar paginação/virtualização para listas longas de eventos.
+- Implementar **Reatores** básicos (ex: auto-fix para erros de linter).
+- Introduzir atualização incremental no DOM do Kanban.
+- Métricas de performance de agentes.
 
 ### Rodada 3
-- Mover loops internos de automação para fila orientada a eventos.
-- Revisar acesso ao SQLite com índices e consultas especializadas por lane/status.
-- Avaliar troca de SSE para canal bidirecional quando houver colaboração multiusuário intensa.
+- Implementar **Workspaces** com Git Worktrees.
+- Sistema de Plugins para Runtimes e LLMs.
+- Fila de eventos robusta para orquestração paralela massiva.
 
 ## Estrutura de referência
 - `src/server.ts`: orquestração backend, auto-assign, SSE, drivers.
