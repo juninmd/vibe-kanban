@@ -34,13 +34,11 @@ export class ClaudeDriver implements LLMDriver {
       });
 
       child.on("close", (code) => {
+         this.runningTasks.delete(task.id);
          if (code === 0) {
             ctx.onComplete(task.id);
          } else {
-            // If exit code is non-zero, it might have failed.
-            // But if we already handled error/simulation, we might duplicate logic.
-            // For now, assume stderr handled it or simulation took over.
-            // If simulation took over, we don't need to do anything here.
+            ctx.onBugFound(task.id, `Claude exited with code ${code}`);
          }
       });
 

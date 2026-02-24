@@ -14,6 +14,7 @@ type Agent = {
   category: string;
   status: "idle" | "working";
   assignedTask: number | null;
+  tool?: string;
 };
 
 type Task = {
@@ -50,6 +51,8 @@ let tasks: Task[] = [];
 let eventLog: EventLog[] = [];
 let previousTaskState = new Map<number, { lane: string; assignedTo: string | null }>(); // Para rastrear mudanças e detectar transições
 let renderQueued = false;
+let stateUpdateQueued = false;
+let pendingStateData: any = null;
 
 const els = {
   form: document.getElementById("taskForm") as HTMLFormElement,
@@ -68,7 +71,6 @@ const els = {
   eventLog: document.getElementById("eventLog") as HTMLElement,
   view3d: document.getElementById("view3d") as HTMLElement,
   view2d: document.getElementById("view2d") as HTMLElement,
-  terminalsLayer: document.getElementById("terminalsLayer") as HTMLElement,
   toggleViewBtn: document.getElementById("toggleViewBtn") as HTMLButtonElement,
   seedTasksBtn: document.getElementById("seedTasksBtn") as HTMLButtonElement,
   resetDataBtn: document.getElementById("resetDataBtn") as HTMLButtonElement,
@@ -94,6 +96,17 @@ const els = {
   statAgents: document.getElementById("statAgents") as HTMLElement,
   headerStats: document.getElementById("headerStats") as HTMLElement,
   toastContainer: document.getElementById("toast-container") as HTMLElement,
+  agentEditId: document.getElementById("agentEditId") as HTMLInputElement,
+  agentRole: document.getElementById("agentRole") as HTMLInputElement,
+  agentCategory: document.getElementById("agentCategory") as HTMLSelectElement,
+  agentModalTitle: document.getElementById("agentModalTitle") as HTMLElement,
+  agentSubmitBtn: document.getElementById("agentSubmitBtn") as HTMLButtonElement,
+  // New Terminal UI
+  terminalsLayer: document.getElementById("terminalsLayer") as HTMLElement,
+  terminalsContainer: document.getElementById("terminalsContainer") as HTMLElement,
+  terminalsTabs: document.getElementById("terminalsTabs") as HTMLElement,
+  terminalsContent: document.getElementById("terminalsContent") as HTMLElement,
+  closeAllTerminalsBtn: document.getElementById("closeAllTerminalsBtn") as HTMLButtonElement,
 };
 
 // --- Toast System ---
@@ -149,41 +162,51 @@ let isOfficeCreated = false;
 export let officeData: { padPositions: THREE.Vector3[] } = { padPositions: [] };
 
 function updateState(data: any) {
-  // Detect completions for celebration
-  const newTasks = data.tasks || [];
-  const nextTaskState = new Map<number, { lane: string; assignedTo: string | null }>();
-  newTasks.forEach((t: Task) => {
-    const old = previousTaskState.get(t.id);
-    if (old && old.lane !== "done" && t.lane === "done") {
-      spawnConfetti();
-      playSuccessSound();
-      if (old.assignedTo) {
-        // Find the mesh for the agent that finished this
-        const item = agentMeshes.get(old.assignedTo);
-        if (item) {
-          item.phase = "celebrating";
-          item.phaseTimer = 3.0; // seconds
+  pendingStateData = data;
+  if (stateUpdateQueued) return;
+  stateUpdateQueued = true;
+
+  requestAnimationFrame(() => {
+    const data = pendingStateData;
+    stateUpdateQueued = false;
+
+    // Detect completions for celebration
+    const newTasks = data.tasks || [];
+    const nextTaskState = new Map<number, { lane: string; assignedTo: string | null }>();
+    newTasks.forEach((t: Task) => {
+      const old = previousTaskState.get(t.id);
+      if (old && old.lane !== "done" && t.lane === "done") {
+        spawnConfetti();
+        playSuccessSound();
+        if (old.assignedTo) {
+          // Find the mesh for the agent that finished this
+          const item = agentMeshes.get(old.assignedTo);
+          if (item) {
+            item.phase = "celebrating";
+            item.phaseTimer = 3.0; // seconds
+          }
         }
       }
+      nextTaskState.set(t.id, { lane: t.lane, assignedTo: t.assignedTo ?? null });
+    });
+    previousTaskState = nextTaskState;
+
+    tasks = newTasks;
+    agents = data.agents || [];
+
+    updateDashboard();
+
+    // Create office dynamically once we know how many agents there are
+    if (!isOfficeCreated && agents.length > 0) {
+      const data = createOffice(scene, agents.length);
+      officeData.padPositions = data.padPositions;
+      isOfficeCreated = true;
+      spawnDesks();
     }
-    nextTaskState.set(t.id, { lane: t.lane, assignedTo: t.assignedTo ?? null });
+
+    eventLog = data.events || [];
+    render();
   });
-  previousTaskState = nextTaskState;
-
-  tasks = newTasks;
-  agents = data.agents || [];
-
-  updateDashboard();
-
-  // Create office dynamically once we know how many agents there are
-  if (!isOfficeCreated && agents.length > 0) {
-    const data = createOffice(scene, agents.length);
-    officeData.padPositions = data.padPositions;
-    isOfficeCreated = true;
-  }
-
-  eventLog = data.events || [];
-  scheduleRender();
 }
 
 function scheduleRender() {
@@ -193,6 +216,34 @@ function scheduleRender() {
     renderQueued = false;
     render();
   });
+}
+
+async function updateTaskAgentModels() {
+  const agentId = els.agentAssign.value;
+  const driver = els.driverSelect.value;
+
+  let tool = driver; // Fallback to global driver
+  if (agentId) {
+    const agent = agents.find(a => a.id === agentId);
+    if (agent && agent.tool) tool = agent.tool;
+  }
+
+  if (!tool) {
+    els.agentModelDropdown.innerHTML = '<option value="">Selecione um agente ou ferramenta</option>';
+    return;
+  }
+
+  try {
+    const res = await fetch(`${API_URL}/api/models?tool=${tool}`);
+    const data = await res.json();
+    if (data.models && data.models.length > 0) {
+      els.agentModelDropdown.innerHTML = data.models.map((m: string) => `<option value="${m}">${m}</option>`).join("");
+    } else {
+      els.agentModelDropdown.innerHTML = '<option value="">Nenhum modelo encontrado</option>';
+    }
+  } catch (e) {
+    console.error("Erro ao carregar modelos para a tarefa:", e);
+  }
 }
 
 async function fetchState() {
@@ -275,14 +326,14 @@ function renderKanban() {
     col.innerHTML = `<h3>${laneLabels[lane]}</h3>`;
 
     (tasksByLane.get(lane) || []).forEach((task) => {
-        const card = document.createElement("article");
-        card.className = `task-card priority-${task.priority}`;
-        const assigned = task.assignedTo ? agentsById.get(task.assignedTo) ?? "-" : "-";
+      const card = document.createElement("article");
+      card.className = `task-card priority-${task.priority}`;
+      const assigned = task.assignedTo ? agentsById.get(task.assignedTo) ?? "-" : "-";
 
-        // Logs preview
-        const lastLog = task.logs && task.logs.length > 0 ? task.logs[task.logs.length - 1] : "";
+      // Logs preview
+      const lastLog = task.logs && task.logs.length > 0 ? task.logs[task.logs.length - 1] : "";
 
-        card.innerHTML = `
+      card.innerHTML = `
           <strong>#${task.id} ${task.title}</strong>
           ${task.description ? `<p style="font-size:0.8em; margin: 4px 0">${task.description}</p>` : ""}
           <div class="task-meta">
@@ -297,45 +348,304 @@ function renderKanban() {
           ${lastLog ? `<div style="font-size:0.8em; margin-top:5px; color:#aaa;">> ${lastLog}</div>` : ""}
         `;
 
-        const actions = document.createElement("div");
-        actions.className = "task-actions";
+      const actions = document.createElement("div");
+      actions.className = "task-actions";
 
-        const makeBtn = (txt: string, onClick: () => void) => {
-          const btn = document.createElement("button");
-          btn.textContent = txt;
-          btn.onclick = onClick;
-          return btn;
-        };
+      const makeBtn = (txt: string, onClick: () => void) => {
+        const btn = document.createElement("button");
+        btn.textContent = txt;
+        btn.onclick = onClick;
+        return btn;
+      };
 
-        if (lane === "backlog") actions.append(makeBtn("Pegar tarefa", () => pickTask(task)));
-        if (lane === "in_progress") actions.append(makeBtn("Interromper", () => interruptTask(task)));
+      if (lane === "backlog") actions.append(makeBtn("Pegar tarefa", () => pickTask(task)));
+      if (lane === "in_progress") actions.append(makeBtn("Interromper", () => interruptTask(task)));
 
-        actions.append(makeBtn("←", () => moveTask(task, -1)));
-        actions.append(makeBtn("→", () => moveTask(task, +1)));
-        actions.append(makeBtn("↑", () => reprioritize(task, -1)));
-        actions.append(makeBtn("↓", () => reprioritize(task, +1)));
-        actions.append(makeBtn("+ bug", () => bugFromTask(task)));
+      actions.append(makeBtn("←", () => moveTask(task, -1)));
+      actions.append(makeBtn("→", () => moveTask(task, +1)));
+      actions.append(makeBtn("↑", () => reprioritize(task, -1)));
+      actions.append(makeBtn("↓", () => reprioritize(task, +1)));
+      actions.append(makeBtn("+ bug", () => bugFromTask(task)));
 
-        card.append(actions);
-        col.append(card);
-      });
+      card.append(actions);
+      col.append(card);
+    });
 
     els.kanban.append(col);
   });
 }
 
 function renderAgents() {
-  els.agentsList.innerHTML = agents
-    .map((a) => `
-      <div class="agent-item">
-        <strong>${a.role}</strong>
-        <span>Modelo: ${a.model}</span>
-        <span>Categoria: ${a.category}</span>
-        <span>Status: ${a.status === "idle" ? "Livre" : "Trabalhando"}</span>
-        ${a.assignedTask ? `<span>Task: #${a.assignedTask}</span>` : ""}
-      </div>
-    `)
-    .join("");
+  if (agents.length === 0) {
+    els.agentsList.innerHTML = '<div class="agent-empty">Nenhum agente configurado.<br>Clique em "Novo Agente" para adicionar.</div>';
+  } else {
+    els.agentsList.innerHTML = "";
+    agents.forEach((a) => {
+      const div = document.createElement("div");
+      div.className = "agent-item";
+      const statusClass = a.status === "idle" ? "status-idle" : "status-working";
+      const statusLabel = a.status === "idle" ? "Livre" : "Trabalhando";
+      div.innerHTML = `
+        <div class="agent-header">
+          <strong>${a.role}</strong>
+          <span class="agent-status ${statusClass}">${statusLabel}</span>
+        </div>
+        <div class="agent-details">
+          <span>Modelo: ${a.model}</span>
+          <span>Categoria: ${a.category}</span>
+          ${a.tool ? `<span>Ferramenta: ${a.tool}</span>` : ""}
+          ${a.assignedTask ? `<span>Task: #${a.assignedTask}</span>` : ""}
+        </div>
+      `;
+      const actions = document.createElement("div");
+      actions.className = "agent-actions";
+      const termBtn = document.createElement("button");
+      termBtn.className = "agent-term-btn";
+      termBtn.textContent = "📟 Terminal";
+      termBtn.onclick = () => openTerminal(a.id);
+      const editBtn = document.createElement("button");
+      editBtn.className = "agent-edit-btn";
+      editBtn.textContent = "✏️ Editar";
+      editBtn.onclick = () => openAgentEditModal(a);
+      const deleteBtn = document.createElement("button");
+      deleteBtn.className = "agent-delete-btn";
+      deleteBtn.textContent = "🗑️ Excluir";
+      deleteBtn.onclick = () => deleteAgentById(a.id, a.role);
+      actions.append(termBtn, editBtn, deleteBtn);
+      div.append(actions);
+      els.agentsList.append(div);
+    });
+  }
+  // Dynamically populate taskAgentAssign dropdown
+  populateAgentAssignDropdown();
+}
+
+// --- Terminal UI Logic ---
+declare var Terminal: any;
+declare var FitAddon: any;
+declare var WebLinksAddon: any;
+
+class TerminalInstance {
+  term: any;
+  fitAddon: any;
+  agentId: string;
+  container: HTMLDivElement;
+  tab: HTMLDivElement;
+
+  constructor(agentId: string, agentRole: string) {
+    this.agentId = agentId;
+
+    // Create container
+    this.container = document.createElement("div");
+    this.container.className = "terminal-instance";
+    els.terminalsContent.appendChild(this.container);
+
+    // Create tab
+    this.tab = document.createElement("div");
+    this.tab.className = "terminal-tab";
+    this.tab.textContent = agentRole;
+    this.tab.onclick = () => terminalUIManager.setActive(agentId);
+    els.terminalsTabs.appendChild(this.tab);
+
+    // Initialize xterm.js
+    this.term = new Terminal({
+      cursorBlink: true,
+      fontSize: 14,
+      fontFamily: "'Share Tech Mono', monospace",
+      theme: {
+        background: "#000000",
+        foreground: "#00f0ff",
+        cursor: "#ff0055",
+        black: "#000000",
+        red: "#ef4444",
+        green: "#22c55e",
+        yellow: "#eab308",
+        blue: "#3b82f6",
+        magenta: "#a855f7",
+        cyan: "#06b6d4",
+        white: "#e2e8f0"
+      }
+    });
+
+    this.fitAddon = new FitAddon.FitAddon();
+    this.term.loadAddon(this.fitAddon);
+    this.term.loadAddon(new WebLinksAddon.WebLinksAddon());
+
+    this.term.open(this.container);
+    this.fitAddon.fit();
+
+    this.term.onData((data: string) => {
+      fetch(`/api/terminals/${encodeURIComponent(agentId)}/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ data })
+      });
+    });
+
+    // Resize handling
+    window.addEventListener("resize", () => this.fitAddon.fit());
+  }
+
+  write(data: string) {
+    this.term.write(data);
+  }
+
+  focus() {
+    this.container.classList.add("active");
+    this.tab.classList.add("active");
+    this.term.focus();
+    setTimeout(() => this.fitAddon.fit(), 10);
+  }
+
+  hide() {
+    this.container.classList.remove("active");
+    this.tab.classList.remove("active");
+  }
+
+  dispose() {
+    this.container.remove();
+    this.tab.remove();
+    this.term.dispose();
+  }
+}
+
+class TerminalUIManager {
+  instances = new Map<string, TerminalInstance>();
+  activeAgentId: string | null = null;
+  isMinimized = true;
+
+  constructor() {
+    if (els.closeAllTerminalsBtn) {
+      els.closeAllTerminalsBtn.onclick = () => this.toggleMinimize();
+    }
+    // Set initial state
+    els.terminalsLayer.classList.add("minimized");
+  }
+
+  toggleMinimize() {
+    this.isMinimized = !this.isMinimized;
+    if (this.isMinimized) {
+      els.terminalsLayer.classList.add("minimized");
+      els.closeAllTerminalsBtn.textContent = "Maximizar";
+    } else {
+      els.terminalsLayer.classList.remove("minimized");
+      els.closeAllTerminalsBtn.textContent = "Minimizar";
+      if (this.activeAgentId) {
+        const inst = this.instances.get(this.activeAgentId);
+        if (inst) setTimeout(() => inst.fitAddon.fit(), 100);
+      }
+    }
+  }
+
+  async openTerminal(agentId: string) {
+    let inst = this.instances.get(agentId);
+    if (!inst) {
+      const agent = agents.find(a => a.id === agentId);
+      if (!agent) return;
+
+      inst = new TerminalInstance(agentId, agent.role);
+      this.instances.set(agentId, inst);
+
+      // Start session on server
+      try {
+        await fetch(`/api/terminals/${encodeURIComponent(agentId)}/start`, { method: "POST" });
+      } catch (e) {
+        console.error("Failed to start terminal session", e);
+      }
+    }
+
+    this.setActive(agentId);
+    if (this.isMinimized) this.toggleMinimize();
+  }
+
+  setActive(agentId: string) {
+    this.instances.forEach(inst => inst.hide());
+    const target = this.instances.get(agentId);
+    if (target) {
+      target.focus();
+      this.activeAgentId = agentId;
+    }
+  }
+
+  handleTerminalData(agentId: string, content: string) {
+    const inst = this.instances.get(agentId);
+    if (inst) {
+      inst.write(content);
+    }
+  }
+
+  handleTerminalExit(agentId: string, code: number) {
+    const inst = this.instances.get(agentId);
+    if (inst) {
+      inst.write(`\r\n[Processo encerrado com código ${code}]\r\n`);
+    }
+  }
+
+  cleanupDeadAgents(activeAgents: Agent[]) {
+    const activeIds = new Set(activeAgents.map(a => a.id));
+    this.instances.forEach((inst, id) => {
+      if (!activeIds.has(id)) {
+        inst.dispose();
+        this.instances.delete(id);
+      }
+    });
+  }
+}
+
+const terminalUIManager = new TerminalUIManager();
+
+function openTerminal(agentId: string) {
+  terminalUIManager.openTerminal(agentId);
+}
+
+function populateAgentAssignDropdown() {
+  if (!els.agentAssign) return;
+  const currentVal = els.agentAssign.value;
+  els.agentAssign.innerHTML = '<option value="">- Automático Direcionado -</option>';
+  agents.forEach((a) => {
+    const opt = document.createElement("option");
+    opt.value = a.id;
+    opt.textContent = `${a.role} (${a.category})`;
+    els.agentAssign.append(opt);
+  });
+  els.agentAssign.value = currentVal;
+}
+
+async function openAgentEditModal(agent: Agent) {
+  els.agentEditId.value = agent.id;
+  els.agentRole.value = agent.role;
+  els.agentCategory.value = agent.category;
+  els.agentModalTitle.textContent = "Editar Agente";
+  els.agentSubmitBtn.textContent = "Salvar Alterações";
+  // Load tools
+  els.agentTool.innerHTML = '<option value="">Carregando...</option>';
+  try {
+    const res = await fetch(`${API_URL}/api/tools`);
+    const data = await res.json();
+    if (data.tools && data.tools.length > 0) {
+      els.agentTool.innerHTML = '<option value="">Selecione a ferramenta</option>' + data.tools.map((t: any) => `<option value="${t.id}"${t.id === agent.tool ? ' selected' : ''}>${t.name}</option>`).join("");
+    }
+  } catch (e) { console.error(e); }
+  // Load models for the tool
+  if (agent.tool) {
+    try {
+      const res = await fetch(`${API_URL}/api/models?tool=${agent.tool}`);
+      const data = await res.json();
+      if (data.models && data.models.length > 0) {
+        els.agentModelDropdown.innerHTML = data.models.map((m: string) => `<option value="${m}"${m === agent.model ? ' selected' : ''}>${m}</option>`).join("");
+      }
+    } catch (e) { console.error(e); }
+  } else {
+    els.agentModelDropdown.innerHTML = `<option value="${agent.model}" selected>${agent.model}</option>`;
+  }
+  els.agentModal.showModal();
+}
+
+async function deleteAgentById(agentId: string, agentRole: string) {
+  if (!confirm(`Tem certeza que deseja excluir o agente "${agentRole}"?`)) return;
+  await apiCall(`/api/agents/${encodeURIComponent(agentId)}`, "DELETE", {});
+  playErrorSound();
+  showToast(`Agente "${agentRole}" removido`, "error");
 }
 
 function addEvent(text: string) {
@@ -361,7 +671,15 @@ function render() {
   updateAgents3D();
 }
 
-els.driverSelect?.addEventListener("change", async () => { const driver = els.driverSelect.value; await fetch("/api/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ driver }) }); /* addEvent("Driver alterado: " + driver); */ });
+els.driverSelect?.addEventListener("change", async () => {
+  const driver = els.driverSelect.value;
+  await fetch("/api/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ driver }) });
+  updateTaskAgentModels();
+});
+
+els.agentAssign?.addEventListener("change", () => {
+  updateTaskAgentModels();
+});
 els.form.addEventListener("submit", (e) => {
   e.preventDefault();
   createTask({
@@ -412,6 +730,12 @@ els.clearDoneBtn?.addEventListener("click", () => {
 
 // --- Modals Logic ---
 els.createAgentBtn.addEventListener("click", async () => {
+  // Reset modal to create mode
+  els.agentEditId.value = "";
+  els.agentForm.reset();
+  els.agentModalTitle.textContent = "Criar Novo Agente";
+  els.agentSubmitBtn.textContent = "Criar Agente";
+  els.agentModelDropdown.innerHTML = '<option value="">Selecione a ferramenta primeiro</option>';
   els.agentModal.showModal();
   els.agentTool.innerHTML = '<option value="">Carregando...</option>';
   try {
@@ -449,14 +773,24 @@ els.agentTool.addEventListener("change", async (e: Event) => {
 
 els.agentForm.addEventListener("submit", async (e) => {
   e.preventDefault();
-  const role = (document.getElementById("agentRole") as HTMLInputElement).value;
-  const category = (document.getElementById("agentCategory") as HTMLSelectElement).value;
+  const editId = els.agentEditId.value;
+  const role = els.agentRole.value;
+  const category = els.agentCategory.value;
   const tool = els.agentTool.value;
   const model = els.agentModelDropdown.value;
 
-  await apiCall("/api/agents", "POST", { role, category, tool, model });
+  if (editId) {
+    // Edit mode
+    await apiCall(`/api/agents/${encodeURIComponent(editId)}`, "PUT", { role, category, tool, model });
+    showToast(`Agente "${role}" atualizado`, "success");
+  } else {
+    // Create mode
+    await apiCall("/api/agents", "POST", { role, category, tool, model });
+    showToast(`Agente "${role}" criado`, "success");
+  }
   els.agentModal.close();
   els.agentForm.reset();
+  els.agentEditId.value = "";
   els.agentModelDropdown.innerHTML = '<option value="">Selecione a ferramenta primeiro</option>';
 });
 
@@ -551,11 +885,9 @@ const particles = new THREE.Points(pGeo, pMat);
 scene.add(particles);
 
 let robotModel: THREE.Group | null = null;
-let computerModel: THREE.Group | null = null;
 let robotAnimations: THREE.AnimationClip[] = [];
 const loader = new GLTFLoader();
 let usingFallbackAvatars = false;
-let areComputersSpawned = false;
 
 loader.load("/models/RobotExpressive.glb", (gltf) => {
   robotModel = gltf.scene;
@@ -576,54 +908,22 @@ loader.load("/models/RobotExpressive.glb", (gltf) => {
   rebuildAgentMeshes();
 });
 
-loader.load("/models/old_computer.glb", (gltf) => {
-  computerModel = gltf.scene;
-  computerModel.traverse((child: any) => {
-    if (child.isMesh) {
-      child.castShadow = true;
-      child.receiveShadow = true;
-    }
-  });
-  spawnComputers();
-}, undefined, (error) => {
-  console.error("Falha ao carregar modelo do computador.", error);
-});
-
-function spawnComputers() {
-  if (areComputersSpawned || !isOfficeCreated || !computerModel) return;
-
+// Desk generation (simple box desks without old_computer model)
+function spawnDesks() {
   officeData.padPositions.forEach((pos) => {
-    // Desk
     const deskGeo = new THREE.BoxGeometry(2.0, 1.0, 1.2);
     const deskMat = new THREE.MeshStandardMaterial({ color: "#1e293b", roughness: 0.2, metalness: 0.5 });
     const desk = new THREE.Mesh(deskGeo, deskMat);
-    // Position desk slightly behind the pad (pad is at pos.z, agent stands there facing positive Z? No, see below)
-    // In updateAgents3D:
-    // item.group.lookAt(item.target.x, item.group.position.y, item.target.z);
-    // When working: lookAt(..., ..., z - 100); -> Agent looks at NEGATIVE Z.
-    // So the desk should be at NEGATIVE Z relative to the agent.
-    // The pad is at pos.z.
-    // If agent stands at pos.z and looks at Z-100, the desk should be at pos.z - offset.
-
-    // Let's re-verify rotation.
-    // if (item.phase === "working") { item.group.lookAt(..., ..., item.group.position.z - 100); }
-    // So agent faces -Z.
-    // Pad is at Z=2.8.
-    // Desk should be at Z < 2.8. e.g. Z=1.6.
-
     desk.position.set(pos.x, 0.5, pos.z - 1.2);
     scene.add(desk);
 
-    // Computer
-    const computer = computerModel!.clone();
-    computer.scale.set(1.5, 1.5, 1.5); // Adjust scale as needed
-    computer.position.set(0, 0.5, 0); // On top of desk
-    // Rotate computer to face the agent (Agent faces -Z, Computer faces +Z)
-    computer.rotation.y = Math.PI;
-    desk.add(computer);
+    // Simple monitor placeholder
+    const monGeo = new THREE.BoxGeometry(0.9, 0.6, 0.05);
+    const monMat = new THREE.MeshStandardMaterial({ color: "#0ea5e9", emissive: 0x003344, emissiveIntensity: 0.6 });
+    const monitor = new THREE.Mesh(monGeo, monMat);
+    monitor.position.set(0, 0.8, 0);
+    desk.add(monitor);
   });
-
-  areComputersSpawned = true;
 }
 
 // Confetti System
@@ -762,39 +1062,39 @@ function updateKanban3D() {
     const { x, y } = getTaskCardPosition(lane, count);
 
     if (shouldRenderTaskIn3D(lane, count, y)) {
-        visibleTaskIds.add(task.id);
+      visibleTaskIds.add(task.id);
 
-        let mesh = taskMeshes.get(task.id);
-        const signature = `${task.title}-${task.category}-${task.priority}-${task.assignedTo || ''}`;
+      let mesh = taskMeshes.get(task.id);
+      const signature = `${task.title}-${task.category}-${task.priority}-${task.assignedTo || ''}`;
 
-        if (!mesh) {
-            // Create
-            const geometry = new THREE.BoxGeometry(2.7, 0.75, 0.05);
-            const texture = createTaskTexture(task);
-            const material = new THREE.MeshStandardMaterial({
-              map: texture,
-              emissive: 0x222222,
-              emissiveMap: texture,
-              emissiveIntensity: 0.4
-            });
-            mesh = new THREE.Mesh(geometry, material);
-            mesh.userData = { taskId: task.id, signature };
-            kanbanGroup.add(mesh);
-            taskMeshes.set(task.id, mesh);
-        } else {
-             // Update texture if changed
-             if (mesh.userData.signature !== signature) {
-                 const oldTex = (mesh.material as THREE.MeshStandardMaterial).map;
-                 if (oldTex) oldTex.dispose();
-                 const newTex = createTaskTexture(task);
-                 (mesh.material as THREE.MeshStandardMaterial).map = newTex;
-                 (mesh.material as THREE.MeshStandardMaterial).emissiveMap = newTex;
-                 mesh.userData.signature = signature;
-                 (mesh.material as THREE.MeshStandardMaterial).needsUpdate = true;
-             }
+      if (!mesh) {
+        // Create
+        const geometry = new THREE.BoxGeometry(2.7, 0.75, 0.05);
+        const texture = createTaskTexture(task);
+        const material = new THREE.MeshStandardMaterial({
+          map: texture,
+          emissive: 0x222222,
+          emissiveMap: texture,
+          emissiveIntensity: 0.4
+        });
+        mesh = new THREE.Mesh(geometry, material);
+        mesh.userData = { taskId: task.id, signature };
+        kanbanGroup.add(mesh);
+        taskMeshes.set(task.id, mesh);
+      } else {
+        // Update texture if changed
+        if (mesh.userData.signature !== signature) {
+          const oldTex = (mesh.material as THREE.MeshStandardMaterial).map;
+          if (oldTex) oldTex.dispose();
+          const newTex = createTaskTexture(task);
+          (mesh.material as THREE.MeshStandardMaterial).map = newTex;
+          (mesh.material as THREE.MeshStandardMaterial).emissiveMap = newTex;
+          mesh.userData.signature = signature;
+          (mesh.material as THREE.MeshStandardMaterial).needsUpdate = true;
         }
+      }
 
-        mesh.position.set(x, y, 0.15);
+      mesh.position.set(x, y, 0.15);
     }
 
     laneCounts[lane] = count + 1;
@@ -802,13 +1102,13 @@ function updateKanban3D() {
 
   // Cleanup invisible/removed tasks
   for (const [id, mesh] of taskMeshes.entries()) {
-      if (!visibleTaskIds.has(id)) {
-          kanbanGroup.remove(mesh);
-          if (mesh.geometry) mesh.geometry.dispose();
-          if ((mesh.material as THREE.MeshStandardMaterial).map) (mesh.material as THREE.MeshStandardMaterial).map!.dispose();
-          if ((mesh.material as THREE.MeshStandardMaterial).dispose) (mesh.material as THREE.MeshStandardMaterial).dispose();
-          taskMeshes.delete(id);
-      }
+    if (!visibleTaskIds.has(id)) {
+      kanbanGroup.remove(mesh);
+      if (mesh.geometry) mesh.geometry.dispose();
+      if ((mesh.material as THREE.MeshStandardMaterial).map) (mesh.material as THREE.MeshStandardMaterial).map!.dispose();
+      if ((mesh.material as THREE.MeshStandardMaterial).dispose) (mesh.material as THREE.MeshStandardMaterial).dispose();
+      taskMeshes.delete(id);
+    }
   }
 }
 
@@ -1319,8 +1619,18 @@ function updateTrails() {
 const evtSource = new EventSource(`${API_URL}/api/events`);
 evtSource.onmessage = (event) => {
   try {
-    const data = JSON.parse(event.data);
-    updateState(data);
+    const msg = JSON.parse(event.data);
+
+    if (msg.type === "terminal:data") {
+      terminalUIManager.handleTerminalData(msg.agentId, msg.content);
+    } else if (msg.type === "terminal:exit") {
+      terminalUIManager.handleTerminalExit(msg.agentId, msg.code);
+    } else {
+      // Default state update
+      updateState(msg);
+      // Optional: Cleanup dead agent terminals
+      if (msg.agents) terminalUIManager.cleanupDeadAgents(msg.agents);
+    }
   } catch (e) {
     console.error("Error parsing SSE data", e);
   }
@@ -1418,4 +1728,5 @@ window.addEventListener("keydown", (e) => {
   }
 });
 
+updateTaskAgentModels();
 tick();

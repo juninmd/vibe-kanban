@@ -5,11 +5,16 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Vibe Kanban 3D</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🤖</text></svg>">
+  <link rel="icon"
+    href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🤖</text></svg>">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
+  <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-web-links@0.9.0/lib/xterm-addon-web-links.js"></script>
 </head>
 
 <body>
@@ -19,7 +24,6 @@
     <h1>Vibe Kanban • Time de Agentes</h1>
     <div class="topbar-actions">
       <select id="driverSelect" style="margin-right: 10px;">
-        <option value="mock">Mock Driver</option>
         <option value="gemini">Gemini CLI</option>
         <option value="copilot">Copilot SDK</option>
         <option value="opencode">OpenCode AI</option>
@@ -28,7 +32,8 @@
       <button id="settingsBtn">Configurações</button>
       <button id="toggleViewBtn">Alternar 2D / 3D</button>
       <button id="seedTasksBtn">Gerar tarefas exemplo</button>
-      <button id="clearDoneBtn" style="border-color: #5ea6ff; color: #5ea6ff; margin-right: 5px;">Limpar Concluídos</button>
+      <button id="clearDoneBtn" style="border-color: #5ea6ff; color: #5ea6ff; margin-right: 5px;">Limpar
+        Concluídos</button>
       <button id="resetDataBtn" style="border-color: #ff6f6f; color: #ff6f6f;">Resetar Dados</button>
     </div>
   </header>
@@ -87,8 +92,25 @@
             </select>
           </label>
           <label>
+            Diretório de Trabalho
+            <select id="taskWorkMode">
+              <option value="auto">Automático (clones/task-id)</option>
+              <option value="local">Diretório Local Existente</option>
+              <option value="github">Repositório GitHub</option>
+              <option value="new">Novo Projeto</option>
+            </select>
+          </label>
+          <label id="taskWorkDirLabel" style="display:none">
+            Caminho do Diretório
+            <input id="taskWorkDir" placeholder="ex: D:\Projects\meu-app" />
+          </label>
+          <label id="taskGithubRepoLabel" style="display:none">
             Repositório (Github)
             <input id="taskGithubRepo" placeholder="ex: empresa/projeto" />
+          </label>
+          <label id="taskNewProjectLabel" style="display:none">
+            Nome do Novo Projeto
+            <input id="taskNewProject" placeholder="ex: meu-novo-app" />
           </label>
           <label>
             Descrição
@@ -102,22 +124,12 @@
             Designar Agente Voluntário (Opcional)
             <select id="taskAgentAssign">
               <option value="">- Automático Direcionado -</option>
-              <option value="pm">Product Manager</option>
-              <option value="sec">Security Agent</option>
-              <option value="perf">Perf Optimizer</option>
-              <option value="func">Feature Builder</option>
-              <option value="tests">QA Bot</option>
-              <option value="bug">Bug Fixer</option>
             </select>
           </label>
           <label>
             Modelo Lógico
             <select id="taskAgentModel">
-              <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
-              <option value="gemini-2.0-pro-exp-02-05">Gemini 2.0 Pro</option>
-              <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
-              <option value="claude-3-5-sonnet">Claude 3.5 Sonnet</option>
-              <option value="gpt-4o">GPT-4o</option>
+              <option value="">Selecione um agente ou ferramenta</option>
             </select>
           </label>
           <button type="submit">Adicionar card</button>
@@ -145,7 +157,21 @@
         <div class="kanban" id="kanbanBoard"></div>
       </div>
 
-      <div id="terminalsLayer" class="terminals-layer"></div>
+      <div id="terminalsLayer" class="terminals-layer">
+        <div class="terminals-container" id="terminalsContainer">
+          <div class="terminals-header">
+            <div class="terminals-tabs" id="terminalsTabs">
+              <!-- Tabs per agent terminal -->
+            </div>
+            <div class="terminals-actions">
+              <button id="closeAllTerminalsBtn">Minimizar Tudo</button>
+            </div>
+          </div>
+          <div class="terminals-content" id="terminalsContent">
+            <!-- Terminal instances -->
+          </div>
+        </div>
+      </div>
       <div id="agentTooltip" class="agent-tooltip" style="display: none;"></div>
     </section>
   </main>
@@ -153,8 +179,9 @@
   <!-- Modal Novo Agente -->
   <dialog id="agentModal" class="modal">
     <div class="modal-content">
-      <h2>Criar Novo Agente</h2>
+      <h2 id="agentModalTitle">Criar Novo Agente</h2>
       <form id="agentForm" class="modal-form">
+        <input type="hidden" id="agentEditId" value="" />
         <label>Nome / Role <input id="agentRole" required placeholder="Ex: Desenvolvedor React" /></label>
         <label>Categoria
           <select id="agentCategory">
@@ -179,7 +206,7 @@
         </label>
         <div class="modal-actions">
           <button type="button" id="cancelAgentBtn">Cancelar</button>
-          <button type="submit" class="primary-btn">Criar Agente</button>
+          <button type="submit" class="primary-btn" id="agentSubmitBtn">Criar Agente</button>
         </div>
       </form>
     </div>
@@ -193,7 +220,9 @@
         <label>Diretório padrão para Clones
           <input id="configCloneDir" required placeholder="./clones ou /home/usuario/clones" />
         </label>
-        <p class="field-hint">Use caminhos compatíveis com Linux/macOS/Windows. Ex.: <code>./clones</code> ou <code>/var/tmp/vibe-clones</code>.</p>
+        <p class="field-hint">Use caminhos compatíveis com Linux/macOS/Windows. Ex.: <code>./clones</code> ou
+          <code>/var/tmp/vibe-clones</code>.
+        </p>
 
         <hr style="border: 0; border-top: 1px solid var(--border); margin: 1rem 0;">
 
@@ -218,6 +247,8 @@
       </form>
     </div>
   </dialog>
+
+  <!-- Removido o terminalModal antigo em favor do terminalsLayer interativo -->
 
   <script type="importmap">
       {

@@ -13,6 +13,7 @@ export interface Task {
   agentType?: string;
   createdAt: number;
   updatedAt: number;
+  workDir?: string;
 }
 
 export interface Agent {
@@ -24,6 +25,7 @@ export interface Agent {
   assignedTask: number | null;
   tool?: string;
   terminalId?: string;
+  env?: Record<string, string>;
 }
 
 export interface EventLog {

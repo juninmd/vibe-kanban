@@ -1,9 +1,9 @@
 import { createServer } from "http";
 import * as fs from "fs";
 import * as path from "path";
+import * as crypto from "crypto";
 import { execSync, exec } from "child_process";
 import { Task, Agent, State, EventLog, LLMDriver } from "./types.js";
-import { MockDriver } from "./drivers/MockDriver.js";
 import { GeminiDriver } from "./drivers/GeminiDriver.js";
 import { CopilotDriver } from "./drivers/CopilotDriver.js";
 import { OpenCodeDriver } from "./drivers/OpenCodeDriver.js";
@@ -11,30 +11,16 @@ import { OpenAIDriver } from "./drivers/OpenAIDriver.js";
 import { ClaudeDriver } from "./drivers/ClaudeDriver.js";
 import { CommandDriver } from "./drivers/CommandDriver.js";
 import { DB } from "./db.js";
+import { TerminalManager } from "./terminal/TerminalManager.js";
 import "dotenv/config";
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 5174;
 
 // --- State and Persistence ---
-const INITIAL_AGENTS: Agent[] = [
-  { id: "pm", role: "Product Manager", model: "gpt-4o", category: "roadmap", status: "idle", assignedTask: null },
-  { id: "sec", role: "Segurança", model: "gpt-4o", category: "security", status: "idle", assignedTask: null },
-  { id: "perf", role: "Performance", model: "gpt-4o", category: "performance", status: "idle", assignedTask: null },
-  { id: "func", role: "Novas Funcionalidades", model: "gpt-4o", category: "feature", status: "idle", assignedTask: null },
-  { id: "tests", role: "Testes", model: "gpt-4o", category: "test", status: "idle", assignedTask: null },
-  { id: "bug", role: "Correções / Bugs", model: "gpt-4o", category: "bug", status: "idle", assignedTask: null },
-];
-
 function initializeState(): State {
-  let agents = DB.getAgents();
-  if (agents.length === 0) {
-    INITIAL_AGENTS.forEach(agent => DB.saveAgent(agent));
-    agents = DB.getAgents();
-  }
-
   return {
     tasks: DB.getTasks(),
-    agents: agents,
+    agents: DB.getAgents(),
     events: DB.getEvents()
   };
 }
@@ -42,9 +28,30 @@ function initializeState(): State {
 initializeState();
 
 // SSE Clients
-let clients: { id: number; res: any }[] = [];
+let clients: { id: string; res: any }[] = [];
 let broadcastScheduled = false;
 let lastBroadcastState = "";
+
+// --- Terminal Buffer (in-memory per agent, last 500 lines) ---
+const terminalBuffers = new Map<string, { type: string; content: string; timestamp: number }[]>();
+const TERMINAL_BUFFER_MAX = 500;
+
+function addTerminalLine(agentId: string, taskId: number | null, type: string, content: string) {
+  // In-memory buffer
+  let buf = terminalBuffers.get(agentId);
+  if (!buf) { buf = []; terminalBuffers.set(agentId, buf); }
+  const entry = { type, content, timestamp: Date.now() };
+  buf.push(entry);
+  if (buf.length > TERMINAL_BUFFER_MAX) buf.shift();
+  // Persist to DB
+  DB.addTerminalLog(agentId, taskId, type, content);
+  // Broadcast terminal update to SSE clients
+  const termData = JSON.stringify({ terminalUpdate: { agentId, taskId, ...entry } });
+  clients.forEach(c => { try { c.res.write(`data: ${termData}\n\n`); } catch (e) { } });
+}
+
+// Bug rate limiter
+const bugCounts = new Map<number, number>();
 
 // Helper to keep local state and DB in sync
 function updateTask(id: number, updates: Partial<Task>) {
@@ -117,7 +124,7 @@ function jsonResponse(res: any, status: number, body: any) {
   res.writeHead(status, {
     "Content-Type": "application/json",
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET,POST,OPTIONS,DELETE",
+    "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type"
   });
   res.end(JSON.stringify(body));
@@ -145,48 +152,68 @@ function startTask(task: Task, agent: Agent) {
     assignedTask: task.id
   });
   addEvent(`[AutoPilot] ${agent.role} iniciou a tarefa #${task.id}`);
+  addTerminalLine(agent.id, task.id, "system", `=== Tarefa #${task.id}: ${task.title} ===`);
 
   const executeDriver = resolveDriverForAgent(agent);
+  bugCounts.set(task.id, 0);
 
-  // Execute via Driver (async tick keeps API responses deterministic before driver side effects)
   setTimeout(() => executeDriver.executeTask(task, agent, {
     onLog: (tid, msg) => {
       const t = getTask(tid);
       if (t) {
         const updatedLogs = [...t.logs, msg];
         updateTask(tid, { logs: updatedLogs });
+        // Write to terminal buffer for the assigned agent
+        if (t.assignedTo) {
+          addTerminalLine(t.assignedTo, tid, "stdout", msg);
+        }
         if (msg.includes("Error") || msg.includes("Completed")) addEvent(`#${tid}: ${msg}`);
       }
     },
     onComplete: (tid) => {
       const t = getTask(tid);
       if (t && t.assignedTo) {
+        addTerminalLine(t.assignedTo, tid, "system", `✅ Tarefa #${tid} concluída!`);
         updateAgent(t.assignedTo, { status: "idle", assignedTask: null });
         updateTask(tid, { assignedTo: null, lane: "done" });
         addEvent(`Tarefa #${tid} concluída!`);
+        bugCounts.delete(tid);
       }
     },
     onBugFound: (tid, desc) => {
       const t = getTask(tid);
-      if (t) {
-        addEvent(`BUG encontrado em #${tid}: ${desc}`);
-        const bugTask = DB.createTask({
-          title: `Bug: ${desc}`,
-          source: "system",
-          category: "testes",
-          priority: "alta",
-          lane: "backlog",
-          assignedTo: null,
-          interrupted: false,
-          logs: [],
-        });
-        if (t.assignedTo) {
-          updateAgent(t.assignedTo, { status: "idle", assignedTask: null });
-          updateTask(tid, { assignedTo: null, lane: "backlog", interrupted: true });
-        }
+      if (!t) return;
+      // Rate limit: max 3 bugs per task
+      const count = (bugCounts.get(tid) || 0) + 1;
+      bugCounts.set(tid, count);
+      if (count > 3) {
+        console.warn(`Bug rate limit reached for task #${tid}`);
+        return;
       }
+      addEvent(`BUG encontrado em #${tid}: ${desc}`);
+      if (t.assignedTo) {
+        addTerminalLine(t.assignedTo, tid, "stderr", `❌ Bug: ${desc}`);
+        updateAgent(t.assignedTo, { status: "idle", assignedTask: null });
+        updateTask(tid, { assignedTo: null, lane: "backlog", interrupted: true });
+      }
+      // Only create bug task if under limit
+      DB.createTask({
+        title: `Bug: ${desc.substring(0, 100)}`,
+        source: "system",
+        category: "bug",
+        priority: "alta",
+        lane: "backlog",
+        assignedTo: null,
+        interrupted: false,
+        logs: [],
+      });
     },
-    onInterrupt: (tid) => { }
+    onInterrupt: (tid) => {
+      const t = getTask(tid);
+      if (t?.assignedTo) {
+        addTerminalLine(t.assignedTo, tid, "system", `⏹️ Tarefa #${tid} interrompida`);
+      }
+    }
   }), 0);
 }
 
@@ -227,91 +254,96 @@ function autoAssign() {
   }
 }
 
-// Start Auto-Pilot loop (every 3 seconds)
-setInterval(autoAssign, 3000);
+// Auto-assign: skip system-generated tasks to prevent bug loops
+setInterval(() => {
+  autoAssign();
+}, 3000);
 
 // --- PM Auto-Create Logic ---
 async function generateRoadmapTasks() {
-  const backlogTasks = DB.getTasks().filter(t => t.lane === "backlog");
+  // Only run if we have an API key configured
+  if (!process.env.OPENAI_API_KEY && !process.env.GEMINI_API_KEY) return;
 
-  // Only generate if we are running low on tasks
+  const backlogTasks = DB.getTasks().filter(t => t.lane === "backlog");
   if (backlogTasks.length >= 3) return;
 
-  const prompt = `
-    You are a Product Manager for a software project called "Vibe Kanban 3D".
-    The project is a 3D Task Orchestrator with AI agents.
-    Current roles: Product Manager, Security, Performance, Novas Funcionalidades, Testes, Correções / Bugs.
+  const existingAgents = DB.getAgents();
+  const roles = existingAgents.map(a => a.role).join(", ") || "Nenhum agente configurado";
 
-    Generate 2 realistic, high-value tasks for the backlog.
-    Categories must be one of: "roadmap", "security", "performance", "feature", "test", "bug".
-    Priorities: "alta", "media", "baixa".
+  const prompt = `You are a Product Manager for "Vibe Kanban 3D", a 3D Task Orchestrator with AI agents.
+Current agents: ${roles}.
+Categories: "roadmap", "security", "performance", "feature", "test", "bug".
+Priorities: "alta", "media", "baixa".
+Generate 2 realistic tasks. Return ONLY a JSON array: [{"title":"...","category":"...","priority":"...","description":"..."}]`;
 
-    Return ONLY a JSON array with objects containing: title, category, priority, description.
-    Example: [{"title": "Optimize 3D rendering", "category": "performance", "priority": "alta", "description": "Reduce draw calls..."}]
-    Do not output markdown code blocks. Just the raw JSON string.
-  `;
-
-  const processTasks = (jsonStr: string) => {
-      try {
-          const cleanJson = jsonStr.replace(/```json/g, "").replace(/```/g, "").trim();
-          const newTasks = JSON.parse(cleanJson);
-          if (Array.isArray(newTasks)) {
-              let count = 0;
-              newTasks.forEach((t: any) => {
-                  if (t.title && t.category) {
-                      DB.createTask({
-                          title: t.title,
-                          source: "product_manager",
-                          category: t.category,
-                          priority: t.priority || "media",
-                          lane: "backlog",
-                          assignedTo: null,
-                          interrupted: false,
-                          logs: [],
-                          description: t.description
-                      });
-                      count++;
-                  }
-              });
-              if (count > 0) addEvent(`[PM] Adicionou ${count} novas tarefas ao backlog.`);
-          }
-      } catch (e) {
-          console.error("PM Failed to parse JSON:", e);
+  const processTasks = (raw: string) => {
+    try {
+      // Try to extract JSON array from mixed text
+      const arrayMatch = raw.match(/\[[\s\S]*?\]/);
+      if (!arrayMatch) {
+        console.warn("PM: No JSON array found in response");
+        return;
       }
+      const newTasks = JSON.parse(arrayMatch[0]);
+      if (!Array.isArray(newTasks)) return;
+      let count = 0;
+      newTasks.forEach((t: any) => {
+        if (t.title && t.category) {
+          DB.createTask({
+            title: t.title,
+            source: "product_manager",
+            category: t.category,
+            priority: t.priority || "media",
+            lane: "backlog",
+            assignedTo: null,
+            interrupted: false,
+            logs: [],
+            description: t.description
+          });
+          count++;
+        }
+      });
+      if (count > 0) addEvent(`[PM] Adicionou ${count} novas tarefas ao backlog.`);
+    } catch (e) {
+      console.warn("PM: Failed to parse response JSON");
+    }
   };
 
-  // 1. Try OpenAI if Key is present
-  if (process.env.OPENAI_API_KEY) {
-      try {
-          const res = await fetch("https://api.openai.com/v1/chat/completions", {
-              method: "POST",
-              headers: {
-                  "Content-Type": "application/json",
-                  "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`
-              },
-              body: JSON.stringify({
-                  model: "gpt-4o",
-                  messages: [{ role: "system", content: prompt }]
-              })
-          });
-          const data = await res.json();
-          const content = data.choices?.[0]?.message?.content;
-          if (content) processTasks(content);
-      } catch (e) {
-          console.error("PM OpenAI Auto-create failed:", e);
-      }
-      return;
-  }
-
-  // 2. Fallback to Gemini CLI
-  if (isCommandAvailable("gemini")) {
-      exec(`gemini -p '${prompt.replace(/'/g, "'\\''")}' -m gemini-2.0-flash --yolo`, (error, stdout, stderr) => {
-          if (error) {
-              console.error("PM Auto-create failed:", stderr);
-              return;
-          }
-          processTasks(stdout);
+  try {
+    if (process.env.OPENAI_API_KEY) {
+      const res = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`
+        },
+        body: JSON.stringify({
+          model: "gpt-4o",
+          response_format: { type: "json_object" },
+          messages: [
+            { role: "system", content: "You generate JSON task arrays." },
+            { role: "user", content: prompt }
+          ]
+        })
       });
+      const data = await res.json();
+      const content = data.choices?.[0]?.message?.content;
+      if (content) processTasks(content);
+    } else if (process.env.GEMINI_API_KEY) {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { responseMimeType: "application/json" }
+        })
+      });
+      const data = await res.json();
+      const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (content) processTasks(content);
+    }
+  } catch (e) {
+    console.warn("PM Auto-create failed:", e);
   }
 }
 
@@ -335,9 +367,19 @@ function sanitizeCloneDir(input: unknown): string {
 }
 
 // --- Drivers ---
-const cliDriver = new CommandDriver(() => appConfig.cloneDir);
+const terminalManager = new TerminalManager({
+  onOutput: (agentId, data) => {
+    // We can also broadcast this to specific clients if needed, 
+    // but for now we'll use addTerminalLine for persistence and general broadcast.
+    addTerminalLine(agentId, null, "stdout", data);
+  },
+  onExit: (agentId, code) => {
+    addTerminalLine(agentId, null, "system", `Terminal exited with code ${code}`);
+  }
+});
+
+const cliDriver = new CommandDriver(() => appConfig.cloneDir, terminalManager);
 const drivers: Record<string, LLMDriver> = {
-  mock: new MockDriver(() => appConfig.cloneDir),
   gemini: new GeminiDriver(() => appConfig.cloneDir),
   copilot: new CopilotDriver(),
   opencode: new OpenCodeDriver(() => appConfig.cloneDir),
@@ -355,9 +397,9 @@ function isCommandAvailable(command: string): boolean {
 }
 
 // Keep the app functional even when Gemini CLI is not installed.
-let currentDriver: LLMDriver = isCommandAvailable("gemini") ? drivers.gemini : drivers.mock;
-if (currentDriver === drivers.mock) {
-  addEvent("Gemini CLI não encontrado. Driver padrão alterado para Mock automaticamente.");
+let currentDriver: LLMDriver = drivers.gemini;
+if (!isCommandAvailable("gemini")) {
+  addEvent("Aviso: Gemini CLI não encontrado. Driver padrão definido como Gemini, mas pode falhar sem a CLI instalada.");
 }
 
 const server = createServer(async (req, res) => {
@@ -440,15 +482,15 @@ const server = createServer(async (req, res) => {
   // GET /api/tools
   if (url === "/api/tools" && method === "GET") {
     const tools: { id: string; name: string }[] = [];
-    tools.push({ id: "mock", name: "Mock Driver" });
-    try {
-      execSync("gemini --version", { stdio: "ignore" });
-      tools.push({ id: "gemini", name: "Gemini CLI" });
-    } catch { }
-    try {
-      execSync("ollama --version", { stdio: "ignore" });
-      tools.push({ id: "ollama", name: "Ollama" });
-    } catch { }
+    const checks: [string, string, string][] = [
+      ["gemini", "gemini --version", "Gemini CLI"],
+      ["claude", "claude --version", "Claude Code"],
+      ["copilot", "github-copilot-cli --version", "Copilot CLI"],
+      ["opencode", "opencode --version", "OpenCode"],
+    ];
+    for (const [id, cmd, name] of checks) {
+      try { execSync(cmd, { stdio: "ignore" }); tools.push({ id, name }); } catch { }
+    }
     return jsonResponse(res, 200, { tools });
   }
 
@@ -457,16 +499,14 @@ const server = createServer(async (req, res) => {
     const urlObj = new URL(url as string, `http://${req.headers?.host || "localhost"}`);
     const tool = urlObj.searchParams.get("tool");
     let models: string[] = [];
-    if (tool === "ollama") {
-      try {
-        const output = execSync("ollama list").toString();
-        const lines = output.split('\n').slice(1).filter(l => l.trim().length > 0);
-        models = lines.map(l => l.split(/\s+/)[0]);
-      } catch { }
-    } else if (tool === "gemini") {
+    if (tool === "gemini") {
       models = ["gemini-2.0-flash", "gemini-2.0-flash-lite-preview", "gemini-2.0-pro-exp-02-05", "gemini-2.0-flash-thinking-exp-01-21", "gemini-1.5-flash", "gemini-1.5-pro"];
-    } else if (tool === "mock") {
-      models = ["mock-model-v1", "mock-gpt-4", "mock-claude"];
+    } else if (tool === "claude") {
+      models = ["claude-sonnet-4-20250514", "claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022"];
+    } else if (tool === "copilot") {
+      models = ["gpt-4o", "gpt-4o-mini"];
+    } else if (tool === "opencode") {
+      models = ["gpt-4o", "claude-sonnet-4-20250514"];
     }
     return jsonResponse(res, 200, { models });
   }
@@ -490,6 +530,43 @@ const server = createServer(async (req, res) => {
     return jsonResponse(res, 201, { agent: newAgent });
   }
 
+  // PUT /api/agents/:id (Edit agent)
+  if (url.startsWith("/api/agents/") && method === "PUT") {
+    const agentId = decodeURIComponent(url.split("/api/agents/")[1]);
+    const existing = DB.getAgent(agentId);
+    if (!existing) return jsonResponse(res, 404, { error: "Agent not found" });
+    const body = await parseBody(req);
+    const updates: Partial<Agent> = {};
+    if (body.role !== undefined) updates.role = body.role;
+    if (body.model !== undefined) updates.model = body.model;
+    if (body.category !== undefined) updates.category = body.category;
+    if (body.tool !== undefined) updates.tool = body.tool;
+    DB.updateAgent(agentId, updates);
+    addEvent(`Agente atualizado: ${body.role || existing.role}`);
+    broadcastState();
+    return jsonResponse(res, 200, { agent: DB.getAgent(agentId) });
+  }
+
+  // DELETE /api/agents/:id (Delete agent)
+  if (url.startsWith("/api/agents/") && method === "DELETE") {
+    const agentId = decodeURIComponent(url.split("/api/agents/")[1]);
+    const existing = DB.getAgent(agentId);
+    if (!existing) return jsonResponse(res, 404, { error: "Agent not found" });
+    // Release any assigned task
+    if (existing.assignedTask) {
+      const task = DB.getTask(existing.assignedTask);
+      if (task) {
+        const driver = resolveDriverForAgent(existing);
+        driver.interruptTask(task);
+        updateTask(task.id, { assignedTo: null, lane: "backlog", interrupted: true });
+      }
+    }
+    DB.deleteAgent(agentId);
+    addEvent(`Agente removido: ${existing.role}`);
+    broadcastState();
+    return jsonResponse(res, 200, { ok: true });
+  }
+
   // GET /api/events (SSE)
   if (url === "/api/events" && method === "GET") {
     res.writeHead(200, {
@@ -501,12 +578,8 @@ const server = createServer(async (req, res) => {
     // Send initial state
     res.write(`data: ${JSON.stringify({ tasks: DB.getTasks(), agents: DB.getAgents(), events: DB.getEvents() })}\n\n`);
 
-    const clientId = Date.now();
-    const newClient = {
-      id: clientId,
-      res
-    };
-    clients.push(newClient);
+    const clientId = crypto.randomUUID();
+    clients.push({ id: clientId, res });
 
     req.on("close", () => {
       clients = clients.filter(c => c.id !== clientId);
@@ -523,9 +596,90 @@ const server = createServer(async (req, res) => {
     });
   }
 
+  // GET /api/agents/:id/terminal
+  if (url.match(/^\/api\/agents\/[^/]+\/terminal$/) && method === "GET") {
+    const agentId = decodeURIComponent(url.split("/api/agents/")[1].replace("/terminal", ""));
+    // Prefer in-memory buffer, fallback to DB
+    const memLogs = terminalBuffers.get(agentId);
+    const logs = memLogs && memLogs.length > 0 ? memLogs : DB.getTerminalLogs(agentId).reverse();
+    return jsonResponse(res, 200, { logs });
+  }
+
+  // DELETE /api/agents/:id/terminal
+  if (url.match(/^\/api\/agents\/[^/]+\/terminal$/) && method === "DELETE") {
+    const agentId = decodeURIComponent(url.split("/api/agents/")[1].replace("/terminal", ""));
+    terminalBuffers.delete(agentId);
+    DB.clearTerminalLogs(agentId);
+    addEvent(`Logs do terminal do agente ${agentId} limpos.`);
+    return jsonResponse(res, 200, { ok: true });
+  }
+
+  // --- Terminal PTY Endpoints ---
+
+  // GET /api/terminals
+  if (url === "/api/terminals" && method === "GET") {
+    return jsonResponse(res, 200, { terminals: terminalManager.listActive() });
+  }
+
+  // POST /api/terminals/:agentId/start
+  if (url.match(/^\/api\/terminals\/[^/]+\/start$/) && method === "POST") {
+    const agentId = decodeURIComponent(url.split("/api/terminals/")[1].replace("/start", ""));
+    const agent = DB.getAgent(agentId);
+    if (!agent) return jsonResponse(res, 404, { error: "Agent not found" });
+
+    const body = await parseBody(req);
+    try {
+      const info = await terminalManager.create({
+        agentId,
+        cwd: body.cwd || appConfig.cloneDir || process.cwd(),
+        cols: body.cols || 120,
+        rows: body.rows || 30,
+        env: body.env
+      });
+      return jsonResponse(res, 200, info);
+    } catch (e: any) {
+      return jsonResponse(res, 500, { error: e.message });
+    }
+  }
+
+  // POST /api/terminals/:agentId/send
+  if (url.match(/^\/api\/terminals\/[^/]+\/send$/) && method === "POST") {
+    const agentId = decodeURIComponent(url.split("/api/terminals/")[1].replace("/send", ""));
+    const body = await parseBody(req);
+    try {
+      terminalManager.write(agentId, body.data || "");
+      return jsonResponse(res, 200, { ok: true });
+    } catch (e: any) {
+      return jsonResponse(res, 404, { error: e.message });
+    }
+  }
+
+  // POST /api/terminals/:agentId/resize
+  if (url.match(/^\/api\/terminals\/[^/]+\/resize$/) && method === "POST") {
+    const agentId = decodeURIComponent(url.split("/api/terminals/")[1].replace("/resize", ""));
+    const body = await parseBody(req);
+    terminalManager.resize(agentId, body.cols || 120, body.rows || 30);
+    return jsonResponse(res, 200, { ok: true });
+  }
+
+  // POST /api/terminals/:agentId/kill
+  if (url.match(/^\/api\/terminals\/[^/]+\/kill$/) && method === "POST") {
+    const agentId = decodeURIComponent(url.split("/api/terminals/")[1].replace("/kill", ""));
+    await terminalManager.kill(agentId);
+    return jsonResponse(res, 200, { ok: true });
+  }
+
   // POST /api/tasks (Create task)
   if (url === "/api/tasks" && method === "POST") {
     const body = await parseBody(req);
+    // Resolve workDir
+    let workDir = body.workDir || null;
+    if (workDir) {
+      workDir = path.resolve(workDir);
+      if (!fs.existsSync(workDir)) {
+        fs.mkdirSync(workDir, { recursive: true });
+      }
+    }
     const task = DB.createTask({
       title: body.title,
       source: body.source || "user",
@@ -538,6 +692,7 @@ const server = createServer(async (req, res) => {
       githubRepo: body.githubRepo,
       description: body.description,
       agentType: body.agentType,
+      workDir,
     });
     addEvent(`Novo card criado: ${task.title} (${task.source})`);
     return jsonResponse(res, 201, { task });
@@ -625,6 +780,7 @@ const server = createServer(async (req, res) => {
     const body = await parseBody(req);
     const envPath = path.resolve(process.cwd(), ".env");
     let envContent = "";
+    const ALLOWED_ENV_KEYS = ["OPENAI_API_KEY", "GEMINI_API_KEY", "ANTHROPIC_API_KEY", "GITHUB_TOKEN"];
 
     try {
       if (fs.existsSync(envPath)) {
@@ -632,17 +788,14 @@ const server = createServer(async (req, res) => {
       }
     } catch (e) { }
 
-    const envLines = envContent.split("\n");
-    const newKeys = Object.keys(body);
+    const newKeys = Object.keys(body).filter(k => ALLOWED_ENV_KEYS.includes(k));
 
     newKeys.forEach(key => {
       const value = body[key];
-      if (!value) return; // Skip empty values
+      if (!value) return;
 
-      // Update process.env
       process.env[key] = value;
 
-      // Update .env file content
       const regex = new RegExp(`^${key}=.*`, "m");
       if (regex.test(envContent)) {
         envContent = envContent.replace(regex, `${key}=${value}`);
@@ -685,7 +838,6 @@ const server = createServer(async (req, res) => {
   // Reset
   if (url === "/api/reset" && method === "POST") {
     DB.reset();
-    INITIAL_AGENTS.forEach(agent => DB.saveAgent(agent));
     addEvent("Sistema resetado.");
     broadcastState();
     return jsonResponse(res, 200, { ok: true });

@@ -19,7 +19,8 @@ db.exec(`
     description TEXT,
     agentType TEXT,
     createdAt INTEGER NOT NULL,
-    updatedAt INTEGER NOT NULL
+    updatedAt INTEGER NOT NULL,
+    workDir TEXT
   );
 
   CREATE TABLE IF NOT EXISTS agents (
@@ -38,7 +39,21 @@ db.exec(`
     timestamp TEXT NOT NULL,
     text TEXT NOT NULL
   );
+
+  CREATE TABLE IF NOT EXISTS terminal_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    agentId TEXT NOT NULL,
+    taskId INTEGER,
+    type TEXT NOT NULL,
+    content TEXT NOT NULL,
+    timestamp INTEGER NOT NULL
+  );
 `);
+
+// Migration: add workDir column if missing
+try {
+  db.exec(`ALTER TABLE tasks ADD COLUMN workDir TEXT`);
+} catch (e) { /* column already exists */ }
 
 export const DB = {
   // Tasks
@@ -64,8 +79,8 @@ export const DB = {
   createTask(task: Partial<Task>): Task {
     const now = Date.now();
     const result = db.prepare(`
-      INSERT INTO tasks (title, source, category, priority, lane, assignedTo, interrupted, logs, githubRepo, description, agentType, createdAt, updatedAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO tasks (title, source, category, priority, lane, assignedTo, interrupted, logs, githubRepo, description, agentType, createdAt, updatedAt, workDir)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       task.title,
       task.source || "user",
@@ -79,7 +94,8 @@ export const DB = {
       task.description || null,
       task.agentType || null,
       task.createdAt || now,
-      task.updatedAt || now
+      task.updatedAt || now,
+      task.workDir || null
     );
     return this.getTask(Number(result.lastInsertRowid))!;
   },
@@ -93,7 +109,7 @@ export const DB = {
       UPDATE tasks SET
         title = ?, source = ?, category = ?, priority = ?, lane = ?,
         assignedTo = ?, interrupted = ?, logs = ?, githubRepo = ?,
-        description = ?, agentType = ?, updatedAt = ?
+        description = ?, agentType = ?, updatedAt = ?, workDir = ?
       WHERE id = ?
     `).run(
       updatedTask.title,
@@ -108,6 +124,7 @@ export const DB = {
       updatedTask.description,
       updatedTask.agentType,
       updatedTask.updatedAt,
+      updatedTask.workDir || null,
       id
     );
   },
@@ -154,6 +171,28 @@ export const DB = {
     db.prepare("INSERT INTO events (timestamp, text) VALUES (?, ?)").run(timestamp, text);
   },
 
+  deleteAgent(id: string): void {
+    db.prepare("DELETE FROM agents WHERE id = ?").run(id);
+    db.prepare("DELETE FROM terminal_logs WHERE agentId = ?").run(id);
+  },
+
+  // Terminal Logs
+  addTerminalLog(agentId: string, taskId: number | null, type: string, content: string): void {
+    db.prepare(
+      "INSERT INTO terminal_logs (agentId, taskId, type, content, timestamp) VALUES (?, ?, ?, ?, ?)"
+    ).run(agentId, taskId, type, content, Date.now());
+  },
+
+  getTerminalLogs(agentId: string, limit = 200): { type: string; content: string; timestamp: number; taskId: number | null }[] {
+    return db.prepare(
+      "SELECT type, content, timestamp, taskId FROM terminal_logs WHERE agentId = ? ORDER BY id DESC LIMIT ?"
+    ).all(agentId, limit) as any[];
+  },
+
+  clearTerminalLogs(agentId: string): void {
+    db.prepare("DELETE FROM terminal_logs WHERE agentId = ?").run(agentId);
+  },
+
   clearDoneTasks(): void {
     db.prepare("DELETE FROM tasks WHERE lane = 'done'").run();
   },
@@ -162,5 +201,6 @@ export const DB = {
     db.prepare("DELETE FROM tasks").run();
     db.prepare("DELETE FROM agents").run();
     db.prepare("DELETE FROM events").run();
+    db.prepare("DELETE FROM terminal_logs").run();
   }
 };
