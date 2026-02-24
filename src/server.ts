@@ -25,7 +25,36 @@ function initializeState(): State {
   };
 }
 
+function initializeDefaultAgents() {
+  const existing = DB.getAgents();
+  if (existing.length === 0) {
+    const defaults = [
+      { role: "Product Manager", category: "roadmap", model: "gemini-2.0-flash" },
+      { role: "Segurança", category: "security", model: "gemini-2.0-flash" },
+      { role: "Performance", category: "performance", model: "gemini-2.0-flash" },
+      { role: "Novas Funcionalidades", category: "feature", model: "gemini-2.0-flash" },
+      { role: "Testes", category: "test", model: "gemini-2.0-flash" },
+      { role: "Correções / Bugs", category: "bug", model: "gemini-2.0-flash" }
+    ];
+
+    defaults.forEach(def => {
+      DB.saveAgent({
+        id: `agent-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        role: def.role,
+        model: def.model,
+        category: def.category,
+        status: "idle",
+        assignedTask: null,
+        tool: "gemini",
+        terminalId: `term-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+      });
+    });
+    console.log("Initialized default agents.");
+  }
+}
+
 initializeState();
+initializeDefaultAgents();
 
 // SSE Clients
 let clients: { id: string; res: any }[] = [];
@@ -838,6 +867,7 @@ const server = createServer(async (req, res) => {
   // Reset
   if (url === "/api/reset" && method === "POST") {
     DB.reset();
+    initializeDefaultAgents();
     addEvent("Sistema resetado.");
     broadcastState();
     return jsonResponse(res, 200, { ok: true });
