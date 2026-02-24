@@ -1,19 +1,36 @@
 import { Task, Agent, LLMDriver, DriverContext } from "../types.js";
 import { spawn } from "child_process";
+import * as fs from "fs";
+import * as path from "path";
 
 export class OpenCodeDriver implements LLMDriver {
    name: string = "OpenCode AI";
    private runningTasks = new Map<number, any>();
+   private getCloneDir: () => string;
+
+   constructor(getCloneDir: () => string) {
+       this.getCloneDir = getCloneDir;
+   }
 
    async executeTask(task: Task, agent: Agent, ctx: DriverContext): Promise<void> {
+      const baseDir = this.getCloneDir();
+      const taskDir = path.join(baseDir, `task-${task.id}`);
+
+      if (!fs.existsSync(taskDir)) {
+          fs.mkdirSync(taskDir, { recursive: true });
+      }
+
       const cmd = "opencode";
       const args = ["run", task.title, "--agent", agent.role];
-      ctx.onLog(task.id, `Running: ${cmd} ${args.join(" ")}`);
+      ctx.onLog(task.id, `Running: ${cmd} ${args.join(" ")} in ${taskDir}`);
 
-      const child = spawn(cmd, args);
+      const child = spawn(cmd, args, { cwd: taskDir });
+      let fullOutput = "";
 
       child.stdout.on("data", (data) => {
-         ctx.onLog(task.id, data.toString());
+         const text = data.toString();
+         fullOutput += text;
+         ctx.onLog(task.id, text);
       });
 
       child.stderr.on("data", (data) => {
@@ -34,10 +51,34 @@ export class OpenCodeDriver implements LLMDriver {
       });
 
       child.on("close", (code) => {
+         // Parse files
+         const fileRegex = /<<<FILE:(.+?)>>>([\s\S]+?)<<<END>>>/g;
+         let match;
+         let filesCreated = 0;
+         while ((match = fileRegex.exec(fullOutput)) !== null) {
+            const filename = match[1].trim();
+            let content = match[2];
+            if (content.startsWith("\n")) content = content.substring(1);
+
+            try {
+                const filePath = path.join(taskDir, filename);
+                const fileDir = path.dirname(filePath);
+                if (!fs.existsSync(fileDir)) fs.mkdirSync(fileDir, { recursive: true });
+
+                fs.writeFileSync(filePath, content);
+                ctx.onLog(task.id, `[FILE] Wrote ${filename}`);
+                filesCreated++;
+            } catch(e: any) {
+                 ctx.onLog(task.id, `[ERROR] Failed to write ${filename}: ${e.message}`);
+            }
+         }
+
          if (code === 0) {
+            ctx.onLog(task.id, `Process completed. Files created: ${filesCreated}`);
             ctx.onComplete(task.id);
          } else {
             // Handle error
+            ctx.onBugFound(task.id, `Process exited with code ${code}`);
          }
       });
 

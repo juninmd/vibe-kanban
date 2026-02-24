@@ -72,6 +72,7 @@ const els = {
   toggleViewBtn: document.getElementById("toggleViewBtn") as HTMLButtonElement,
   seedTasksBtn: document.getElementById("seedTasksBtn") as HTMLButtonElement,
   resetDataBtn: document.getElementById("resetDataBtn") as HTMLButtonElement,
+  clearDoneBtn: document.getElementById("clearDoneBtn") as HTMLButtonElement,
   createAgentBtn: document.getElementById("createAgentBtn") as HTMLButtonElement,
   settingsBtn: document.getElementById("settingsBtn") as HTMLButtonElement,
   agentModal: document.getElementById("agentModal") as HTMLDialogElement,
@@ -400,6 +401,12 @@ els.seedTasksBtn.addEventListener("click", () => {
 els.resetDataBtn.addEventListener("click", () => {
   if (confirm("Tem certeza que deseja apagar todos os dados do servidor?")) {
     apiCall("/api/reset", "POST", {});
+  }
+});
+
+els.clearDoneBtn?.addEventListener("click", () => {
+  if (confirm("Tem certeza que deseja limpar todas as tarefas concluídas?")) {
+    apiCall("/api/tasks/clear-done", "POST", {});
   }
 });
 
@@ -946,8 +953,8 @@ function createAgentMesh(agent: Agent, index: number) {
     "Product Manager": "#a855f7",
     "Segurança": "#ef4444",
     "Performance": "#f97316",
-    "Feature Builder": "#3b82f6",
-    "QA": "#22c55e",
+    "Novas Funcionalidades": "#3b82f6",
+    "Testes": "#22c55e",
     "Correções / Bugs": "#06b6d4"
   };
   const color = new THREE.Color(roleColors[agent.role] || "#888888");
@@ -995,29 +1002,37 @@ function createAgentMesh(agent: Agent, index: number) {
   scene.add(group);
 
   function makeLabelCanvas(text: string, colorHex: string) {
-    const size = 512;
     const canvas = document.createElement("canvas");
-    canvas.width = size;
-    canvas.height = 128;
+    canvas.width = 1024;
+    canvas.height = 256;
     const ctx = canvas.getContext("2d")!;
 
     // Convert hex to rgba for transparency
     const r = parseInt(colorHex.slice(1, 3), 16);
     const g = parseInt(colorHex.slice(3, 5), 16);
     const b = parseInt(colorHex.slice(5, 7), 16);
-    ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.85)`;
+    ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.9)`;
 
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    // Rounded rect background for badge look
+    ctx.beginPath();
+    ctx.roundRect(0, 0, canvas.width, canvas.height, 40);
+    ctx.fill();
 
     // Add a border
     ctx.strokeStyle = "#ffffff";
-    ctx.lineWidth = 8;
-    ctx.strokeRect(4, 4, canvas.width - 8, canvas.height - 8);
+    ctx.lineWidth = 16;
+    ctx.stroke();
 
-    ctx.font = "bold 56px Inter, sans-serif";
+    ctx.font = "bold 160px 'Share Tech Mono', monospace";
     ctx.fillStyle = "#ffffff";
     ctx.textAlign = "center";
-    ctx.fillText(text, canvas.width / 2, 85);
+    ctx.textBaseline = "middle";
+    // Shadow for better readability
+    ctx.shadowColor = "rgba(0,0,0,0.8)";
+    ctx.shadowBlur = 10;
+    ctx.shadowOffsetX = 4;
+    ctx.shadowOffsetY = 4;
+    ctx.fillText(text, canvas.width / 2, canvas.height / 2 + 10);
     return canvas;
   }
 
@@ -1218,7 +1233,10 @@ function tick() {
         termEl.style.display = "block";
 
         const lastLog = taskObj.logs && taskObj.logs.length > 0 ? taskObj.logs[taskObj.logs.length - 1] : "Buscando contexto...";
-        termEl.innerHTML = `<strong>> ${taskObj.title.substring(0, 15)}...</strong><br/><span class="term-log">${lastLog}</span>`;
+        const newHTML = `<strong>> ${taskObj.title.substring(0, 15)}...</strong><br/><span class="term-log">${lastLog}</span>`;
+        if (termEl.innerHTML !== newHTML) {
+          termEl.innerHTML = newHTML;
+        }
 
       } else {
         item.laser.visible = false;

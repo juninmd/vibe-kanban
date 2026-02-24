@@ -1,12 +1,13 @@
 import { createServer } from "http";
 import * as fs from "fs";
 import * as path from "path";
-import { execSync } from "child_process";
+import { execSync, exec } from "child_process";
 import { Task, Agent, State, EventLog, LLMDriver } from "./types.js";
 import { MockDriver } from "./drivers/MockDriver.js";
 import { GeminiDriver } from "./drivers/GeminiDriver.js";
 import { CopilotDriver } from "./drivers/CopilotDriver.js";
 import { OpenCodeDriver } from "./drivers/OpenCodeDriver.js";
+import { OpenAIDriver } from "./drivers/OpenAIDriver.js";
 import { ClaudeDriver } from "./drivers/ClaudeDriver.js";
 import { CommandDriver } from "./drivers/CommandDriver.js";
 import { DB } from "./db.js";
@@ -16,12 +17,12 @@ const PORT = process.env.PORT ? Number(process.env.PORT) : 5174;
 
 // --- State and Persistence ---
 const INITIAL_AGENTS: Agent[] = [
-  { id: "pm", role: "Product Manager", model: "gemini-2.0-flash", category: "roadmap", status: "idle", assignedTask: null },
-  { id: "sec", role: "Segurança", model: "gemini-2.0-flash", category: "security", status: "idle", assignedTask: null },
-  { id: "perf", role: "Performance", model: "gemini-2.0-flash", category: "performance", status: "idle", assignedTask: null },
-  { id: "func", role: "Feature Builder", model: "gemini-2.0-flash", category: "feature", status: "idle", assignedTask: null },
-  { id: "tests", role: "QA", model: "gemini-2.0-pro-exp-02-05", category: "test", status: "idle", assignedTask: null },
-  { id: "bug", role: "Correções / Bugs", model: "gemini-2.0-flash-thinking-exp-01-21", category: "bug", status: "idle", assignedTask: null },
+  { id: "pm", role: "Product Manager", model: "gpt-4o", category: "roadmap", status: "idle", assignedTask: null },
+  { id: "sec", role: "Segurança", model: "gpt-4o", category: "security", status: "idle", assignedTask: null },
+  { id: "perf", role: "Performance", model: "gpt-4o", category: "performance", status: "idle", assignedTask: null },
+  { id: "func", role: "Novas Funcionalidades", model: "gpt-4o", category: "feature", status: "idle", assignedTask: null },
+  { id: "tests", role: "Testes", model: "gpt-4o", category: "test", status: "idle", assignedTask: null },
+  { id: "bug", role: "Correções / Bugs", model: "gpt-4o", category: "bug", status: "idle", assignedTask: null },
 ];
 
 function initializeState(): State {
@@ -230,28 +231,92 @@ function autoAssign() {
 setInterval(autoAssign, 3000);
 
 // --- PM Auto-Create Logic ---
-// function pmAutoCreateLoop() {
-//   const backlogTasks = DB.getTasks().filter(t => t.lane === "backlog");
-//   // If backlog is running low, PM creates new tasks
-//   if (backlogTasks.length < 3) {
-//     const categories = ["roadmap", "security", "performance", "feature", "test", "bug"];
-//     const randomCategory = categories[Math.floor(Math.random() * categories.length)];
-//     const task = DB.createTask({
-//       title: `Feature backlog item ${Date.now().toString().slice(-4)}`,
-//       source: "product_manager",
-//       category: randomCategory,
-//       priority: Math.random() > 0.7 ? "alta" : "media",
-//       lane: "backlog",
-//       assignedTo: null,
-//       interrupted: false,
-//       logs: [],
-//     });
-//     addEvent(`[PM] Novo card criado: ${task.title}`);
-//   }
-// }
+async function generateRoadmapTasks() {
+  const backlogTasks = DB.getTasks().filter(t => t.lane === "backlog");
 
-// PM loop (every 10 seconds)
-// setInterval(pmAutoCreateLoop, 10000);
+  // Only generate if we are running low on tasks
+  if (backlogTasks.length >= 3) return;
+
+  const prompt = `
+    You are a Product Manager for a software project called "Vibe Kanban 3D".
+    The project is a 3D Task Orchestrator with AI agents.
+    Current roles: Product Manager, Security, Performance, Novas Funcionalidades, Testes, Correções / Bugs.
+
+    Generate 2 realistic, high-value tasks for the backlog.
+    Categories must be one of: "roadmap", "security", "performance", "feature", "test", "bug".
+    Priorities: "alta", "media", "baixa".
+
+    Return ONLY a JSON array with objects containing: title, category, priority, description.
+    Example: [{"title": "Optimize 3D rendering", "category": "performance", "priority": "alta", "description": "Reduce draw calls..."}]
+    Do not output markdown code blocks. Just the raw JSON string.
+  `;
+
+  const processTasks = (jsonStr: string) => {
+      try {
+          const cleanJson = jsonStr.replace(/```json/g, "").replace(/```/g, "").trim();
+          const newTasks = JSON.parse(cleanJson);
+          if (Array.isArray(newTasks)) {
+              let count = 0;
+              newTasks.forEach((t: any) => {
+                  if (t.title && t.category) {
+                      DB.createTask({
+                          title: t.title,
+                          source: "product_manager",
+                          category: t.category,
+                          priority: t.priority || "media",
+                          lane: "backlog",
+                          assignedTo: null,
+                          interrupted: false,
+                          logs: [],
+                          description: t.description
+                      });
+                      count++;
+                  }
+              });
+              if (count > 0) addEvent(`[PM] Adicionou ${count} novas tarefas ao backlog.`);
+          }
+      } catch (e) {
+          console.error("PM Failed to parse JSON:", e);
+      }
+  };
+
+  // 1. Try OpenAI if Key is present
+  if (process.env.OPENAI_API_KEY) {
+      try {
+          const res = await fetch("https://api.openai.com/v1/chat/completions", {
+              method: "POST",
+              headers: {
+                  "Content-Type": "application/json",
+                  "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`
+              },
+              body: JSON.stringify({
+                  model: "gpt-4o",
+                  messages: [{ role: "system", content: prompt }]
+              })
+          });
+          const data = await res.json();
+          const content = data.choices?.[0]?.message?.content;
+          if (content) processTasks(content);
+      } catch (e) {
+          console.error("PM OpenAI Auto-create failed:", e);
+      }
+      return;
+  }
+
+  // 2. Fallback to Gemini CLI
+  if (isCommandAvailable("gemini")) {
+      exec(`gemini -p '${prompt.replace(/'/g, "'\\''")}' -m gemini-2.0-flash --yolo`, (error, stdout, stderr) => {
+          if (error) {
+              console.error("PM Auto-create failed:", stderr);
+              return;
+          }
+          processTasks(stdout);
+      });
+  }
+}
+
+// PM loop (every 60 seconds)
+setInterval(generateRoadmapTasks, 60000);
 
 const CONFIG_FILE = "vibe_config.json";
 let appConfig = { cloneDir: "./clones" };
@@ -272,11 +337,12 @@ function sanitizeCloneDir(input: unknown): string {
 // --- Drivers ---
 const cliDriver = new CommandDriver(() => appConfig.cloneDir);
 const drivers: Record<string, LLMDriver> = {
-  mock: new MockDriver(),
+  mock: new MockDriver(() => appConfig.cloneDir),
   gemini: new GeminiDriver(() => appConfig.cloneDir),
   copilot: new CopilotDriver(),
-  opencode: new OpenCodeDriver(),
+  opencode: new OpenCodeDriver(() => appConfig.cloneDir),
   claude: new ClaudeDriver(),
+  openai: new OpenAIDriver(() => appConfig.cloneDir),
 };
 
 function isCommandAvailable(command: string): boolean {
@@ -374,6 +440,7 @@ const server = createServer(async (req, res) => {
   // GET /api/tools
   if (url === "/api/tools" && method === "GET") {
     const tools: { id: string; name: string }[] = [];
+    tools.push({ id: "mock", name: "Mock Driver" });
     try {
       execSync("gemini --version", { stdio: "ignore" });
       tools.push({ id: "gemini", name: "Gemini CLI" });
@@ -398,6 +465,8 @@ const server = createServer(async (req, res) => {
       } catch { }
     } else if (tool === "gemini") {
       models = ["gemini-2.0-flash", "gemini-2.0-flash-lite-preview", "gemini-2.0-pro-exp-02-05", "gemini-2.0-flash-thinking-exp-01-21", "gemini-1.5-flash", "gemini-1.5-pro"];
+    } else if (tool === "mock") {
+      models = ["mock-model-v1", "mock-gpt-4", "mock-claude"];
     }
     return jsonResponse(res, 200, { models });
   }
@@ -486,10 +555,10 @@ const server = createServer(async (req, res) => {
 
     startTask(task, agent);
 
-    return jsonResponse(res, 200, {
-      task: getTask(task.id),
-      agent: getAgent(agent.id)
-    });
+    const updatedTask = getTask(task.id);
+    const updatedAgent = getAgent(agent.id);
+
+    return jsonResponse(res, 200, { task: updatedTask, agent: updatedAgent });
   }
 
   // POST /api/interrupt
@@ -603,6 +672,14 @@ const server = createServer(async (req, res) => {
       return jsonResponse(res, 200, { driver: currentDriver.name });
     }
     return jsonResponse(res, 400, { error: "Invalid driver" });
+  }
+
+  // POST /api/tasks/clear-done
+  if (url === "/api/tasks/clear-done" && method === "POST") {
+    DB.clearDoneTasks();
+    addEvent("Tarefas concluídas foram limpas.");
+    broadcastState();
+    return jsonResponse(res, 200, { ok: true });
   }
 
   // Reset
