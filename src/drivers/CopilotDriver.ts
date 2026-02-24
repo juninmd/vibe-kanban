@@ -7,7 +7,9 @@ export class CopilotDriver implements LLMDriver {
 
    async executeTask(task: Task, agent: Agent, ctx: DriverContext): Promise<void> {
       const cmd = "gh";
-      const args = ["copilot", "suggest", task.title, "--target", "nodejs"];
+      // Prepend role to title for context
+      const promptContext = `[Role: ${agent.role}] ${task.title}`;
+      const args = ["copilot", "suggest", promptContext, "--target", "nodejs"];
       ctx.onLog(task.id, `Running: ${cmd} ${args.join(" ")}`);
 
       const child = spawn(cmd, args);

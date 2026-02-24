@@ -27,6 +27,7 @@ export class GeminiDriver implements LLMDriver {
       const prompt = `
 [SYSTEM: AUTONOMOUS MODE]
 You are an autonomous agent integrated into a Kanban board called "Vibe Kanban".
+You are acting as the agent role: "${agent.role}".
 Your goal is to complete the following task in this workspace.
 
 TASK ID: #${task.id}
