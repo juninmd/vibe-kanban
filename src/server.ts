@@ -99,6 +99,19 @@ function addEvent(text: string) {
 function getTask(id: number) { return DB.getTask(id); }
 function getAgent(id: string) { return DB.getAgent(id); }
 
+function resolveDriverForAgent(agent?: Agent | null): LLMDriver {
+  if (agent?.tool) return cliDriver;
+  return currentDriver;
+}
+
+function releaseTaskAgent(task: Task): LLMDriver {
+  const agent = task.assignedTo ? getAgent(task.assignedTo) : null;
+  if (agent) {
+    updateAgent(agent.id, { status: "idle", assignedTask: null });
+  }
+  return resolveDriverForAgent(agent);
+}
+
 // --- Helpers ---
 function jsonResponse(res: any, status: number, body: any) {
   res.writeHead(status, {
@@ -133,10 +146,10 @@ function startTask(task: Task, agent: Agent) {
   });
   addEvent(`[AutoPilot] ${agent.role} iniciou a tarefa #${task.id}`);
 
-  let executeDriver = agent.tool ? cliDriver : currentDriver;
+  const executeDriver = resolveDriverForAgent(agent);
 
-  // Execute via Driver
-  executeDriver.executeTask(task, agent, {
+  // Execute via Driver (async tick keeps API responses deterministic before driver side effects)
+  setTimeout(() => executeDriver.executeTask(task, agent, {
     onLog: (tid, msg) => {
       const t = getTask(tid);
       if (t) {
@@ -174,7 +187,7 @@ function startTask(task: Task, agent: Agent) {
       }
     },
     onInterrupt: (tid) => { }
-  });
+  }), 0);
 }
 
 function autoAssign() {
@@ -424,8 +437,6 @@ const server = createServer(async (req, res) => {
     return jsonResponse(res, 200, { cloneDir: appConfig.cloneDir });
   }
 
-  if (method === "OPTIONS") return jsonResponse(res, 200, { ok: true });
-
   // GET /api/tools
   if (url === "/api/tools" && method === "GET") {
     const tools: { id: string; name: string }[] = [];
@@ -557,12 +568,7 @@ const server = createServer(async (req, res) => {
     if (!task) return jsonResponse(res, 404, { error: "Task not found" });
 
     if (task.assignedTo) {
-      const agent = getAgent(task.assignedTo);
-      let executeDriver = currentDriver;
-      if (agent) {
-        updateAgent(agent.id, { status: "idle", assignedTask: null });
-        if (agent.tool) executeDriver = cliDriver;
-      }
+      const executeDriver = releaseTaskAgent(task);
       // Stop driver
       executeDriver.interruptTask(task);
       updateTask(task.id, { assignedTo: null, lane: "backlog", interrupted: true });
@@ -580,12 +586,7 @@ const server = createServer(async (req, res) => {
     // If moving out of in_progress, interrupt/finish logic
     if (task.lane === "in_progress" && lane !== "in_progress") {
       if (task.assignedTo) {
-        const agent = getAgent(task.assignedTo);
-        let executeDriver = currentDriver;
-        if (agent) {
-          updateAgent(agent.id, { status: "idle", assignedTask: null });
-          if (agent.tool) executeDriver = cliDriver;
-        }
+        const executeDriver = releaseTaskAgent(task);
         executeDriver.interruptTask(task);
         updateTask(task.id, { assignedTo: null });
       }
