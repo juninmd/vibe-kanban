@@ -1,5 +1,5 @@
 import { Task, Agent, LLMDriver, DriverContext } from "../types.js";
-import { spawn } from "child_process";
+import { spawn, execSync } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
 
@@ -18,6 +18,30 @@ export class OpenCodeDriver implements LLMDriver {
 
       if (!fs.existsSync(taskDir)) {
           fs.mkdirSync(taskDir, { recursive: true });
+      }
+
+      // Check if OpenCode is installed
+      let isInstalled = false;
+      try {
+         execSync("opencode --version", { stdio: "ignore" });
+         isInstalled = true;
+      } catch (e) {
+         isInstalled = false;
+      }
+
+      if (!isInstalled) {
+         ctx.onLog(task.id, "⚠️ OpenCode CLI not found. Attempting to install 'opencode-ai'...");
+         try {
+            // Attempt global installation
+            execSync("npm install -g opencode-ai", { stdio: "pipe" });
+            ctx.onLog(task.id, "✅ OpenCode installed successfully.");
+            isInstalled = true;
+         } catch (installError: any) {
+             ctx.onLog(task.id, `❌ Installation failed: ${installError.message}`);
+             ctx.onLog(task.id, "⚠️ Switching to SIMULATION MODE for demo.");
+             this.runSimulation(task, agent, ctx, taskDir);
+             return;
+         }
       }
 
       const cmd = "opencode";
@@ -44,7 +68,8 @@ export class OpenCodeDriver implements LLMDriver {
 
       child.on("error", (error: any) => {
          if (error.code === "ENOENT") {
-            ctx.onLog(task.id, "⚠️ OpenCode CLI not found. Switching to SIMULATION MODE for demo.");
+            // Should not happen if check passed, but just in case
+            ctx.onLog(task.id, "⚠️ OpenCode CLI not found (ENOENT). Switching to SIMULATION MODE.");
             isSimulation = true;
             this.runSimulation(task, agent, ctx, taskDir);
             return;
