@@ -29,12 +29,12 @@ function initializeDefaultAgents() {
   const existing = DB.getAgents();
   if (existing.length === 0) {
     const defaults = [
-      { role: "Product Manager", category: "roadmap", model: "gemini-2.0-flash" },
-      { role: "Segurança", category: "security", model: "gemini-2.0-flash" },
-      { role: "Performance", category: "performance", model: "gemini-2.0-flash" },
-      { role: "Novas Funcionalidades", category: "feature", model: "gemini-2.0-flash" },
-      { role: "Testes", category: "test", model: "gemini-2.0-flash" },
-      { role: "Correções / Bugs", category: "bug", model: "gemini-2.0-flash" }
+      { role: "Product Manager", category: "roadmap", model: "gpt-4o", tool: "openai" },
+      { role: "Segurança", category: "security", model: "opencode-default", tool: "opencode" },
+      { role: "Performance", category: "performance", model: "opencode-perf", tool: "opencode" },
+      { role: "Novas Funcionalidades", category: "feature", model: "gpt-4o", tool: "openai" },
+      { role: "Testes", category: "test", model: "opencode-test", tool: "opencode" },
+      { role: "Correções / Bugs", category: "bug", model: "opencode-fix", tool: "opencode" }
     ];
 
     defaults.forEach(def => {
@@ -45,7 +45,7 @@ function initializeDefaultAgents() {
         category: def.category,
         status: "idle",
         assignedTask: null,
-        tool: "gemini",
+        tool: def.tool,
         terminalId: `term-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
       });
     });
