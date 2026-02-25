@@ -291,10 +291,34 @@ setInterval(() => {
 // --- PM Auto-Create Logic ---
 async function generateRoadmapTasks() {
   // Only run if we have an API key configured
-  if (!process.env.OPENAI_API_KEY && !process.env.GEMINI_API_KEY) return;
+  // if (!process.env.OPENAI_API_KEY && !process.env.GEMINI_API_KEY) return;
 
   const backlogTasks = DB.getTasks().filter(t => t.lane === "backlog");
   if (backlogTasks.length >= 3) return;
+
+  if (!process.env.OPENAI_API_KEY && !process.env.GEMINI_API_KEY) {
+    const mocks: { title: string; category: string; priority: "alta" | "media" | "baixa"; description: string }[] = [
+      { title: "Implementar OAuth 2.0", category: "security", priority: "alta", description: "Configurar login social com Google e GitHub." },
+      { title: "Otimizar Renderização 3D", category: "performance", priority: "media", description: "Reduzir draw calls no Three.js." },
+      { title: "Adicionar Modo Escuro", category: "feature", priority: "baixa", description: "Criar toggle de tema no frontend." },
+      { title: "Testar Integração CI/CD", category: "test", priority: "alta", description: "Verificar pipeline de build no GitHub Actions." },
+      { title: "Refatorar API de Agentes", category: "roadmap", priority: "media", description: "Melhorar endpoints REST." }
+    ];
+    const t = mocks[Math.floor(Math.random() * mocks.length)];
+    DB.createTask({
+      title: t.title,
+      source: "product_manager",
+      category: t.category,
+      priority: t.priority,
+      lane: "backlog",
+      assignedTo: null,
+      interrupted: false,
+      logs: [],
+      description: t.description
+    });
+    addEvent(`[PM] (Simulado) Adicionou nova tarefa: ${t.title}`);
+    return;
+  }
 
   const existingAgents = DB.getAgents();
   const roles = existingAgents.map(a => a.role).join(", ") || "Nenhum agente configurado";
