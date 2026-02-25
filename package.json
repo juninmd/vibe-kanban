@@ -10,9 +10,12 @@
     "test:e2e": "playwright test",
     "test:all": "pnpm test && pnpm test:e2e",
     "kind:up": "./scripts/kind-up.sh",
-    "kind:down": "./scripts/kind-down.sh"
+    "kind:down": "./scripts/kind-down.sh",
+    "cli": "node dist/cli/vibe.js"
   },
   "devDependencies": {
+    "@types/node-fetch": "^2.6.11",
+    "commander": "^12.1.0",
     "@playwright/test": "^1.55.0",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^25.2.3",
@@ -24,6 +27,7 @@
   "dependencies": {
     "better-sqlite3": "^12.6.2",
     "dotenv": "^17.3.1",
+    "node-fetch": "^2.7.0",
     "node-pty": "^1.1.0",
     "playwright": "^1.58.2"
   }

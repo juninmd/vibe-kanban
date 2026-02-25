@@ -38,10 +38,46 @@ export class GeminiDriver implements LLMDriver {
 
       const cmd = "gemini";
 
-      // Autonomous prompt: we give the task and some context, but we let Gemini use its tools.
-      const prompt = `
+      const isPlanMode = task.agentType === "plan";
+
+      // Prompts distintos para modo plan (somente leitura) e build (mutação)
+      const prompt = isPlanMode
+         ? `
+[SYSTEM: PLAN MODE - READ ONLY]
+You are an autonomous planning agent integrated into a Kanban board called "Vibe Kanban".
+You are acting as the agent role: "${agent.role}".
+Your goal is to ANALYZE the repository in this workspace and produce a high quality refactoring / implementation PLAN,
+without making any file modifications yourself.
+
+WORKSPACE: ${basePath}
+TASK ID: #${task.id}
+TITLE: ${task.title}
+DESCRIPTION: ${task.description || "No description provided."}
+CATEGORY: ${task.category}
+PRIORITY: ${task.priority}
+
+RULES:
+1. TREAT THE FILESYSTEM AS READ-ONLY: do NOT modify, create or delete files.
+2. Do NOT call tools that write to disk or run destructive commands.
+3. Focus on understanding the architecture, listing impacted modules and files, and sequencing concrete steps.
+4. Your final answer MUST be a structured JSON plan with:
+   {
+     "highLevelSummary": string,
+     "steps": [
+       {
+         "file": "relative/path.ts",
+         "summary": "short description of the change",
+         "rationale": "why this change is needed"
+       }
+     ]
+   }
+5. Keep the JSON valid and minified (no comments).
+
+Respond ONLY with the JSON object, nothing else.
+`
+         : `
 [SYSTEM: AUTONOMOUS MODE]
-You are an autonomous agent integrated into a Kanban board called "Vibe Kanban".
+You are an autonomous coding agent integrated into a Kanban board called "Vibe Kanban".
 You are acting as the agent role: "${agent.role}".
 Your goal is to complete the following task in this workspace.
 
@@ -54,7 +90,7 @@ PRIORITY: ${task.priority}
 INSTRUCTIONS:
 1. Explore the codebase if necessary.
 2. Implement the requested changes.
-3. Verify your work.
+3. Run tests or checks when appropriate.
 4. When finished, provide a brief summary of what you did.
 
 If you don't have tool access, use this format to create/update files:
@@ -115,16 +151,27 @@ content
          child.on("close", (code) => {
             this.runningTasks.delete(task.id);
 
-            // Fallback: Parse files if Gemini used the text format instead of tools
-            const filesCreated = extractAndWriteFiles(fullOutput, basePath, ctx, task.id);
-
-            if (code === 0) {
-               ctx.onLog(task.id, `[SYSTEM] Gemini CLI finalizado com sucesso.`);
-               if (filesCreated > 0) ctx.onLog(task.id, `[SYSTEM] Blocos de arquivos detectados: ${filesCreated}`);
-               ctx.onComplete(task.id);
+            if (isPlanMode) {
+               // Em modo plano, não escrevemos arquivos — apenas retornamos o JSON para os logs.
+               ctx.onLog(task.id, `[SYSTEM] Gemini PLAN finalizado com código ${code}.`);
+               if (code === 0) {
+                  ctx.onLog(task.id, `[PLAN] ${fullOutput.trim()}`);
+                  ctx.onComplete(task.id);
+               } else {
+                  ctx.onBugFound(task.id, `Planejamento falhou com código ${code}`);
+               }
             } else {
-               ctx.onLog(task.id, `[SYSTEM] Gemini CLI encerrou com código ${code}`);
-               ctx.onBugFound(task.id, `Execução falhou com código ${code}`);
+               // Fallback: Parse files if Gemini used the text format instead of tools
+               const filesCreated = extractAndWriteFiles(fullOutput, basePath, ctx, task.id);
+
+               if (code === 0) {
+                  ctx.onLog(task.id, `[SYSTEM] Gemini CLI finalizado com sucesso.`);
+                  if (filesCreated > 0) ctx.onLog(task.id, `[SYSTEM] Blocos de arquivos detectados: ${filesCreated}`);
+                  ctx.onComplete(task.id);
+               } else {
+                  ctx.onLog(task.id, `[SYSTEM] Gemini CLI encerrou com código ${code}`);
+                  ctx.onBugFound(task.id, `Execução falhou com código ${code}`);
+               }
             }
          });
 
