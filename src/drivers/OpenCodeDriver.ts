@@ -149,6 +149,12 @@ export class OpenCodeDriver implements LLMDriver {
 
          const step = steps[currentStep];
          ctx.onLog(task.id, step.msg);
+
+         // Probabilistic bug generation (20% chance per step)
+         if (Math.random() < 0.2) {
+             ctx.onBugFound(task.id, `Simulated bug found by ${agent.role}: Unexpected edge case in data processing.`);
+         }
+
          currentStep++;
       }, 1500); // Average pace
 
