@@ -39,11 +39,19 @@ export interface State {
   events: EventLog[];
 }
 
+export interface Memory {
+  get(key: string): any;
+  set(key: string, value: any): void;
+  getAll(): Record<string, any>;
+  clear(): void;
+}
+
 export interface DriverContext {
   onLog: (taskId: number, message: string) => void;
   onComplete: (taskId: number) => void;
   onBugFound: (taskId: number, description: string) => void;
   onInterrupt: (taskId: number) => void;
+  memory: Memory;
 }
 
 export interface LLMDriver {

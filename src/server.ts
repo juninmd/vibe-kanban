@@ -12,6 +12,7 @@ import { ClaudeDriver } from "./drivers/ClaudeDriver.js";
 import { CommandDriver } from "./drivers/CommandDriver.js";
 import { DB } from "./db.js";
 import { TerminalManager } from "./terminal/TerminalManager.js";
+import { Memory } from "./memory.js";
 import "dotenv/config";
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 5174;
@@ -30,12 +31,12 @@ function initializeDefaultAgents() {
   if (existing.length === 0) {
     const defaults = [
       { role: "Product Manager", category: "roadmap", model: "gpt-4o", tool: "openai" },
-      { role: "Segurança", category: "security", model: "opencode-sec", tool: "opencode" },
-      { role: "Performance", category: "performance", model: "opencode-perf", tool: "opencode" },
-      { role: "Novas Funcionalidades", category: "feature", model: "opencode-feat", tool: "opencode" },
-      { role: "Testes", category: "test", model: "opencode-test", tool: "opencode" },
-      { role: "Novas Features", category: "feature", model: "opencode-new", tool: "opencode" },
-      { role: "Correções / Bugs", category: "bug", model: "opencode-fix", tool: "opencode" }
+      { role: "Segurança", category: "security", model: "gemini-2.0-flash", tool: "gemini" },
+      { role: "Performance", category: "performance", model: "gpt-4o", tool: "copilot" },
+      { role: "Novas Funcionalidades", category: "feature", model: "gpt-4o", tool: "opencode" },
+      { role: "Novas Features", category: "feature", model: "claude-3-5-sonnet", tool: "claude" },
+      { role: "Testes", category: "test", model: "gpt-4o", tool: "opencode" },
+      { role: "Correções / Bugs", category: "bug", model: "gpt-4o", tool: "opencode" }
     ];
 
     defaults.forEach(def => {
@@ -246,7 +247,8 @@ function startTask(task: Task, agent: Agent) {
       if (t?.assignedTo) {
         addTerminalLine(t.assignedTo, tid, "system", `⏹️ Tarefa #${tid} interrompida`);
       }
-    }
+    },
+    memory: Memory.getInstance()
   }), 0);
 }
 
