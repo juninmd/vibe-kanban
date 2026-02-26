@@ -288,8 +288,12 @@ function autoAssign() {
 }
 
 // Auto-assign: skip system-generated tasks to prevent bug loops
+let orchestrationEnabled = true;
+
 setInterval(() => {
-  autoAssign();
+  if (orchestrationEnabled) {
+    autoAssign();
+  }
 }, 3000);
 
 // --- PM Auto-Create Logic ---
@@ -889,6 +893,24 @@ const server = createServer(async (req, res) => {
     DB.clearDoneTasks();
     addEvent("Tarefas concluídas foram limpas.");
     broadcastState();
+    return jsonResponse(res, 200, { ok: true });
+  }
+
+  // POST /api/orchestrator/config (Enable/disable auto-assignment)
+  if (url === "/api/orchestrator/config" && method === "POST") {
+    const body = await parseBody(req);
+    if (typeof body.enabled === "boolean") {
+      orchestrationEnabled = body.enabled;
+      addEvent(`Orquestração automática ${orchestrationEnabled ? "ativada" : "desativada"}.`);
+      return jsonResponse(res, 200, { enabled: orchestrationEnabled });
+    }
+    return jsonResponse(res, 400, { error: "Invalid body. Expected { enabled: boolean }" });
+  }
+
+  // POST /api/orchestrator/run (Manually trigger assignment logic)
+  if (url === "/api/orchestrator/run" && method === "POST") {
+    autoAssign();
+    addEvent("Orquestração manual executada via API.");
     return jsonResponse(res, 200, { ok: true });
   }
 
