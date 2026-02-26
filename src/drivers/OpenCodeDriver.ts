@@ -21,23 +21,13 @@ export class OpenCodeDriver implements LLMDriver {
       }
 
       // Check if OpenCode is installed
-      let isInstalled = false;
-      try {
-         execSync("opencode --version", { stdio: "ignore" });
-         isInstalled = true;
-      } catch (e) {
-         isInstalled = false;
-      }
+      let isInstalled = this.checkInstalled();
 
       if (!isInstalled) {
          ctx.onLog(task.id, "⚠️ OpenCode CLI not found. Attempting to install 'opencode-ai'...");
-         try {
-            // Attempt global installation
-            execSync("npm install -g opencode-ai", { stdio: "pipe" });
-            ctx.onLog(task.id, "✅ OpenCode installed successfully.");
-            isInstalled = true;
-         } catch (installError: any) {
-             ctx.onLog(task.id, `❌ Installation failed: ${installError.message}`);
+         if (this.installOpenCode(ctx, task.id)) {
+             isInstalled = true;
+         } else {
              ctx.onLog(task.id, "⚠️ Switching to SIMULATION MODE for demo.");
              this.runSimulation(task, agent, ctx, taskDir);
              return;
@@ -46,6 +36,9 @@ export class OpenCodeDriver implements LLMDriver {
 
       const cmd = "opencode";
       const args = ["run", task.title, "--agent", agent.role];
+      if (agent.model && agent.model !== "default") {
+          args.push("--model", agent.model);
+      }
       ctx.onLog(task.id, `Running: ${cmd} ${args.join(" ")} in ${taskDir}`);
 
       const child = spawn(cmd, args, { cwd: taskDir });
@@ -172,6 +165,27 @@ export class OpenCodeDriver implements LLMDriver {
          this.runningTasks.delete(task.id);
       }
       return Promise.resolve();
+   }
+
+   protected checkInstalled(): boolean {
+      try {
+         execSync("opencode --version", { stdio: "ignore" });
+         return true;
+      } catch (e) {
+         return false;
+      }
+   }
+
+   protected installOpenCode(ctx: DriverContext, taskId: number): boolean {
+      try {
+         // Attempt global installation
+         execSync("npm install -g opencode-ai", { stdio: "pipe" });
+         ctx.onLog(taskId, "✅ OpenCode installed successfully.");
+         return true;
+      } catch (installError: any) {
+          ctx.onLog(taskId, `❌ Installation failed: ${installError.message}`);
+          return false;
+      }
    }
 
    getLogs(taskId: number): string[] {
