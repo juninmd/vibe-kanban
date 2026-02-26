@@ -1336,7 +1336,17 @@ function createAgentMesh(agent: Agent, index: number) {
     return canvas;
   }
 
-  const labelCanvas = makeLabelCanvas(`${agent.model}`, roleColors[agent.role] || "#555555");
+  // Determine badge color based on tool/model
+  let badgeColor = "#555555";
+  const tool = agent.tool || "unknown";
+
+  if (tool.includes("openai")) badgeColor = "#10a37f";
+  else if (tool.includes("gemini")) badgeColor = "#4285f4";
+  else if (tool.includes("copilot")) badgeColor = "#6f42c1";
+  else if (tool.includes("opencode")) badgeColor = "#f97316";
+  else if (tool.includes("claude")) badgeColor = "#d97757";
+
+  const labelCanvas = makeLabelCanvas(`${agent.model}`, badgeColor);
   const labelTex = new THREE.CanvasTexture(labelCanvas);
   labelTex.colorSpace = THREE.SRGBColorSpace;
   const labelMat = new THREE.SpriteMaterial({ map: labelTex, transparent: true, depthTest: false });
