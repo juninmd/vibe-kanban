@@ -30,10 +30,11 @@ function initializeDefaultAgents() {
   if (existing.length === 0) {
     const defaults = [
       { role: "Product Manager", category: "roadmap", model: "gpt-4o", tool: "openai" },
-      { role: "Segurança", category: "security", model: "opencode-default", tool: "opencode" },
+      { role: "Segurança", category: "security", model: "opencode-sec", tool: "opencode" },
       { role: "Performance", category: "performance", model: "opencode-perf", tool: "opencode" },
-      { role: "Novas Funcionalidades", category: "feature", model: "gpt-4o", tool: "openai" },
+      { role: "Novas Funcionalidades", category: "feature", model: "opencode-feat", tool: "opencode" },
       { role: "Testes", category: "test", model: "opencode-test", tool: "opencode" },
+      { role: "Novas Features", category: "feature", model: "opencode-new", tool: "opencode" },
       { role: "Correções / Bugs", category: "bug", model: "opencode-fix", tool: "opencode" }
     ];
 
@@ -136,6 +137,9 @@ function getTask(id: number) { return DB.getTask(id); }
 function getAgent(id: string) { return DB.getAgent(id); }
 
 function resolveDriverForAgent(agent?: Agent | null): LLMDriver {
+  if (agent?.tool && drivers[agent.tool]) {
+    return drivers[agent.tool];
+  }
   if (agent?.tool) return cliDriver;
   return currentDriver;
 }
