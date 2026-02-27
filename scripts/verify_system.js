@@ -73,7 +73,7 @@ async function verifySystem() {
         "Performance",
         "Novas Funcionalidades",
         "Testes",
-        "Correções / Bugs"
+        "Novas Features"
     ];
 
     const missing = requiredRoles.filter(role => !agents.find(a => a.role === role));
