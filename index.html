@@ -250,6 +250,45 @@
 
   <!-- Removido o terminalModal antigo em favor do terminalsLayer interativo -->
 
+  <!-- Modal Detalhes da Tarefa -->
+  <dialog id="taskDetailsModal" class="modal">
+    <div class="modal-content modal-large">
+      <div class="modal-header">
+        <h2 id="taskDetailsTitle">Tarefa #0: Título</h2>
+        <div class="modal-header-actions">
+          <button id="taskOpenFolderBtn" class="secondary-btn" style="display:none">📂 Abrir Pasta</button>
+          <button id="closeTaskDetailsBtn" class="close-btn">×</button>
+        </div>
+      </div>
+      <div class="task-details-grid">
+        <div class="task-info-pane">
+          <div class="detail-group">
+            <span class="detail-label">Descrição</span>
+            <p id="taskDetailsDescription" class="detail-value">Sem descrição.</p>
+          </div>
+          <div class="detail-group">
+            <span class="detail-label">Status</span>
+            <span id="taskDetailsStatus" class="tag">Backlog</span>
+          </div>
+          <div class="detail-group">
+            <span class="detail-label">Agente Responsável</span>
+            <span id="taskDetailsAgent" class="detail-value">-</span>
+          </div>
+          <div class="detail-group">
+            <span class="detail-label">Prioridade / Categoria</span>
+            <div id="taskDetailsMeta"></div>
+          </div>
+        </div>
+        <div class="task-history-pane">
+          <span class="detail-label">Histórico de Conversa / Logs</span>
+          <div id="taskHistoryContent" class="terminal-mini">
+            <!-- Logs will be loaded here -->
+          </div>
+        </div>
+      </div>
+    </div>
+  </dialog>
+
   <script type="importmap">
       {
         "imports": {

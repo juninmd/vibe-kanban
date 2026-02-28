@@ -6,9 +6,12 @@ Padronizar a atuação de agentes no Vibe Kanban para entregas reais, auditávei
 ## Regras operacionais
 1. **Pacotes e scripts:** usar sempre `pnpm`.
 2. **Sem simulação silenciosa:** se CLI/ferramenta não existir, registrar erro real no log.
-3. **Single source of truth:** estado de tarefas/agentes/eventos deve vir do backend.
-4. **Persistência obrigatória:** configuração de execução deve viver em `vibe_config.json`.
-5. **Observabilidade:** ações dos agentes precisam deixar trilha clara em eventos e logs por tarefa.
+3. **Qualidade é inegociável:** Nunca gerar código mock. Todo código deve ser pronto para produção, robusto e devidamente testado.
+4. **Mentalidade de melhoria contínua:** Sempre melhore o código que você encontrar ou receber. Refatoração e otimização fazem parte do fluxo.
+5. **Interfaces nota 10:** Qualquer interface gerada deve ser amigável, altamente parametrizável e focada em performance máxima.
+6. **Single source of truth:** estado de tarefas/agentes/eventos deve vir do backend.
+7. **Persistência obrigatória:** configuração de execução deve viver em `vibe_config.json`.
+8. **Observabilidade:** ações dos agentes precisam deixar trilha clara em eventos e logs por tarefa.
 
 ## Princípios de performance
 - Reduzir trabalho repetitivo por ciclo (evitar scans e cópias profundas desnecessárias).

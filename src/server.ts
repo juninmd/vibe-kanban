@@ -17,6 +17,14 @@ import "dotenv/config";
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 5174;
 
+const CONFIG_FILE = "vibe_config.json";
+let appConfig = { cloneDir: "./clones" };
+try {
+  if (fs.existsSync(CONFIG_FILE)) {
+    appConfig = JSON.parse(fs.readFileSync(CONFIG_FILE, "utf-8"));
+  }
+} catch (e) { }
+
 // --- State and Persistence ---
 function initializeState(): State {
   return {
@@ -175,11 +183,23 @@ function parseBody(req: any): Promise<any> {
 
 // --- Auto-Pilot Logic ---
 function startTask(task: Task, agent: Agent) {
+  // Ensure workDir is set and persisted
+  const finalWorkDir = task.workDir || path.join(appConfig.cloneDir, `task-${task.id}`);
+  
+  if (!fs.existsSync(finalWorkDir)) {
+    fs.mkdirSync(finalWorkDir, { recursive: true });
+  }
+
   updateTask(task.id, {
     assignedTo: agent.id,
     lane: "in_progress",
-    interrupted: false
+    interrupted: false,
+    workDir: finalWorkDir
   });
+  
+  // Refresh task object with new workDir
+  const updatedTask = DB.getTask(task.id) || task;
+
   updateAgent(agent.id, {
     status: "working",
     assignedTask: task.id
@@ -190,7 +210,7 @@ function startTask(task: Task, agent: Agent) {
   const executeDriver = resolveDriverForAgent(agent);
   bugCounts.set(task.id, 0);
 
-  setTimeout(() => executeDriver.executeTask(task, agent, {
+  setTimeout(() => executeDriver.executeTask(updatedTask, agent, {
     onLog: (tid, msg) => {
       const t = getTask(tid);
       if (t) {
@@ -411,14 +431,6 @@ Generate 2 realistic tasks. Return ONLY a JSON array: [{"title":"...","category"
 
 // PM loop (every 60 seconds)
 setInterval(generateRoadmapTasks, 60000);
-
-const CONFIG_FILE = "vibe_config.json";
-let appConfig = { cloneDir: "./clones" };
-try {
-  if (fs.existsSync(CONFIG_FILE)) {
-    appConfig = JSON.parse(fs.readFileSync(CONFIG_FILE, "utf-8"));
-  }
-} catch (e) { }
 
 function sanitizeCloneDir(input: unknown): string {
   if (typeof input !== "string") return "./clones";
@@ -656,6 +668,27 @@ const server = createServer(async (req, res) => {
       agents: DB.getAgents(),
       events: DB.getEvents()
     });
+  }
+
+  // GET /api/tasks/:id/terminal
+  if (url.match(/^\/api\/tasks\/[^/]+\/terminal$/) && method === "GET") {
+    const taskId = Number(url.split("/api/tasks/")[1].replace("/terminal", ""));
+    const logs = DB.getTaskTerminalLogs(taskId);
+    return jsonResponse(res, 200, { logs });
+  }
+
+  // POST /api/tasks/:id/open-folder
+  if (url.match(/^\/api\/tasks\/[^/]+\/open-folder$/) && method === "POST") {
+    const taskId = Number(url.split("/api/tasks/")[1].replace("/open-folder", ""));
+    const task = DB.getTask(taskId);
+    if (!task || !task.workDir) {
+      return jsonResponse(res, 404, { error: "Task or workDir not found" });
+    }
+
+    const command = process.platform === "win32" ? `explorer "${task.workDir}"` : (process.platform === "darwin" ? `open "${task.workDir}"` : `xdg-open "${task.workDir}"`);
+    exec(command);
+    addEvent(`Abrindo pasta da tarefa #${taskId}: ${task.workDir}`);
+    return jsonResponse(res, 200, { ok: true });
   }
 
   // GET /api/agents/:id/terminal

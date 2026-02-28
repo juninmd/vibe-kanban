@@ -189,6 +189,12 @@ export const DB = {
     ).all(agentId, limit) as any[];
   },
 
+  getTaskTerminalLogs(taskId: number, limit = 500): { type: string; content: string; timestamp: number; agentId: string }[] {
+    return db.prepare(
+      "SELECT type, content, timestamp, agentId FROM terminal_logs WHERE taskId = ? ORDER BY id ASC LIMIT ?"
+    ).all(taskId, limit) as any[];
+  },
+
   clearTerminalLogs(agentId: string): void {
     db.prepare("DELETE FROM terminal_logs WHERE agentId = ?").run(agentId);
   },

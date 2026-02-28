@@ -31,6 +31,7 @@ type Task = {
   description?: string;
   agentType?: string;
   model?: string;
+  workDir?: string;
 };
 
 type EventLog = {
@@ -107,6 +108,16 @@ const els = {
   terminalsTabs: document.getElementById("terminalsTabs") as HTMLElement,
   terminalsContent: document.getElementById("terminalsContent") as HTMLElement,
   closeAllTerminalsBtn: document.getElementById("closeAllTerminalsBtn") as HTMLButtonElement,
+  // Task Details Modal
+  taskDetailsModal: document.getElementById("taskDetailsModal") as HTMLDialogElement,
+  taskDetailsTitle: document.getElementById("taskDetailsTitle") as HTMLElement,
+  taskDetailsDescription: document.getElementById("taskDetailsDescription") as HTMLElement,
+  taskDetailsStatus: document.getElementById("taskDetailsStatus") as HTMLElement,
+  taskDetailsAgent: document.getElementById("taskDetailsAgent") as HTMLElement,
+  taskDetailsMeta: document.getElementById("taskDetailsMeta") as HTMLElement,
+  taskHistoryContent: document.getElementById("taskHistoryContent") as HTMLElement,
+  taskOpenFolderBtn: document.getElementById("taskOpenFolderBtn") as HTMLButtonElement,
+  closeTaskDetailsBtn: document.getElementById("closeTaskDetailsBtn") as HTMLButtonElement,
 };
 
 // --- Toast System ---
@@ -328,6 +339,14 @@ function renderKanban() {
     (tasksByLane.get(lane) || []).forEach((task) => {
       const card = document.createElement("article");
       card.className = `task-card priority-${task.priority}`;
+      card.style.cursor = "pointer";
+      card.onclick = (e) => {
+        // Prevent click if clicking an action button
+        if ((e.target as HTMLElement).tagName === "BUTTON") return;
+        openTaskDetailsModal(task);
+        playClickSound();
+      };
+      
       const assigned = task.assignedTo ? agentsById.get(task.assignedTo) ?? "-" : "-";
 
       // Logs preview
@@ -598,6 +617,58 @@ function openTerminal(agentId: string) {
   terminalUIManager.openTerminal(agentId);
 }
 
+async function openTaskDetailsModal(task: Task) {
+  els.taskDetailsTitle.textContent = `Tarefa #${task.id}: ${task.title}`;
+  els.taskDetailsDescription.textContent = task.description || "Sem descrição.";
+  els.taskDetailsStatus.textContent = laneLabels[task.lane] || task.lane;
+  els.taskDetailsStatus.className = `tag lane-${task.lane}`;
+  
+  const agentsById = new Map(agents.map((agent) => [agent.id, agent.role]));
+  els.taskDetailsAgent.textContent = task.assignedTo ? agentsById.get(task.assignedTo) || task.assignedTo : "Ninguém designado";
+  
+  els.taskDetailsMeta.innerHTML = `
+    <span class="tag">${task.category}</span>
+    <span class="tag priority-${task.priority}">${task.priority}</span>
+    ${task.githubRepo ? `<span class="tag">Repo: ${task.githubRepo}</span>` : ""}
+  `;
+
+  // WorkDir handling
+  if (task.lane !== "done" && task.workDir) {
+    els.taskOpenFolderBtn.style.display = "block";
+    els.taskOpenFolderBtn.onclick = () => {
+      fetch(`/api/tasks/${task.id}/open-folder`, { method: "POST" });
+      showToast("Abrindo pasta local...", "info");
+    };
+  } else {
+    els.taskOpenFolderBtn.style.display = "none";
+  }
+
+  // Load History
+  els.taskHistoryContent.innerHTML = "Carregando histórico...";
+  els.taskDetailsModal.showModal();
+
+  try {
+    const res = await fetch(`/api/tasks/${task.id}/terminal`);
+    const data = await res.json();
+    if (data.logs && data.logs.length > 0) {
+      els.taskHistoryContent.innerHTML = data.logs.map((log: any) => {
+        const time = new Date(log.timestamp).toLocaleTimeString();
+        return `<div class="log-entry">
+          <span class="log-time">[${time}]</span>
+          <span class="log-${log.type}">> ${log.content}</span>
+        </div>`;
+      }).join("");
+      // Scroll to bottom
+      setTimeout(() => els.taskHistoryContent.scrollTop = els.taskHistoryContent.scrollHeight, 50);
+    } else {
+      els.taskHistoryContent.innerHTML = "Nenhum histórico disponível para esta tarefa.";
+    }
+  } catch (e) {
+    els.taskHistoryContent.innerHTML = "Erro ao carregar histórico.";
+    console.error(e);
+  }
+}
+
 function populateAgentAssignDropdown() {
   if (!els.agentAssign) return;
   const currentVal = els.agentAssign.value;
@@ -804,6 +875,7 @@ els.settingsBtn.addEventListener("click", async () => {
 });
 
 els.cancelSettingsBtn.addEventListener("click", () => els.settingsModal.close());
+els.closeTaskDetailsBtn.addEventListener("click", () => els.taskDetailsModal.close());
 
 els.settingsForm.addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -1676,7 +1748,8 @@ function onPointerDown(event: PointerEvent) {
     const task = tasks.find(t => t.id === taskId);
 
     if (task) {
-      alert(`Task #${task.id}\nTitle: ${task.title}\nCategory: ${task.category}\nAssigned: ${task.assignedTo || "None"}`);
+      openTaskDetailsModal(task);
+      playClickSound();
     }
   } else if (intersectsAgents.length > 0) {
     // Determine which agent was clicked
