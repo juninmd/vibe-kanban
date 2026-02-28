@@ -39,9 +39,10 @@ function initializeDefaultAgents() {
   if (existing.length === 0) {
     const defaults = [
       { role: "Product Manager", category: "roadmap", model: "gpt-4o", tool: "openai" },
-      { role: "Segurança", category: "security", model: "gemini-2.0-flash", tool: "opencode" },
-      { role: "Performance", category: "performance", model: "gpt-4o", tool: "opencode" },
-      { role: "Novas Funcionalidades", category: "feature", model: "gpt-4o", tool: "opencode" },
+      { role: "Segurança", category: "security", model: "gemini-2.0-flash", tool: "gemini" },
+      { role: "Performance", category: "performance", model: "gpt-4o", tool: "copilot" },
+      { role: "Backend Feature", category: "feature", model: "gpt-4o", tool: "opencode" },
+      { role: "Frontend Feature", category: "feature", model: "claude-3-5-sonnet-20241022", tool: "claude" },
       { role: "Testes", category: "test", model: "gpt-4o", tool: "opencode" },
       { role: "Novas Features", category: "feature", model: "gpt-4o", tool: "opencode" },
       { role: "Correções / Bugs", category: "bug", model: "gpt-4o", tool: "opencode" },
