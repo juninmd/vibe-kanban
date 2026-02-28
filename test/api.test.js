@@ -53,7 +53,7 @@ describe('Vibe Kanban API', async () => {
     assert.ok(Array.isArray(data.tasks));
     assert.ok(Array.isArray(data.agents));
     assert.ok(Array.isArray(data.events));
-    assert.equal(data.agents.length, 7);
+    assert.equal(data.agents.length, 6);
   });
 
   test('POST /api/tasks creates and persists a card', async () => {
@@ -132,7 +132,7 @@ describe('Vibe Kanban API', async () => {
     const stateRes = await fetch(`${API_URL}/api/state`);
     const state = await stateRes.json();
     assert.equal(state.tasks.length, 0);
-    assert.equal(state.agents.length, 7);
+    assert.equal(state.agents.length, 6);
   });
 
   test('POST /api/config/clone-dir normaliza caminho e cria diretório', async () => {
