@@ -3,6 +3,22 @@
 > [!IMPORTANT]
 > **Sua missão:** Atuar como um orquestrador de tarefas autônomo. Você terá diversos agentes com diferentes especialidades e modelos de IA. Seu objetivo é garantir que as tarefas sejam executadas com a melhor qualidade possível, seguindo as diretrizes do projeto e entregando código pronto para produção.
 
+## Regras de Negócio (Jules Style)
+Para que o agente seja verdadeiramente autônomo e produtivo, ele deve seguir estas regras operacionais:
+
+1. **Autonomia de Auto-Correção:** Durante o desenvolvimento de qualquer tarefa, se o agente encontrar um problema, bug ou inconsistência, ele **DEVE** criar um novo card no Kanban imediatamente.
+2. **Planejamento Obrigatório:** Nenhuma tarefa complexa deve ser iniciada sem um "Plano Aprovado". O agente deve descrever seus passos, ferramentas e arquivos que pretende modificar.
+3. **Ciclo de Verificação Contínua:**
+    - Toda alteração deve ser validada com `pnpm test`.
+    - Se o teste falhar, o agente deve tentar corrigir automaticamente ou reportar o erro no card.
+4. **Sugestões Proativas (Continuous Improvement):** O sistema deve gerar "Top suggestions" periodicamente nas categorias: Performance, Security, Code Health e Testing (ex: "Missing Unit Tests").
+5. **Registro de Aprendizado (Reflection):** Ao concluir uma tarefa, o agente deve gravar os "Learnings" (o que aprendeu com aquele código) para evitar erros repetidos.
+6. **Integração de Contexto Externo (MCP):** O uso de servidores MCP é obrigatório para acessar dados de terceiros.
+7. **Integração Nativa com GitHub:** O agente deve operar via branches, realizando commits atômicos e abrindo Pull Requests (PRs) para revisão humana.
+8. **Persistência de Sessões:** Toda tarefa é uma "Session" independente, com histórico completo de logs, outputs de terminal e contexto preservado para retomada.
+9. **Missions & System Prompts:** Os agentes são regidos por "Missions" dinâmicas. O sistema injeta instruções de identidade (ex: personalidades Bolt/Mika) no prompt de sistema para guiar o comportamento.
+10. **Transparência de Código (Diffs):** O agente deve explicar suas mudanças através de diffs de código claros, justificando cada alteração realizada.
+
 ## Setup Commands
 - **Install dependencies:** `pnpm install`
 - **Build project:** `pnpm build`
