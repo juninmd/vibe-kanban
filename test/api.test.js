@@ -144,7 +144,9 @@ describe('Vibe Kanban API', async () => {
 
     assert.equal(res.status, 200);
     const data = await res.json();
-    assert.equal(data.cloneDir, 'test-clones/');
+    const expectedPath = 'test-clones'.replace(/\\/g, '/') + '/';
+    const actualPath = data.cloneDir.replace(/\\/g, '/');
+    assert.equal(actualPath, expectedPath);
     assert.equal(existsSync('test-clones'), true);
   });
 

@@ -1,63 +1,92 @@
 # AGENTS.md — Vibe Kanban
 
-## Objetivo
-Padronizar a atuação de agentes no Vibe Kanban para entregas reais, auditáveis e com foco em performance.
+> [!IMPORTANT]
+> **Sua missão:** Atuar como um orquestrador de tarefas autônomo. Você terá diversos agentes com diferentes especialidades e modelos de IA. Seu objetivo é garantir que as tarefas sejam executadas com a melhor qualidade possível, seguindo as diretrizes do projeto e entregando código pronto para produção.
 
-## Regras operacionais
-1. **Pacotes e scripts:** usar sempre `pnpm`.
-2. **Sem simulação silenciosa:** se CLI/ferramenta não existir, registrar erro real no log.
-3. **Single source of truth:** estado de tarefas/agentes/eventos deve vir do backend.
-4. **Persistência obrigatória:** configuração de execução deve viver em `vibe_config.json`.
-5. **Observabilidade:** ações dos agentes precisam deixar trilha clara em eventos e logs por tarefa.
+## Regras de Negócio (Jules Style)
+Para que o agente seja verdadeiramente autônomo e produtivo, ele deve seguir estas regras operacionais:
 
-## Princípios de performance
-- Reduzir trabalho repetitivo por ciclo (evitar scans e cópias profundas desnecessárias).
-- Agrupar atualizações para diminuir re-renderizações e broadcasts.
-- Processar apenas o que mudou sempre que possível.
-- Limitar volume visual de logs/eventos no frontend para manter UI responsiva.
+1. **Autonomia de Auto-Correção:** Durante o desenvolvimento de qualquer tarefa, se o agente encontrar um problema, bug ou inconsistência, ele **DEVE** criar um novo card no Kanban imediatamente.
+2. **Planejamento Obrigatório:** Nenhuma tarefa complexa deve ser iniciada sem um "Plano Aprovado". O agente deve descrever seus passos, ferramentas e arquivos que pretende modificar.
+3. **Ciclo de Verificação Contínua:**
+    - Toda alteração deve ser validada com `pnpm test`.
+    - Se o teste falhar, o agente deve tentar corrigir automaticamente ou reportar o erro no card.
+4. **Sugestões Proativas (Continuous Improvement):** O sistema deve gerar "Top suggestions" periodicamente nas categorias: Performance, Security, Code Health e Testing (ex: "Missing Unit Tests").
+5. **Registro de Aprendizado (Reflection):** Ao concluir uma tarefa, o agente deve gravar os "Learnings" (o que aprendeu com aquele código) para evitar erros repetidos.
+6. **Integração de Contexto Externo (MCP):** O uso de servidores MCP é obrigatório para acessar dados de terceiros.
+7. **Integração Nativa com GitHub:** O agente deve operar via branches, realizando commits atômicos e abrindo Pull Requests (PRs) para revisão humana.
+8. **Persistência de Sessões:** Toda tarefa é uma "Session" independente, com histórico completo de logs, outputs de terminal e contexto preservado para retomada.
+9. **Missions & System Prompts:** Os agentes são regidos por "Missions" dinâmicas. O sistema injeta instruções de identidade (ex: personalidades Bolt/Mika) no prompt de sistema para guiar o comportamento.
+10. **Transparência de Código (Diffs):** O agente deve explicar suas mudanças através de diffs de código claros, justificando cada alteração realizada.
 
-## Arquitetura de Orquestração (Inspirada em ComposioHQ)
+## Setup Commands
+- **Install dependencies:** `pnpm install`
+- **Build project:** `pnpm build`
+- **Start server:** `pnpm start`
+- **Access UI:** `http://localhost:5174`
 
-Para evoluir a capacidade de entrega autônoma, o Vibe Kanban adotará padrões de orquestração avançada:
+## Development Workflow
+Para garantir a qualidade exigida (visto nas instruções de orquestração):
 
-### 1. Isolamento via Workspaces
-Cada tarefa deve ser executada em um ambiente isolado.
-- **Git Worktrees:** Utilizar worktrees para permitir que múltiplos agentes trabalhem em features diferentes simultaneamente sem conflitos de branch no mesmo diretório.
-- **Ambientes Efêmeros:** O ambiente de execução (runtime) deve ser criado sob demanda e descartado após a conclusão ou falha da tarefa.
+1. **Initialize Agents:** Caso necessário, ajuste o array `defaults` em `initializeDefaultAgents` (no `src/server.ts`) para os 7 agentes base: PM, Segurança, Performance, Funcionalidades, Testes, Features e Bugs.
+2. **Execute Tasks:** As tarefas devem ser executadas em ambientes isolados (Workspaces/Worktrees futuramente).
+3. **Verify:** Utilize `pnpm test` para validar a suite de testes (Unit, API, Orchestration, OpenCode).
+4. **Pre-commit:** Garanta que testes, revisões e reflexões foram feitos antes do commit.
+5. **Commit:** Envie mudanças com mensagens descritivas.
 
-### 2. Reatores (Event-Driven Architecture)
-O sistema deve reagir a eventos externos e internos do ciclo de desenvolvimento, não apenas a comandos diretos.
-- **Trigger `ci-failed`:** Se o CI falhar, um agente deve ser automaticamente despachado para corrigir o erro, analisando os logs.
-- **Trigger `changes-requested`:** Comentários em PRs devem gerar novas sub-tarefas para o agente responsável.
-- **Trigger `conflict-detected`:** Detecção de conflitos de merge deve acionar um agente especialista em resolução de conflitos.
+## Operational Rules (The "Vibe" Way)
+1. **Sem simulação silenciosa:** Se uma ferramenta falhar, registre o erro real.
+2. **Qualidade inegociável:** Nunca gere código mock. Todo código deve ser robusto e testado.
+3. **Melhoria contínua:** Refatore e otimize o código que encontrar.
+4. **Interfaces nota 10:** UIs amigáveis, performáticas e parametrizáveis.
+5. **Single source of truth:** Estado centralizado no backend/DB.
+6. **Observabilidade:** Logs claros por tarefa em `vibe_config.json` e eventos SSE.
+7. **Bugs Autônomos:** Durante o desenvolvimento, se encontrar problemas ou bugs, crie novos cards no Kanban.
 
-### 3. Plugin Architecture
-A estrutura deve permitir a troca fácil de componentes ("Batteries Included but Swappable").
-- **Providers de LLM:** Interface agnóstica para OpenAI, Anthropic, Gemini, ou modelos locais (Ollama).
-- **Runtimes:** Suporte plugável para execução em Docker, Sandbox seguro ou Localhost.
-- **Ferramentas:** Capacidade de adicionar novas skills aos agentes (ex: acesso a banco de dados, web browsing) via configuração.
+## Principles of Performance
+- Minimizar scans e deep copies repetitivos.
+- Batching de updates para reduzir re-renders (usando `requestAnimationFrame`).
+- Limitar volume visual de logs para manter responsividade.
 
-### 4. Parallel Agents
-Suporte nativo para execução paralela de múltiplos agentes em tarefas distintas, coordenados pelo "Product Manager" para evitar colisão de escopo.
+## Inspired Features & Capabilities (Jules Integration)
+O agente autônomo deve operar com o conjunto total de funcionalidades capturadas nas referências:
 
-## Roadmap de execução por rodadas
+- **Personalidades Modulares:**
+    - **"Bolt" ⚡**: Focado obsessivamente em performance e otimização de codebase.
+    - **"Mika" 💜**: Focada em interatividade, UI/UX e modelos Live 2D.
+- **Ciclo de Vida de Tarefas (PR Flow):**
+    1. **Planejamento:** Definição clara de passos antes da execução.
+    2. **Execução:** Codificação real (sem mocks).
+    3. **Verificação:** Execução de `npm test` / `pnpm test`.
+    4. **Reflexão:** Etapa de "Recorded Learnings" após conclusão.
+    5. **Review:** Geração de Pull Requests com descrição técnica detalhada.
+- **Sugestões Inteligentes:** O sistema deve sugerir melhorias proativamente em categorias:
+    - **Cleanup:** Remoção de código morto.
+    - **Performance:** Otimização de latência.
+    - **Security:** Hardening e segurança.
+    - **Code Health:** Refatoração para legibilidade.
+    - **Testing:** Identificação de falta de testes unitários (ex: `MediaHandler`, `ProgramsService`).
+- **MCP Integrations (Model Context Protocol):** Suporte nativo para conectar com:
+    - **Linear:** Sincronização de tasks e backlog.
+    - **Neon/Supabase:** Gerenciamento de banco de dados serverless.
+    - **Stitch:** Geração de UI e assets de design.
+    - **Tinybird:** Analytics em tempo real.
+    - **Context7:** Documentação sempre atualizada para o LLM.
 
-### Rodada 1 (Atual)
-- Otimizar auto-assign no backend.
-- Renderização eficiente no Frontend (Map de estado, requestAnimationFrame).
-- Estrutura básica de Drivers (Mock, OpenAI, OpenCode).
+## Architecture Guidelines
+- **Frontend:** Three.js (3D) + Vanilla JS/TS (2D). Foco em `src/app.ts`.
+- **Backend:** Node.js + SSE + SQLite. Foco em `src/server.ts`.
+- **Drivers:** Sistema plugável de LLMs (Gemini, OpenCode, Codex). Foco em `src/drivers/`.
+- **Tests:** Suite em `test/` usando `node --test`.
 
-### Rodada 2
-- Implementar **Reatores** básicos (ex: auto-fix para erros de linter).
-- Introduzir atualização incremental no DOM do Kanban.
-- Métricas de performance de agentes.
+## References & Inspiration
+- [Hubzz Demo Interface](https://demo.hubzz.com/)
+- [OpenAI Codex](https://github.com/openai/codex)
+- [Anomaly OpenCode](https://github.com/anomalyco/opencode)
+- [Google Jules Agent](https://jules.google) (Inspirador Principal)
 
-### Rodada 3
-- Implementar **Workspaces** com Git Worktrees.
-- Sistema de Plugins para Runtimes e LLMs.
-- Fila de eventos robusta para orquestração paralela massiva.
-
-## Estrutura de referência
-- `src/server.ts`: orquestração backend, auto-assign, SSE, drivers.
-- `src/app.ts`: UI 2D/3D, renderização, integração de estado.
-- `ROADMAP.md`: visão macro das fases do produto.
+---
+*Para instruções detalhadas de módulos específicos, veja os arquivos AGENTS.md nos subdiretórios:*
+- [src/AGENTS.md](file:///d:/Solutions/pessoal/vibe-kanban/src/AGENTS.md)
+- [src/drivers/AGENTS.md](file:///d:/Solutions/pessoal/vibe-kanban/src/drivers/AGENTS.md)
+- [test/AGENTS.md](file:///d:/Solutions/pessoal/vibe-kanban/test/AGENTS.md)
