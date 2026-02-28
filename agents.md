@@ -32,6 +32,31 @@ Para garantir a qualidade exigida (visto nas instruções de orquestração):
 - Batching de updates para reduzir re-renders (usando `requestAnimationFrame`).
 - Limitar volume visual de logs para manter responsividade.
 
+## Inspired Features & Capabilities (Jules Integration)
+O agente autônomo deve operar com o conjunto total de funcionalidades capturadas nas referências:
+
+- **Personalidades Modulares:**
+    - **"Bolt" ⚡**: Focado obsessivamente em performance e otimização de codebase.
+    - **"Mika" 💜**: Focada em interatividade, UI/UX e modelos Live 2D.
+- **Ciclo de Vida de Tarefas (PR Flow):**
+    1. **Planejamento:** Definição clara de passos antes da execução.
+    2. **Execução:** Codificação real (sem mocks).
+    3. **Verificação:** Execução de `npm test` / `pnpm test`.
+    4. **Reflexão:** Etapa de "Recorded Learnings" após conclusão.
+    5. **Review:** Geração de Pull Requests com descrição técnica detalhada.
+- **Sugestões Inteligentes:** O sistema deve sugerir melhorias proativamente em categorias:
+    - **Cleanup:** Remoção de código morto.
+    - **Performance:** Otimização de latência.
+    - **Security:** Hardening e segurança.
+    - **Code Health:** Refatoração para legibilidade.
+    - **Testing:** Identificação de falta de testes unitários (ex: `MediaHandler`, `ProgramsService`).
+- **MCP Integrations (Model Context Protocol):** Suporte nativo para conectar com:
+    - **Linear:** Sincronização de tasks e backlog.
+    - **Neon/Supabase:** Gerenciamento de banco de dados serverless.
+    - **Stitch:** Geração de UI e assets de design.
+    - **Tinybird:** Analytics em tempo real.
+    - **Context7:** Documentação sempre atualizada para o LLM.
+
 ## Architecture Guidelines
 - **Frontend:** Three.js (3D) + Vanilla JS/TS (2D). Foco em `src/app.ts`.
 - **Backend:** Node.js + SSE + SQLite. Foco em `src/server.ts`.
@@ -42,6 +67,7 @@ Para garantir a qualidade exigida (visto nas instruções de orquestração):
 - [Hubzz Demo Interface](https://demo.hubzz.com/)
 - [OpenAI Codex](https://github.com/openai/codex)
 - [Anomaly OpenCode](https://github.com/anomalyco/opencode)
+- [Google Jules Agent](https://jules.google) (Inspirador Principal)
 
 ---
 *Para instruções detalhadas de módulos específicos, veja os arquivos AGENTS.md nos subdiretórios:*
