@@ -212,7 +212,7 @@ function updateState(data: any) {
       const data = createOffice(scene, agents.length);
       officeData.padPositions = data.padPositions;
       isOfficeCreated = true;
-      spawnDesks();
+      spawnComputers();
     }
 
     eventLog = data.events || [];
@@ -980,21 +980,41 @@ loader.load("/models/RobotExpressive.glb", (gltf) => {
   rebuildAgentMeshes();
 });
 
-// Desk generation (simple box desks without old_computer model)
-function spawnDesks() {
-  officeData.padPositions.forEach((pos) => {
-    const deskGeo = new THREE.BoxGeometry(2.0, 1.0, 1.2);
-    const deskMat = new THREE.MeshStandardMaterial({ color: "#1e293b", roughness: 0.2, metalness: 0.5 });
-    const desk = new THREE.Mesh(deskGeo, deskMat);
-    desk.position.set(pos.x, 0.5, pos.z - 1.2);
-    scene.add(desk);
+let computers: THREE.Group[] = [];
 
-    // Simple monitor placeholder
-    const monGeo = new THREE.BoxGeometry(0.9, 0.6, 0.05);
-    const monMat = new THREE.MeshStandardMaterial({ color: "#0ea5e9", emissive: 0x003344, emissiveIntensity: 0.6 });
-    const monitor = new THREE.Mesh(monGeo, monMat);
-    monitor.position.set(0, 0.8, 0);
-    desk.add(monitor);
+// Desk generation
+function spawnComputers() {
+  const loader = new GLTFLoader();
+  loader.load("/models/old_computer.glb", (gltf) => {
+    officeData.padPositions.forEach((pos) => {
+      const computer = gltf.scene.clone();
+      computer.scale.set(0.6, 0.6, 0.6);
+      computer.position.set(pos.x, 0, pos.z - 1.2);
+      computer.rotation.y = Math.PI;
+      scene.add(computer);
+      computers.push(computer as unknown as THREE.Group);
+    });
+  }, undefined, (error) => {
+    console.error("Falha ao carregar modelo old_computer.glb, usando fallback", error);
+    officeData.padPositions.forEach((pos) => {
+      const deskGroup = new THREE.Group();
+      deskGroup.position.set(pos.x, 0, pos.z - 1.2);
+
+      const deskGeo = new THREE.BoxGeometry(2.0, 1.0, 1.2);
+      const deskMat = new THREE.MeshStandardMaterial({ color: "#1e293b", roughness: 0.2, metalness: 0.5 });
+      const desk = new THREE.Mesh(deskGeo, deskMat);
+      desk.position.set(0, 0.5, 0);
+      deskGroup.add(desk);
+
+      const monGeo = new THREE.BoxGeometry(0.9, 0.6, 0.05);
+      const monMat = new THREE.MeshStandardMaterial({ color: "#0ea5e9", emissive: 0x003344, emissiveIntensity: 0.6 });
+      const monitor = new THREE.Mesh(monGeo, monMat);
+      monitor.position.set(0, 1.3, 0);
+      deskGroup.add(monitor);
+
+      scene.add(deskGroup);
+      computers.push(deskGroup);
+    });
   });
 }
 
@@ -1478,14 +1498,14 @@ function updateAgents3D() {
     // Spread agents out more: -8 to +8 roughly
     const spawnPos = new THREE.Vector3(-8 + idx * 3, 0, -1.0);
     const pads = officeData.padPositions;
-    const deskIdx = idx % (pads.length || 1);
+    const deskIdx = computers.length > 0 ? idx % computers.length : idx % (pads.length || 1);
 
     // Safe check for computers array
     const deskPos = pads[deskIdx] ? pads[deskIdx].clone() : spawnPos.clone();
-    deskPos.y = 0.5;
+    deskPos.y = 0; // Ground level
 
-    // Working Animation is now standing (Idle) since there's no desk
-    const workingAnim = "Idle";
+    // Working Animation is now Sitting
+    const workingAnim = item.anims && item.anims["Sitting"] ? "Sitting" : "Idle";
 
     if (item.phase === "celebrating") {
       // Logic for celebrating happens inside tick() loop, just skip overriding it here.
