@@ -24,7 +24,7 @@ test('create agent and verify 3d label', async ({ page }) => {
 
   // Wait for tools to load
   const toolSelect = page.locator('#agentTool');
-  await expect(toolSelect).not.toHaveValue('Carregando...', { timeout: 10000 });
+  await expect(toolSelect).not.toHaveText(/Carregando/, { timeout: 10000 });
 
   // Log options
   const options = await toolSelect.locator('option').all();

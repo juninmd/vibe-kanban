@@ -555,7 +555,7 @@ const server = createServer(async (req, res) => {
 
   // GET /api/tools
   if (url === "/api/tools" && method === "GET") {
-    const tools: { id: string; name: string }[] = [];
+    const tools: { id: string; name: string }[] = [{ id: "mock", name: "Mock Driver" }];
     const checks: [string, string, string][] = [
       ["gemini", "gemini --version", "Gemini CLI"],
       ["claude", "claude --version", "Claude Code"],
@@ -581,6 +581,8 @@ const server = createServer(async (req, res) => {
       models = ["gpt-4o", "gpt-4o-mini"];
     } else if (tool === "opencode") {
       models = ["gpt-4o", "claude-sonnet-4-20250514"];
+    } else if (tool === "mock") {
+      models = ["mock-model"];
     }
     return jsonResponse(res, 200, { models });
   }
