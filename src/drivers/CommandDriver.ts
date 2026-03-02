@@ -1,4 +1,4 @@
-import { spawn, ChildProcessWithoutNullStreams } from "child_process";
+import { execa, ExecaChildProcess } from "execa";
 import * as fs from "fs";
 import * as path from "path";
 import { Task, Agent, LLMDriver, DriverContext } from "../types.js";
@@ -6,7 +6,7 @@ import { extractAndWriteFiles } from "../utils/fileUtils.js";
 
 export class CommandDriver implements LLMDriver {
     name: string = "CLI Command Driver";
-    private runningTasks = new Map<number, ChildProcessWithoutNullStreams>();
+    private runningTasks = new Map<number, ExecaChildProcess>();
     private taskLogs = new Map<number, string[]>();
     private getCloneDir: () => string;
     private terminalManager?: any; // TerminalManager
@@ -115,7 +115,7 @@ Do not output hypothetical logs. Output the actual file content needed to solve 
         ctx.onLog(task.id, `Starting: ${command} ${args[0]} in ${taskDir}`);
 
         try {
-            const child = spawn(command, args, { cwd: taskDir });
+            const child = execa(command, args, { cwd: taskDir, reject: false });
             this.runningTasks.set(task.id, child);
 
             child.stdout.on("data", (data) => {
