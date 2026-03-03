@@ -1,0 +1,258 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e1]:
+  - banner [ref=e2]:
+    - heading "Vibe Kanban • Time de Agentes" [level=1] [ref=e3]
+    - generic [ref=e4]:
+      - combobox [ref=e5]:
+        - option "Gemini CLI" [selected]
+        - option "Copilot SDK"
+        - option "OpenCode AI"
+      - button "Novo Agente" [ref=e6] [cursor=pointer]
+      - button "Configurações" [ref=e7] [cursor=pointer]
+      - button "Alternar 2D / 3D" [ref=e8] [cursor=pointer]
+      - button "Gerar tarefas exemplo" [ref=e9] [cursor=pointer]
+      - button "Limpar Concluídos" [ref=e10] [cursor=pointer]
+      - button "Resetar Dados" [ref=e11] [cursor=pointer]
+  - main [ref=e12]:
+    - complementary [ref=e13]:
+      - generic [ref=e14]:
+        - heading "📊 Dashboard" [level=2] [ref=e15]
+        - generic [ref=e16]:
+          - generic [ref=e17]:
+            - generic [ref=e18]: Pendentes
+            - generic [ref=e19]: "3"
+          - generic [ref=e20]:
+            - generic [ref=e21]: Concluídas
+            - generic [ref=e22]: "1"
+          - generic [ref=e23]:
+            - generic [ref=e24]: Agentes
+            - generic [ref=e25]: "1"
+      - generic [ref=e26]:
+        - heading "Criar tarefa" [level=2] [ref=e27]
+        - generic [ref=e28]:
+          - generic [ref=e29]:
+            - text: Fonte
+            - combobox "Fonte" [ref=e30]:
+              - option "Product Manager" [selected]
+              - option "Usuário"
+          - generic [ref=e31]:
+            - text: Título
+            - textbox "Título" [ref=e32]:
+              - /placeholder: "Ex: implementar autenticação"
+          - generic [ref=e33]:
+            - text: Categoria
+            - combobox "Categoria" [ref=e34]:
+              - option "Roadmap" [selected]
+              - option "Segurança"
+              - option "Performance"
+              - option "Feature Builder"
+              - option "QA / Testes"
+              - option "Correções / Bugs"
+          - generic [ref=e35]:
+            - text: Prioridade
+            - combobox "Prioridade" [ref=e36]:
+              - option "Alta"
+              - option "Média" [selected]
+              - option "Baixa"
+          - generic [ref=e37]:
+            - text: Diretório de Trabalho
+            - combobox "Diretório de Trabalho" [ref=e38]:
+              - option "Automático (clones/task-id)" [selected]
+              - option "Diretório Local Existente"
+              - option "Repositório GitHub"
+              - option "Novo Projeto"
+          - generic [ref=e39]:
+            - text: Repositório (Github)
+            - textbox "Repositório (Github)" [ref=e40]:
+              - /placeholder: "ex: empresa/projeto"
+          - generic [ref=e41]:
+            - text: Descrição
+            - textbox "Descrição" [ref=e42]:
+              - /placeholder: Detalhes do card...
+          - generic [ref=e43]:
+            - text: Tipo de Agente (CLI/Integração)
+            - textbox "Tipo de Agente (CLI/Integração)" [ref=e44]:
+              - /placeholder: "ex: Gemini CLI, Copilot SDK"
+          - generic [ref=e45]:
+            - text: Designar Agente Voluntário (Opcional)
+            - combobox "Designar Agente Voluntário (Opcional)" [ref=e46]:
+              - option "- Automático Direcionado -" [selected]
+              - option "Product Manager (roadmap)"
+              - option "Performance (performance)"
+              - option "Novas Funcionalidades (feature)"
+              - option "Novas Features (feature)"
+              - option "Testes (test)"
+              - option "Segurança (security)"
+          - generic [ref=e47]:
+            - text: Modelo Lógico
+            - combobox "Modelo Lógico" [ref=e48]:
+              - option "Selecione um agente ou ferramenta" [selected]
+          - button "Adicionar card" [active] [ref=e49] [cursor=pointer]
+      - generic [ref=e50]:
+        - heading "Agentes" [level=2] [ref=e51]
+        - generic [ref=e52]:
+          - generic [ref=e53]:
+            - generic [ref=e54]:
+              - strong [ref=e55]: Product Manager
+              - generic [ref=e56]: Livre
+            - generic [ref=e57]:
+              - generic [ref=e58]: "Modelo: gpt-4o"
+              - generic [ref=e59]: "Categoria: roadmap"
+              - generic [ref=e60]: "Ferramenta: openai"
+            - generic [ref=e61]:
+              - button "📟 Terminal" [ref=e62] [cursor=pointer]
+              - button "✏️ Editar" [ref=e63] [cursor=pointer]
+              - button "🗑️ Excluir" [ref=e64] [cursor=pointer]
+          - generic [ref=e65]:
+            - generic [ref=e66]:
+              - strong [ref=e67]: Performance
+              - generic [ref=e68]: Livre
+            - generic [ref=e69]:
+              - generic [ref=e70]: "Modelo: gpt-4o"
+              - generic [ref=e71]: "Categoria: performance"
+              - generic [ref=e72]: "Ferramenta: copilot"
+            - generic [ref=e73]:
+              - button "📟 Terminal" [ref=e74] [cursor=pointer]
+              - button "✏️ Editar" [ref=e75] [cursor=pointer]
+              - button "🗑️ Excluir" [ref=e76] [cursor=pointer]
+          - generic [ref=e77]:
+            - generic [ref=e78]:
+              - strong [ref=e79]: Novas Funcionalidades
+              - generic [ref=e80]: Livre
+            - generic [ref=e81]:
+              - generic [ref=e82]: "Modelo: claude-3-5-sonnet-20241022"
+              - generic [ref=e83]: "Categoria: feature"
+              - generic [ref=e84]: "Ferramenta: claude"
+            - generic [ref=e85]:
+              - button "📟 Terminal" [ref=e86] [cursor=pointer]
+              - button "✏️ Editar" [ref=e87] [cursor=pointer]
+              - button "🗑️ Excluir" [ref=e88] [cursor=pointer]
+          - generic [ref=e89]:
+            - generic [ref=e90]:
+              - strong [ref=e91]: Novas Features
+              - generic [ref=e92]: Livre
+            - generic [ref=e93]:
+              - generic [ref=e94]: "Modelo: gpt-4o"
+              - generic [ref=e95]: "Categoria: feature"
+              - generic [ref=e96]: "Ferramenta: opencode"
+            - generic [ref=e97]:
+              - button "📟 Terminal" [ref=e98] [cursor=pointer]
+              - button "✏️ Editar" [ref=e99] [cursor=pointer]
+              - button "🗑️ Excluir" [ref=e100] [cursor=pointer]
+          - generic [ref=e101]:
+            - generic [ref=e102]:
+              - strong [ref=e103]: Testes
+              - generic [ref=e104]: Trabalhando
+            - generic [ref=e105]:
+              - generic [ref=e106]: "Modelo: gpt-4o"
+              - generic [ref=e107]: "Categoria: test"
+              - generic [ref=e108]: "Ferramenta: opencode"
+              - generic [ref=e109]: "Task: #26"
+            - generic [ref=e110]:
+              - button "📟 Terminal" [ref=e111] [cursor=pointer]
+              - button "✏️ Editar" [ref=e112] [cursor=pointer]
+              - button "🗑️ Excluir" [ref=e113] [cursor=pointer]
+          - generic [ref=e114]:
+            - generic [ref=e115]:
+              - strong [ref=e116]: Segurança
+              - generic [ref=e117]: Livre
+            - generic [ref=e118]:
+              - generic [ref=e119]: "Modelo: gemini-2.0-flash"
+              - generic [ref=e120]: "Categoria: security"
+              - generic [ref=e121]: "Ferramenta: gemini"
+            - generic [ref=e122]:
+              - button "📟 Terminal" [ref=e123] [cursor=pointer]
+              - button "✏️ Editar" [ref=e124] [cursor=pointer]
+              - button "🗑️ Excluir" [ref=e125] [cursor=pointer]
+      - generic [ref=e126]:
+        - heading "Eventos" [level=2] [ref=e127]
+        - list [ref=e128]:
+          - listitem [ref=e129]: "> 23:02:16 — Tarefa #25 concluída!"
+          - listitem [ref=e130]: "> 23:02:10 — [AutoPilot] Testes iniciou a tarefa #26"
+          - listitem [ref=e131]: "> 23:02:07 — Aviso: Gemini CLI não encontrado. Driver padrão definido como Gemini, mas pode falhar sem a CLI instalada."
+          - listitem [ref=e132]: "> 23:02:04 — BUG encontrado em #26: Process exited with code 1"
+          - listitem [ref=e133]: "> 23:02:04 — BUG encontrado em #26: error: The current working directory was deleted, so that command didn't work. Please cd into a different directory and try again."
+          - listitem [ref=e134]: "> 23:02:03 — Orquestração manual executada via API."
+          - listitem [ref=e135]: "> 23:02:03 — [AutoPilot] Segurança iniciou a tarefa #25"
+          - listitem [ref=e136]: "> 23:02:03 — [AutoPilot] Testes iniciou a tarefa #26"
+          - listitem [ref=e137]: "> 23:02:03 — Novo card criado: Trigger Task (user)"
+          - listitem [ref=e138]: "> 23:02:03 — Orquestração automática desativada."
+          - listitem [ref=e139]: "> 23:02:03 — Orquestração automática ativada."
+          - listitem [ref=e140]: "> 23:02:03 — [PM] (Simulado) Adicionou nova tarefa: Implementar OAuth 2.0"
+          - listitem [ref=e141]: "> 23:02:03 — Sistema resetado."
+    - generic [ref=e142]:
+      - generic [ref=e143]:
+        - paragraph: "Visão 3D da sala (inspiração: hubzz demo)"
+      - generic:
+        - generic:
+          - generic:
+            - heading "Backlog" [level=3]
+            - article:
+              - strong: "#28 Bug: Process exited with code 1"
+              - generic:
+                - generic: bug
+                - generic: alta
+                - generic: "fonte: system"
+                - generic: "agente: -"
+              - generic:
+                - button "Pegar tarefa"
+                - button "←"
+                - button "→"
+                - button "↑"
+                - button "↓"
+                - button "+ bug"
+            - article:
+              - strong: "#27 Bug: error: The current working directory was deleted, so that command didn't work. Please cd into a diff"
+              - generic:
+                - generic: bug
+                - generic: alta
+                - generic: "fonte: system"
+                - generic: "agente: -"
+              - generic:
+                - button "Pegar tarefa"
+                - button "←"
+                - button "→"
+                - button "↑"
+                - button "↓"
+                - button "+ bug"
+          - generic:
+            - heading "Em progresso" [level=3]
+            - article:
+              - strong: "#26 Trigger Task"
+              - generic:
+                - generic: test
+                - generic: media
+                - generic: "fonte: user"
+                - generic: "agente: Testes"
+              - generic: "> Running: opencode run Trigger Task --agent Testes --model gpt-4o in test-clones/task-26"
+              - generic:
+                - button "Interromper"
+                - button "←"
+                - button "→"
+                - button "↑"
+                - button "↓"
+                - button "+ bug"
+          - generic:
+            - heading "Review" [level=3]
+          - generic:
+            - heading "Concluído" [level=3]
+            - article:
+              - strong: "#25 Implementar OAuth 2.0"
+              - paragraph: Configurar login social com Google e GitHub.
+              - generic:
+                - generic: security
+                - generic: alta
+                - generic: "fonte: product_manager"
+                - generic: "agente: -"
+              - generic: "> Gemini simulation completed successfully."
+              - generic:
+                - button "←"
+                - button "→"
+                - button "↑"
+                - button "↓"
+                - button "+ bug"
+      - button "Minimizar Tudo" [ref=e149] [cursor=pointer]
+  - text: SYSTEM_CONFIG SYSTEM_CONFIG SYSTEM_CONFIG
+```

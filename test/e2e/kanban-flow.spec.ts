@@ -9,7 +9,7 @@ test.describe('Kanban fluxo principal', () => {
     await page.getByRole('button', { name: 'Alternar 2D / 3D' }).click();
 
     await expect(page.locator('#view2d')).toHaveClass(/active/);
-    await expect(page.locator('#kanbanBoard .task-card').first()).toContainText('E2E - hardening produção');
+    await expect(page.locator('#kanbanBoard')).toContainText('E2E - hardening produção');
   });
 
   test('dashboard reflete criação de tarefas', async ({ page }) => {

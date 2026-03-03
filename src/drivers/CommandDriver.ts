@@ -1,4 +1,4 @@
-import { execa, ExecaChildProcess } from "execa";
+import { execa } from "execa";
 import * as fs from "fs";
 import * as path from "path";
 import { Task, Agent, LLMDriver, DriverContext } from "../types.js";
@@ -6,7 +6,7 @@ import { extractAndWriteFiles } from "../utils/fileUtils.js";
 
 export class CommandDriver implements LLMDriver {
     name: string = "CLI Command Driver";
-    private runningTasks = new Map<number, ExecaChildProcess>();
+    private runningTasks = new Map<number, import("execa").ExecaChildProcess>();
     private taskLogs = new Map<number, string[]>();
     private getCloneDir: () => string;
     private terminalManager?: any; // TerminalManager
