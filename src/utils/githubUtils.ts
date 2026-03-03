@@ -19,12 +19,12 @@ export async function createPullRequest(
             const { stdout } = await execFileAsync("git", args, { cwd: taskDir });
             return stdout.trim();
         } catch (e: any) {
-            if (!hideError) {
-                // Ensure token is not leaked in error message
-                const safeMsg = e.message.replace(new RegExp(githubToken, 'g'), '***');
-                throw new Error(safeMsg);
+            const safeMsg = e.message.replace(new RegExp(githubToken, 'g'), '***');
+            const sanitizedError = new Error(safeMsg);
+            if (e.stack) {
+                (sanitizedError as any).stack = e.stack.replace(new RegExp(githubToken, 'g'), '***');
             }
-            throw e;
+            throw sanitizedError;
         }
     };
 
@@ -71,7 +71,7 @@ export async function createPullRequest(
         await runGit(["remote", "add", "origin", remoteUrl]);
     }
 
-    await runGit(["push", "-u", "origin", branchName]);
+    await runGit(["push", "--force-with-lease", "-u", "origin", branchName]);
 
     // Create PR via GitHub API
     const prBody = {
