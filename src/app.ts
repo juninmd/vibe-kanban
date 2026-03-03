@@ -4,6 +4,7 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import * as SkeletonUtils from "three/addons/utils/SkeletonUtils.js";
 import { createOffice } from "./office.js";
 import { getLaneSafe, getTaskCardPosition, shouldRenderTaskIn3D } from "./kanbanMath.js";
+import { getHeadMaterials, getBodyMaterials, getLimbMaterial } from "./skins.js";
 
 const API_URL = "";
 
@@ -972,7 +973,7 @@ loader.load("/models/RobotExpressive.glb", (gltf) => {
     }
   });
   console.log("Robot animations loaded:", robotAnimations.map(a => a.name));
-  usingFallbackAvatars = false;
+  usingFallbackAvatars = true; // FORCE use of skin/boxy avatars per user request
   rebuildAgentMeshes();
 }, undefined, (error) => {
   console.error("Falha ao carregar modelo 3D do robô. Usando avatar fallback.", error);
@@ -1376,19 +1377,36 @@ function createAgentMesh(agent: Agent, index: number) {
       anims![clip.name] = mixer!.clipAction(clip);
     });
   } else {
-    const body = new THREE.Mesh(
-      new THREE.CapsuleGeometry(0.25, 0.8, 4, 8),
-      new THREE.MeshStandardMaterial({ color })
-    );
-    body.position.y = 0.8;
+    const bodyGeo = new THREE.BoxGeometry(0.6, 0.8, 0.3);
+    const bodyMats = getBodyMaterials(agent.role, agent.model);
+    const body = new THREE.Mesh(bodyGeo, bodyMats);
+    body.position.y = 0.9;
     group.add(body);
 
-    const head = new THREE.Mesh(
-      new THREE.SphereGeometry(0.22, 16, 16),
-      new THREE.MeshStandardMaterial({ color: "#dbeafe" })
-    );
-    head.position.y = 1.45;
+    const headGeo = new THREE.BoxGeometry(0.5, 0.5, 0.5);
+    const headMats = getHeadMaterials(agent.role);
+    const head = new THREE.Mesh(headGeo, headMats);
+    head.position.y = 1.55;
     group.add(head);
+
+    const limbGeo = new THREE.BoxGeometry(0.2, 0.8, 0.2);
+    const limbMat = getLimbMaterial(agent.role);
+
+    const legL = new THREE.Mesh(limbGeo, limbMat);
+    legL.position.set(-0.15, 0.4, 0);
+    group.add(legL);
+
+    const legR = new THREE.Mesh(limbGeo, limbMat);
+    legR.position.set(0.15, 0.4, 0);
+    group.add(legR);
+
+    const armL = new THREE.Mesh(limbGeo, bodyMats[0]); // same color as body sides
+    armL.position.set(-0.4, 0.9, 0);
+    group.add(armL);
+
+    const armR = new THREE.Mesh(limbGeo, bodyMats[1]);
+    armR.position.set(0.4, 0.9, 0);
+    group.add(armR);
   }
 
   group.position.set(-5 + index * 2, 0, -0.5);
@@ -1442,13 +1460,23 @@ function createAgentMesh(agent: Agent, index: number) {
   const labelCanvas = makeLabelCanvas(`${agent.model}`, badgeColor);
   const labelTex = new THREE.CanvasTexture(labelCanvas);
   labelTex.colorSpace = THREE.SRGBColorSpace;
-  const labelMat = new THREE.SpriteMaterial({ map: labelTex, transparent: true, depthTest: false });
-  const label = new THREE.Sprite(labelMat);
-  // Scale down to badge size
-  label.scale.set(0.6, 0.15, 1);
-  label.renderOrder = 999;
-  // Position on chest
-  label.position.set(0, 1.35, 0.25);
+
+  // Make the label a mesh attached to the chest directly (skin)
+  const labelMat = new THREE.MeshBasicMaterial({
+    map: labelTex,
+    transparent: true,
+    depthTest: true
+  });
+
+  // Create slightly curved/flat plane to stick on chest
+  const labelGeo = new THREE.PlaneGeometry(0.5, 0.125);
+  const label = new THREE.Mesh(labelGeo, labelMat);
+
+  // Position directly on the chest (skin)
+  label.position.set(0, 1.15, 0.15);
+  if (robotModel && !usingFallbackAvatars) {
+    label.position.set(0, 1.15, 0.20);
+  }
   group.add(label);
 
   const statusMat = new THREE.SpriteMaterial({ map: createStatusTexture("💤"), transparent: true, depthTest: false });

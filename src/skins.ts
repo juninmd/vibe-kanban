@@ -70,29 +70,46 @@ export function getHeadMaterials(role: string): THREE.Material[] {
     ];
 }
 
-export function getBodyMaterials(role: string): THREE.Material[] {
+export function getBodyMaterials(role: string, modelName?: string): THREE.Material[] {
     const primaryColor = roleColors[role] || "#888888";
 
-    const frontTex = createTexture(64, 64, (ctx) => {
+    const frontTex = createTexture(256, 256, (ctx) => {
         ctx.fillStyle = primaryColor;
-        ctx.fillRect(0, 0, 64, 64);
+        ctx.fillRect(0, 0, 256, 256);
 
         // Details
         if (role === 'product_manager') {
              // Turtleneck shading
              ctx.fillStyle = '#222';
-             ctx.fillRect(20, 0, 24, 64);
+             ctx.fillRect(80, 0, 96, 256);
         } else if (role === 'seguranca') {
              // Badge
              ctx.fillStyle = '#fbbf24';
-             ctx.fillRect(40, 10, 8, 10);
+             ctx.fillRect(160, 40, 32, 40);
              // Tie
              ctx.fillStyle = '#000';
-             ctx.fillRect(28, 0, 8, 40);
+             ctx.fillRect(112, 0, 32, 160);
         } else {
              // Generic logo/shirt pocket
              ctx.fillStyle = 'rgba(255,255,255,0.2)';
-             ctx.fillRect(10, 10, 16, 14);
+             ctx.fillRect(40, 40, 64, 56);
+        }
+
+        // Draw Model Name directly on the skin/chest texture
+        if (modelName) {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+            ctx.roundRect(16, 128, 224, 64, 16);
+            ctx.fill();
+
+            ctx.font = "bold 28px 'Share Tech Mono', monospace";
+            ctx.fillStyle = "#ffffff";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.shadowColor = "rgba(0,0,0,0.8)";
+            ctx.shadowBlur = 4;
+            ctx.shadowOffsetX = 2;
+            ctx.shadowOffsetY = 2;
+            ctx.fillText(modelName, 128, 160);
         }
     });
 
