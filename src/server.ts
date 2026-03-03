@@ -13,6 +13,7 @@ import { CommandDriver } from "./drivers/CommandDriver.js";
 import { DB } from "./db.js";
 import { TerminalManager } from "./terminal/TerminalManager.js";
 import { Memory } from "./memory.js";
+import { createPullRequest } from "./utils/githubUtils.js";
 import "dotenv/config";
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 5174;
@@ -223,10 +224,26 @@ function startTask(task: Task, agent: Agent) {
         if (msg.includes("Error") || msg.includes("Completed")) addEvent(`#${tid}: ${msg}`);
       }
     },
-    onComplete: (tid) => {
+    onComplete: async (tid) => {
       const t = getTask(tid);
       if (t && t.assignedTo) {
         addTerminalLine(t.assignedTo, tid, "system", `✅ Tarefa #${tid} concluída!`);
+
+        // Auto PR generation
+        if (t.githubRepo && process.env.GITHUB_TOKEN) {
+            addTerminalLine(t.assignedTo, tid, "system", `🔄 Gerando Pull Request para o repositório ${t.githubRepo}...`);
+            try {
+                const workDir = t.workDir || path.join(appConfig.cloneDir, `task-${t.id}`);
+                const githubUser = process.env.GITHUB_USER || "vibe-agent";
+                const prResult = await createPullRequest(workDir, t.id, t.title, t.githubRepo, process.env.GITHUB_TOKEN, githubUser);
+                addTerminalLine(t.assignedTo, tid, "system", `✅ ${prResult}`);
+                addEvent(`PR criado para Tarefa #${tid}: ${t.githubRepo}`);
+            } catch (prError: any) {
+                addTerminalLine(t.assignedTo, tid, "stderr", `❌ Falha ao criar Pull Request: ${prError.message}`);
+                addEvent(`Erro ao criar PR para Tarefa #${tid}.`);
+            }
+        }
+
         updateAgent(t.assignedTo, { status: "idle", assignedTask: null });
         updateTask(tid, { assignedTo: null, lane: "done" });
         addEvent(`Tarefa #${tid} concluída!`);
@@ -877,7 +894,7 @@ const server = createServer(async (req, res) => {
     const body = await parseBody(req);
     const envPath = path.resolve(process.cwd(), ".env");
     let envContent = "";
-    const ALLOWED_ENV_KEYS = ["OPENAI_API_KEY", "GEMINI_API_KEY", "ANTHROPIC_API_KEY", "GITHUB_TOKEN"];
+    const ALLOWED_ENV_KEYS = ["OPENAI_API_KEY", "GEMINI_API_KEY", "ANTHROPIC_API_KEY", "GITHUB_USER", "GITHUB_TOKEN"];
 
     try {
       if (fs.existsSync(envPath)) {

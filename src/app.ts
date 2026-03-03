@@ -90,6 +90,7 @@ const els = {
   envOpenAI: document.getElementById("envOpenAI") as HTMLInputElement,
   envGemini: document.getElementById("envGemini") as HTMLInputElement,
   envAnthropic: document.getElementById("envAnthropic") as HTMLInputElement,
+  envGithubUser: document.getElementById("envGithubUser") as HTMLInputElement,
   envGithub: document.getElementById("envGithub") as HTMLInputElement,
   // Stats
   statPending: document.getElementById("statPending") as HTMLElement,
@@ -887,6 +888,7 @@ els.settingsForm.addEventListener("submit", async (e) => {
   if (els.envOpenAI.value) envUpdates["OPENAI_API_KEY"] = els.envOpenAI.value;
   if (els.envGemini.value) envUpdates["GEMINI_API_KEY"] = els.envGemini.value;
   if (els.envAnthropic.value) envUpdates["ANTHROPIC_API_KEY"] = els.envAnthropic.value;
+  if (els.envGithubUser.value) envUpdates["GITHUB_USER"] = els.envGithubUser.value;
   if (els.envGithub.value) envUpdates["GITHUB_TOKEN"] = els.envGithub.value;
 
   if (Object.keys(envUpdates).length > 0) {
@@ -896,6 +898,7 @@ els.settingsForm.addEventListener("submit", async (e) => {
     els.envOpenAI.value = "";
     els.envGemini.value = "";
     els.envAnthropic.value = "";
+    els.envGithubUser.value = "";
     els.envGithub.value = "";
   } else {
     showToast("Configurações salvas!", "success");
