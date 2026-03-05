@@ -6,7 +6,7 @@ import { extractAndWriteFiles } from "../utils/fileUtils.js";
 
 export class CommandDriver implements LLMDriver {
     name: string = "CLI Command Driver";
-    private runningTasks = new Map<number, import("execa").ExecaChildProcess>();
+    private runningTasks = new Map<number, any>();
     private taskLogs = new Map<number, string[]>();
     private getCloneDir: () => string;
     private terminalManager?: any; // TerminalManager
