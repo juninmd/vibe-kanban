@@ -4,6 +4,7 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import * as SkeletonUtils from "three/addons/utils/SkeletonUtils.js";
 import { createOffice } from "./office.js";
 import { getLaneSafe, getTaskCardPosition, shouldRenderTaskIn3D } from "./kanbanMath.js";
+import { getHeadMaterials, getBodyMaterials, getLimbMaterial } from "./skins.js";
 
 const API_URL = "";
 
@@ -962,8 +963,11 @@ scene.add(particles);
 let robotModel: THREE.Group | null = null;
 let robotAnimations: THREE.AnimationClip[] = [];
 const loader = new GLTFLoader();
-let usingFallbackAvatars = false;
 
+// Force the use of fallback avatars because they project the model name directly on the skin.
+let usingFallbackAvatars = true;
+
+// Preload the gltf, but do not override the fallback flag.
 loader.load("/models/RobotExpressive.glb", (gltf) => {
   robotModel = gltf.scene;
   robotAnimations = gltf.animations;
@@ -975,7 +979,8 @@ loader.load("/models/RobotExpressive.glb", (gltf) => {
     }
   });
   console.log("Robot animations loaded:", robotAnimations.map(a => a.name));
-  usingFallbackAvatars = false;
+  // Keep using fallback avatars
+  // usingFallbackAvatars = false;
   rebuildAgentMeshes();
 }, undefined, (error) => {
   console.error("Falha ao carregar modelo 3D do robô. Usando avatar fallback.", error);
@@ -1358,6 +1363,16 @@ function createAgentMesh(agent: Agent, index: number) {
   let mixer: THREE.AnimationMixer | undefined;
   let anims: Record<string, THREE.AnimationAction> | undefined;
 
+  // Determine badge color based on tool/model
+  let badgeColor = "#555555";
+  const tool = agent.tool || "unknown";
+
+  if (tool.includes("openai")) badgeColor = "#10a37f";
+  else if (tool.includes("gemini")) badgeColor = "#4285f4";
+  else if (tool.includes("copilot")) badgeColor = "#6f42c1";
+  else if (tool.includes("opencode")) badgeColor = "#f97316";
+  else if (tool.includes("claude")) badgeColor = "#d97757";
+
   if (robotModel && !usingFallbackAvatars) {
     const clonedRobot = SkeletonUtils.clone(robotModel) as THREE.Group;
     clonedRobot.scale.set(0.45, 0.45, 0.45); // increased height
@@ -1379,80 +1394,68 @@ function createAgentMesh(agent: Agent, index: number) {
       anims![clip.name] = mixer!.clipAction(clip);
     });
   } else {
-    const body = new THREE.Mesh(
-      new THREE.CapsuleGeometry(0.25, 0.8, 4, 8),
-      new THREE.MeshStandardMaterial({ color })
-    );
+    // Fallback: Boxy Avatar
+
+    // Body (0.5 x 0.6 x 0.3)
+    const bodyGeo = new THREE.BoxGeometry(0.5, 0.6, 0.3);
+    const bodyMats = getBodyMaterials(agent.role, agent.model, badgeColor);
+    const body = new THREE.Mesh(bodyGeo, bodyMats);
     body.position.y = 0.8;
     group.add(body);
 
-    const head = new THREE.Mesh(
-      new THREE.SphereGeometry(0.22, 16, 16),
-      new THREE.MeshStandardMaterial({ color: "#dbeafe" })
-    );
-    head.position.y = 1.45;
+    // Head (0.4 x 0.4 x 0.4)
+    const headGeo = new THREE.BoxGeometry(0.4, 0.4, 0.4);
+    const headMats = getHeadMaterials(agent.role);
+    const head = new THREE.Mesh(headGeo, headMats);
+    head.position.y = 1.35; // 0.8 (body y) + 0.3 (half body height) + 0.2 (half head height) + 0.05 (neck space)
     group.add(head);
+
+    // Limbs
+    const limbMat = getLimbMaterial(agent.role);
+    const armGeo = new THREE.BoxGeometry(0.2, 0.5, 0.2);
+    const legGeo = new THREE.BoxGeometry(0.22, 0.5, 0.22);
+
+    // Left Arm Pivot
+    const leftArmPivot = new THREE.Group();
+    leftArmPivot.position.set(-0.35, 1.05, 0); // Shoulder position
+    const leftArm = new THREE.Mesh(armGeo, limbMat);
+    leftArm.position.set(0, -0.25, 0); // Drop down from pivot
+    leftArmPivot.add(leftArm);
+    group.add(leftArmPivot);
+    group.userData.leftArm = leftArmPivot;
+
+    // Right Arm Pivot
+    const rightArmPivot = new THREE.Group();
+    rightArmPivot.position.set(0.35, 1.05, 0); // Shoulder position
+    const rightArm = new THREE.Mesh(armGeo, limbMat);
+    rightArm.position.set(0, -0.25, 0);
+    rightArmPivot.add(rightArm);
+    group.add(rightArmPivot);
+    group.userData.rightArm = rightArmPivot;
+
+    // Left Leg Pivot
+    const leftLegPivot = new THREE.Group();
+    leftLegPivot.position.set(-0.15, 0.5, 0); // Hip position
+    const leftLeg = new THREE.Mesh(legGeo, limbMat);
+    leftLeg.position.set(0, -0.25, 0);
+    leftLegPivot.add(leftLeg);
+    group.add(leftLegPivot);
+    group.userData.leftLeg = leftLegPivot;
+
+    // Right Leg Pivot
+    const rightLegPivot = new THREE.Group();
+    rightLegPivot.position.set(0.15, 0.5, 0); // Hip position
+    const rightLeg = new THREE.Mesh(legGeo, limbMat);
+    rightLeg.position.set(0, -0.25, 0);
+    rightLegPivot.add(rightLeg);
+    group.add(rightLegPivot);
+    group.userData.rightLeg = rightLegPivot;
   }
 
   group.position.set(-5 + index * 2, 0, -0.5);
   scene.add(group);
 
-  function makeLabelCanvas(text: string, colorHex: string) {
-    const canvas = document.createElement("canvas");
-    canvas.width = 1024;
-    canvas.height = 256;
-    const ctx = canvas.getContext("2d")!;
-
-    // Convert hex to rgba for transparency
-    const r = parseInt(colorHex.slice(1, 3), 16);
-    const g = parseInt(colorHex.slice(3, 5), 16);
-    const b = parseInt(colorHex.slice(5, 7), 16);
-    ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.9)`;
-
-    // Rounded rect background for badge look
-    ctx.beginPath();
-    ctx.roundRect(0, 0, canvas.width, canvas.height, 40);
-    ctx.fill();
-
-    // Add a border
-    ctx.strokeStyle = "#ffffff";
-    ctx.lineWidth = 16;
-    ctx.stroke();
-
-    ctx.font = "bold 160px 'Share Tech Mono', monospace";
-    ctx.fillStyle = "#ffffff";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    // Shadow for better readability
-    ctx.shadowColor = "rgba(0,0,0,0.8)";
-    ctx.shadowBlur = 10;
-    ctx.shadowOffsetX = 4;
-    ctx.shadowOffsetY = 4;
-    ctx.fillText(text, canvas.width / 2, canvas.height / 2 + 10);
-    return canvas;
-  }
-
-  // Determine badge color based on tool/model
-  let badgeColor = "#555555";
-  const tool = agent.tool || "unknown";
-
-  if (tool.includes("openai")) badgeColor = "#10a37f";
-  else if (tool.includes("gemini")) badgeColor = "#4285f4";
-  else if (tool.includes("copilot")) badgeColor = "#6f42c1";
-  else if (tool.includes("opencode")) badgeColor = "#f97316";
-  else if (tool.includes("claude")) badgeColor = "#d97757";
-
-  const labelCanvas = makeLabelCanvas(`${agent.model}`, badgeColor);
-  const labelTex = new THREE.CanvasTexture(labelCanvas);
-  labelTex.colorSpace = THREE.SRGBColorSpace;
-  const labelMat = new THREE.SpriteMaterial({ map: labelTex, transparent: true, depthTest: false });
-  const label = new THREE.Sprite(labelMat);
-  // Scale down to badge size
-  label.scale.set(0.6, 0.15, 1);
-  label.renderOrder = 999;
-  // Position on chest
-  label.position.set(0, 1.35, 0.25);
-  group.add(label);
+  let label: THREE.Sprite | undefined = undefined; // We removed the floating label, setting to undefined for TS interface
 
   const statusMat = new THREE.SpriteMaterial({ map: createStatusTexture("💤"), transparent: true, depthTest: false });
   const statusSprite = new THREE.Sprite(statusMat);
@@ -1596,6 +1599,35 @@ function tick() {
       if (statusMaterial) statusMaterial.map = statusTextures.idle;
     } else {
       if (statusMaterial) statusMaterial.map = statusTextures.walking;
+    }
+
+    // Procedural Animation for fallback avatars
+    if (item.group.userData.leftArm) {
+      const time = Date.now() * 0.005;
+      const { leftArm, rightArm, leftLeg, rightLeg } = item.group.userData;
+
+      if (item.phase === "walking_to_desk" || item.phase === "walking_from_desk" || item.phase === "walking_to_board") {
+        leftArm.rotation.x = Math.sin(time) * 0.5;
+        rightArm.rotation.x = -Math.sin(time) * 0.5;
+        leftLeg.rotation.x = -Math.sin(time) * 0.5;
+        rightLeg.rotation.x = Math.sin(time) * 0.5;
+      } else if (item.phase === "working") {
+        leftArm.rotation.x = -0.3 + Math.sin(time * 2) * 0.05;
+        rightArm.rotation.x = -0.3 + Math.cos(time * 2) * 0.05;
+        leftLeg.rotation.x = -0.2;
+        rightLeg.rotation.x = -0.2;
+      } else if (item.phase === "celebrating") {
+        leftArm.rotation.x = -Math.PI + 0.5 + Math.sin(time * 2) * 0.2;
+        rightArm.rotation.x = -Math.PI + 0.5 + Math.cos(time * 2) * 0.2;
+        leftLeg.rotation.x = 0;
+        rightLeg.rotation.x = 0;
+      } else {
+        // Idle
+        leftArm.rotation.x = 0;
+        rightArm.rotation.x = 0;
+        leftLeg.rotation.x = 0;
+        rightLeg.rotation.x = 0;
+      }
     }
 
     // Laser & Floating Terminal Update

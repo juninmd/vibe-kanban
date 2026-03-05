@@ -70,29 +70,61 @@ export function getHeadMaterials(role: string): THREE.Material[] {
     ];
 }
 
-export function getBodyMaterials(role: string): THREE.Material[] {
+export function getBodyMaterials(role: string, modelName?: string, badgeColor?: string): THREE.Material[] {
     const primaryColor = roleColors[role] || "#888888";
 
-    const frontTex = createTexture(64, 64, (ctx) => {
+    const frontTex = createTexture(256, 256, (ctx) => {
         ctx.fillStyle = primaryColor;
-        ctx.fillRect(0, 0, 64, 64);
+        ctx.fillRect(0, 0, 256, 256);
 
-        // Details
+        // Details scaled by 4
         if (role === 'product_manager') {
              // Turtleneck shading
              ctx.fillStyle = '#222';
-             ctx.fillRect(20, 0, 24, 64);
+             ctx.fillRect(80, 0, 96, 256);
         } else if (role === 'seguranca') {
              // Badge
              ctx.fillStyle = '#fbbf24';
-             ctx.fillRect(40, 10, 8, 10);
+             ctx.fillRect(160, 40, 32, 40);
              // Tie
              ctx.fillStyle = '#000';
-             ctx.fillRect(28, 0, 8, 40);
+             ctx.fillRect(112, 0, 32, 160);
         } else {
              // Generic logo/shirt pocket
              ctx.fillStyle = 'rgba(255,255,255,0.2)';
-             ctx.fillRect(10, 10, 16, 14);
+             ctx.fillRect(40, 40, 64, 56);
+        }
+
+        if (modelName && badgeColor) {
+            // Convert hex to rgba for transparency
+            const r = parseInt(badgeColor.slice(1, 3), 16);
+            const g = parseInt(badgeColor.slice(3, 5), 16);
+            const b = parseInt(badgeColor.slice(5, 7), 16);
+            ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.9)`;
+
+            // Draw a badge in the center
+            const badgeWidth = 200;
+            const badgeHeight = 50;
+            const badgeX = (256 - badgeWidth) / 2;
+            const badgeY = 100;
+
+            ctx.beginPath();
+            ctx.roundRect(badgeX, badgeY, badgeWidth, badgeHeight, 10);
+            ctx.fill();
+
+            ctx.strokeStyle = "#ffffff";
+            ctx.lineWidth = 4;
+            ctx.stroke();
+
+            ctx.font = "bold 28px 'Share Tech Mono', monospace";
+            ctx.fillStyle = "#ffffff";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.shadowColor = "rgba(0,0,0,0.8)";
+            ctx.shadowBlur = 5;
+            ctx.shadowOffsetX = 2;
+            ctx.shadowOffsetY = 2;
+            ctx.fillText(modelName, 128, badgeY + badgeHeight / 2 + 2);
         }
     });
 
