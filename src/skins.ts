@@ -14,17 +14,17 @@ function createTexture(width: number, height: number, drawFn: (ctx: CanvasRender
 }
 
 const roleColors: Record<string, string> = {
-    "product_manager": "#111111", // Black turtleneck
-    "seguranca": "#1e3a8a",       // Navy Blue
-    "performance": "#f97316",     // Orange
-    "funcionalidades": "#3b82f6", // Blue
-    "testes": "#22c55e",          // Green
-    "features": "#06b6d4"         // Cyan
+    "Product Manager": "#111111", // Black turtleneck
+    "Segurança": "#1e3a8a",       // Navy Blue
+    "Performance": "#f97316",     // Orange
+    "Novas Funcionalidades": "#3b82f6", // Blue
+    "Testes": "#22c55e",          // Green
+    "Novas Features": "#06b6d4"         // Cyan
 };
 
 export function getHeadMaterials(role: string): THREE.Material[] {
     const skinColor = '#fce5cd';
-    const hairColor = role === 'product_manager' ? '#eeeeee' : '#3f2818'; // Jobs gray, others brown
+    const hairColor = role === 'Product Manager' ? '#eeeeee' : '#3f2818'; // Jobs gray, others brown
 
     const faceTex = createTexture(64, 64, (ctx) => {
         // Skin
@@ -33,7 +33,7 @@ export function getHeadMaterials(role: string): THREE.Material[] {
 
         // Eyes
         ctx.fillStyle = '#000000';
-        if (role === 'product_manager') {
+        if (role === 'Product Manager') {
             // Glasses
             ctx.fillStyle = '#333';
             ctx.fillRect(10, 24, 18, 8);
@@ -78,11 +78,11 @@ export function getBodyMaterials(role: string, modelName?: string, badgeColor?: 
         ctx.fillRect(0, 0, 256, 256);
 
         // Details scaled by 4
-        if (role === 'product_manager') {
+        if (role === 'Product Manager') {
              // Turtleneck shading
              ctx.fillStyle = '#222';
              ctx.fillRect(80, 0, 96, 256);
-        } else if (role === 'seguranca') {
+        } else if (role === 'Segurança') {
              // Badge
              ctx.fillStyle = '#fbbf24';
              ctx.fillRect(160, 40, 32, 40);
@@ -142,6 +142,6 @@ export function getBodyMaterials(role: string, modelName?: string, badgeColor?: 
 }
 
 export function getLimbMaterial(role: string): THREE.Material {
-    const color = role === 'product_manager' ? '#3b82f6' : '#1f2937'; // Jeans vs Dark Pants
+    const color = role === 'Product Manager' ? '#3b82f6' : '#1f2937'; // Jeans vs Dark Pants
     return new THREE.MeshStandardMaterial({ color });
 }
