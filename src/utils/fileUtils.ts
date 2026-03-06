@@ -76,7 +76,7 @@ export function extractAndWriteFiles(output: string, basePath: string, ctx: Driv
        }
     }
 
-    const bugRegex = /<<<BUG:(.+?)>>>/g;
+    const bugRegex = /<<<BUG:([\s\S]+?)>>>/g;
     let bugMatch;
     while ((bugMatch = bugRegex.exec(output)) !== null) {
        const bugDescription = bugMatch[1].trim();
