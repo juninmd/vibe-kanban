@@ -75,5 +75,13 @@ export function extractAndWriteFiles(output: string, basePath: string, ctx: Driv
             ctx.onLog(taskId, `[ERROR] Failed to write ${filename}: ${e.message}`);
        }
     }
+
+    const bugRegex = /<<<BUG:([\s\S]+?)>>>/g;
+    let bugMatch;
+    while ((bugMatch = bugRegex.exec(output)) !== null) {
+       const bugDescription = bugMatch[1].trim();
+       ctx.onBugFound(taskId, bugDescription);
+    }
+
     return filesCreated;
 }
