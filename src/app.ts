@@ -1545,9 +1545,9 @@ function updateAgents3D() {
     } else if (item.phase === "working") {
       item.group.lookAt(item.group.position.x, item.group.position.y, item.group.position.z - 100);
     } else if (item.phase === "idle") {
-      item.group.rotation.set(0, Math.PI, 0); // Face forward towards camera (Kanban board is at z=-4.2, camera is at z=12, so Math.PI faces the camera)
+      item.group.rotation.set(0, 0, 0); // Face forward towards camera (Kanban board is at z=-4.2, camera is at z=12, so 0 faces the camera)
     } else {
-      item.group.rotation.set(0, Math.PI, 0);
+      item.group.rotation.set(0, 0, 0);
     }
   });
 }
