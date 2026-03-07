@@ -288,6 +288,12 @@ function startTask(task: Task, agent: Agent) {
       }
     },
     memory: Memory.getInstance()
+      }).catch((err: any) => {
+        addEvent(`Erro ao executar tarefa #${updatedTask.id}: ${err.message}`);
+        if (agent.id) {
+          updateAgent(agent.id, { status: "idle", assignedTask: null });
+        }
+        updateTask(updatedTask.id, { assignedTo: null, lane: "backlog", interrupted: true });
       });
     } catch (err: any) {
       addEvent(`Erro ao executar tarefa #${updatedTask.id}: ${err.message}`);
