@@ -16,10 +16,10 @@ function createTexture(width: number, height: number, drawFn: (ctx: CanvasRender
 const roleColors: Record<string, string> = {
     "Product Manager": "#111111", // Black turtleneck
     "Segurança": "#1e3a8a",       // Navy Blue
-    "Performance": "#f97316",     // Orange
-    "Novas Funcionalidades": "#3b82f6", // Blue
-    "Testes": "#22c55e",          // Green
-    "Novas Features": "#00f0ff"         // Cyan
+    "Performance": "#475569",     // Slate
+    "Novas Funcionalidades": "#0284c7", // Blue
+    "Testes": "#15803d",          // Dark Green
+    "Novas Features": "#0f172a"   // Navy
 };
 
 export function getHeadMaterials(role: string): THREE.Material[] {

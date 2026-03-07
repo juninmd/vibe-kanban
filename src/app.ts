@@ -914,31 +914,26 @@ const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color("#0b1022");
+scene.background = new THREE.Color("#f1f5f9");
 const clock = new THREE.Clock();
 
 const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 100);
 camera.position.set(0, 7, 12);
 camera.lookAt(0, 0, 0);
 
-const ambientLight = new THREE.AmbientLight("#ffffff", 0.75);
+const ambientLight = new THREE.AmbientLight("#ffffff", 1.5);
 scene.add(ambientLight);
-const dir = new THREE.DirectionalLight("#b7c6ff", 1.2);
+const dir = new THREE.DirectionalLight("#ffffff", 1.0);
 dir.position.set(5, 8, 3);
 scene.add(dir);
 
-// Holographic Floor Grid
-const gridHelper = new THREE.GridHelper(40, 40, 0x00f0ff, 0x111133);
-gridHelper.position.y = -0.01;
-(gridHelper.material as THREE.Material).transparent = true;
-(gridHelper.material as THREE.Material).opacity = 0.2;
-scene.add(gridHelper);
+// No Grid
 
 function updateLighting() {
   const workingCount = agents.filter(a => a.status === "working").length;
   // Target intensity: brighter when busy
-  const targetDir = workingCount > 0 ? 1.8 : 0.8;
-  const targetAmb = workingCount > 0 ? 0.9 : 0.4;
+  const targetDir = workingCount > 0 ? 1.4 : 1.0;
+  const targetAmb = workingCount > 0 ? 1.8 : 1.5;
 
   dir.intensity += (targetDir - dir.intensity) * 0.05;
   ambientLight.intensity += (targetAmb - ambientLight.intensity) * 0.05;
@@ -946,19 +941,7 @@ function updateLighting() {
 
 // Office data is now populated dynamically when state loads
 
-// Ambient Particles
-const pGeo = new THREE.BufferGeometry();
-const particleCount = 1000;
-const pPos = new Float32Array(particleCount * 3);
-for (let i = 0; i < particleCount; i++) {
-  pPos[i * 3] = (Math.random() - 0.5) * 30; // x
-  pPos[i * 3 + 1] = Math.random() * 8; // y
-  pPos[i * 3 + 2] = (Math.random() - 0.5) * 15; // z
-}
-pGeo.setAttribute("position", new THREE.BufferAttribute(pPos, 3));
-const pMat = new THREE.PointsMaterial({ color: 0x00f0ff, size: 0.05, transparent: true, opacity: 0.6 });
-const particles = new THREE.Points(pGeo, pMat);
-scene.add(particles);
+// No Particles
 
 let robotModel: THREE.Group | null = null;
 let robotAnimations: THREE.AnimationClip[] = [];
@@ -1088,11 +1071,11 @@ controls.enableDamping = true;
 controls.dampingFactor = 0.05;
 controls.maxPolarAngle = Math.PI / 2 - 0.1;
 
-const kanbanMesh = new THREE.Mesh(new THREE.BoxGeometry(12, 6, 0.2), new THREE.MeshStandardMaterial({ color: "#2a376f" }));
+const kanbanMesh = new THREE.Mesh(new THREE.BoxGeometry(12, 6, 0.2), new THREE.MeshStandardMaterial({ color: "#ffffff" }));
 kanbanMesh.position.set(0, 3, -4.2);
 // Add column separators
 for (let i = -1; i <= 1; i++) {
-  const line = new THREE.Mesh(new THREE.BoxGeometry(0.075, 5.7, 0.05), new THREE.MeshStandardMaterial({ color: "#5ea6ff" }));
+  const line = new THREE.Mesh(new THREE.BoxGeometry(0.075, 5.7, 0.05), new THREE.MeshStandardMaterial({ color: "#e2e8f0" }));
   line.position.set(i * 3, 0, 0.11);
   kanbanMesh.add(line);
 }
@@ -1693,23 +1676,18 @@ function tick() {
     }
   });
 
-  if (typeof particles !== "undefined") particles.rotation.y += 0.0005;
-
   updateVisualAlerts();
   updateConfetti();
   updateTrails();
 
-  // Pulse lighting based on active agents
+  // Keep constant corporate lighting, no pulse
   const activeCount = agents.filter(a => a.status === "working").length;
   if (activeCount > 0) {
-    const pulse = Math.sin(Date.now() * 0.002) * 0.1;
-    dir.intensity = 1.2 + (activeCount * 0.1) + pulse;
-    ambientLight.intensity = 0.75 + (activeCount * 0.05) + (pulse * 0.5);
+    dir.intensity = 1.2 + (activeCount * 0.05);
+    ambientLight.intensity = 1.5 + (activeCount * 0.05);
   } else {
-    // Calm breathing when idle
-    const pulse = Math.sin(Date.now() * 0.001) * 0.05;
-    dir.intensity = 1.0 + pulse;
-    ambientLight.intensity = 0.6 + pulse;
+    dir.intensity = 1.0;
+    ambientLight.intensity = 1.5;
   }
 
   controls.update();
