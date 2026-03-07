@@ -1355,7 +1355,7 @@ function createAgentMesh(agent: Agent, index: number) {
     "Performance": "#f97316",
     "Novas Funcionalidades": "#3b82f6",
     "Testes": "#22c55e",
-    "Correções / Bugs": "#06b6d4",
+
     "Novas Features": "#00f0ff"
   };
   const color = new THREE.Color(roleColors[agent.role] || "#888888");
