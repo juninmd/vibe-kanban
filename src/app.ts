@@ -64,7 +64,7 @@ const els = {
   priority: document.getElementById("taskPriority") as HTMLSelectElement,
   githubRepo: document.getElementById("taskGithubRepo") as HTMLInputElement,
   description: document.getElementById("taskDescription") as HTMLTextAreaElement,
-  agentType: document.getElementById("taskAgentType") as HTMLInputElement,
+  agentType: document.getElementById("taskAgentType") as HTMLSelectElement,
   agentAssign: document.getElementById("taskAgentAssign") as HTMLSelectElement,
   agentModel: document.getElementById("taskAgentModel") as HTMLSelectElement,
   driverSelect: document.getElementById("driverSelect") as HTMLSelectElement,
@@ -1851,6 +1851,8 @@ async function loadAvailableTools() {
     const data = await res.json();
     if (data.tools && data.tools.length > 0) {
       els.driverSelect.innerHTML = data.tools.map((t: any) => `<option value="${t.id}">${t.name}</option>`).join("");
+      const agentTypeOptions = '<option value="">Automático / Opcional</option>' + data.tools.map((t: any) => `<option value="${t.id}">${t.name}</option>`).join("");
+      els.agentType.innerHTML = agentTypeOptions;
     }
   } catch (e) {
     console.error("Erro ao carregar ferramentas:", e);
