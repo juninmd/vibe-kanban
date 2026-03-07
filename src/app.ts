@@ -1845,5 +1845,18 @@ window.addEventListener("keydown", (e) => {
   }
 });
 
+async function loadAvailableTools() {
+  try {
+    const res = await fetch(`${API_URL}/api/tools`);
+    const data = await res.json();
+    if (data.tools && data.tools.length > 0) {
+      els.driverSelect.innerHTML = data.tools.map((t: any) => `<option value="${t.id}">${t.name}</option>`).join("");
+    }
+  } catch (e) {
+    console.error("Erro ao carregar ferramentas:", e);
+  }
+}
+
+loadAvailableTools();
 updateTaskAgentModels();
 tick();

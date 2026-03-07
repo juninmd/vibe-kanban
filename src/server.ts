@@ -14,6 +14,7 @@ import { DB } from "./db.js";
 import { TerminalManager } from "./terminal/TerminalManager.js";
 import { Memory } from "./memory.js";
 import { createPullRequest } from "./utils/githubUtils.js";
+import { isCommandAvailable } from "./utils/commandUtils.js";
 import "dotenv/config";
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 5174;
@@ -211,8 +212,10 @@ function startTask(task: Task, agent: Agent) {
   const executeDriver = resolveDriverForAgent(agent);
   bugCounts.set(task.id, 0);
 
-  setTimeout(() => executeDriver.executeTask(updatedTask, agent, {
-    onLog: (tid, msg) => {
+  setTimeout(() => {
+    try {
+      executeDriver.executeTask(updatedTask, agent, {
+        onLog: (tid, msg) => {
       const t = getTask(tid);
       if (t) {
         const updatedLogs = [...t.logs, msg];
@@ -285,7 +288,15 @@ function startTask(task: Task, agent: Agent) {
       }
     },
     memory: Memory.getInstance()
-  }), 0);
+      });
+    } catch (err: any) {
+      addEvent(`Erro ao executar tarefa #${updatedTask.id}: ${err.message}`);
+      if (agent.id) {
+        updateAgent(agent.id, { status: "idle", assignedTask: null });
+      }
+      updateTask(updatedTask.id, { assignedTo: null, lane: "backlog", interrupted: true });
+    }
+  }, 0);
 }
 
 function autoAssign() {
@@ -336,33 +347,11 @@ setInterval(() => {
 
 // --- PM Auto-Create Logic ---
 async function generateRoadmapTasks() {
-  // Only run if we have an API key configured
-  // if (!process.env.OPENAI_API_KEY && !process.env.GEMINI_API_KEY) return;
-
   const backlogTasks = DB.getTasks().filter(t => t.lane === "backlog");
   if (backlogTasks.length >= 3) return;
 
   if (!process.env.OPENAI_API_KEY && !process.env.GEMINI_API_KEY) {
-    const mocks: { title: string; category: string; priority: "alta" | "media" | "baixa"; description: string }[] = [
-      { title: "Implementar OAuth 2.0", category: "security", priority: "alta", description: "Configurar login social com Google e GitHub." },
-      { title: "Otimizar Renderização 3D", category: "performance", priority: "media", description: "Reduzir draw calls no Three.js." },
-      { title: "Adicionar Modo Escuro", category: "feature", priority: "baixa", description: "Criar toggle de tema no frontend." },
-      { title: "Testar Integração CI/CD", category: "test", priority: "alta", description: "Verificar pipeline de build no GitHub Actions." },
-      { title: "Refatorar API de Agentes", category: "roadmap", priority: "media", description: "Melhorar endpoints REST." }
-    ];
-    const t = mocks[Math.floor(Math.random() * mocks.length)];
-    DB.createTask({
-      title: t.title,
-      source: "product_manager",
-      category: t.category,
-      priority: t.priority,
-      lane: "backlog",
-      assignedTo: null,
-      interrupted: false,
-      logs: [],
-      description: t.description
-    });
-    addEvent(`[PM] (Simulado) Adicionou nova tarefa: ${t.title}`);
+    addEvent("[PM] API key não configurada. Configure OPENAI_API_KEY ou GEMINI_API_KEY nas configurações.");
     return;
   }
 
@@ -478,15 +467,6 @@ const drivers: Record<string, LLMDriver> = {
   openai: new OpenAIDriver(() => appConfig.cloneDir),
 };
 
-function isCommandAvailable(command: string): boolean {
-  try {
-    execSync(`${command} --version`, { stdio: "ignore" });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 // Keep the app functional even when Gemini CLI is not installed.
 let currentDriver: LLMDriver = drivers.gemini;
 if (!isCommandAvailable("gemini")) {
@@ -572,35 +552,65 @@ const server = createServer(async (req, res) => {
 
   // GET /api/tools
   if (url === "/api/tools" && method === "GET") {
-    const tools: { id: string; name: string }[] = [{ id: "mock", name: "Mock Driver" }];
-    const checks: [string, string, string][] = [
-      ["gemini", "gemini --version", "Gemini CLI"],
-      ["claude", "claude --version", "Claude Code"],
-      ["copilot", "github-copilot-cli --version", "Copilot CLI"],
-      ["opencode", "opencode --version", "OpenCode"],
-    ];
-    for (const [id, cmd, name] of checks) {
-      try { execSync(cmd, { stdio: "ignore" }); tools.push({ id, name }); } catch { }
+    const tools: { id: string; name: string }[] = [];
+
+    // CLI-based drivers
+    if (isCommandAvailable("gemini")) {
+      tools.push({ id: "gemini", name: "Gemini CLI" });
     }
+    if (isCommandAvailable("opencode")) {
+      tools.push({ id: "opencode", name: "OpenCode AI" });
+    }
+    // Copilot usa `gh` CLI com extensão copilot
+    if (isCommandAvailable("gh")) {
+      tools.push({ id: "copilot", name: "GitHub Copilot (gh cli)" });
+    }
+    if (isCommandAvailable("claude")) {
+      tools.push({ id: "claude", name: "Claude Code" });
+    }
+
+    // API-based drivers (sem depender de CLI local)
+    if (process.env.OPENAI_API_KEY) {
+      tools.push({ id: "openai", name: "OpenAI API" });
+    }
+    if (!isCommandAvailable("claude") && process.env.ANTHROPIC_API_KEY) {
+      tools.push({ id: "claude", name: "Claude (API)" });
+    }
+
     return jsonResponse(res, 200, { tools });
   }
 
   // GET /api/models?tool=xxx
   if (url.startsWith("/api/models") && method === "GET") {
     const urlObj = new URL(url as string, `http://${req.headers?.host || "localhost"}`);
-    const tool = urlObj.searchParams.get("tool");
+    const tool = urlObj.searchParams.get("tool") || undefined;
+
     let models: string[] = [];
-    if (tool === "gemini") {
-      models = ["gemini-2.0-flash", "gemini-2.0-flash-lite-preview", "gemini-2.0-pro-exp-02-05", "gemini-2.0-flash-thinking-exp-01-21", "gemini-1.5-flash", "gemini-1.5-pro"];
-    } else if (tool === "claude") {
-      models = ["claude-sonnet-4-20250514", "claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022"];
-    } else if (tool === "copilot") {
-      models = ["gpt-4o", "gpt-4o-mini"];
-    } else if (tool === "opencode") {
-      models = ["gpt-4o", "claude-sonnet-4-20250514"];
-    } else if (tool === "mock") {
-      models = ["mock-model"];
+
+    // 1) Tentar descoberta dinâmica via driver (CLI/API reais)
+    if (tool && drivers[tool] && typeof drivers[tool].listModels === "function") {
+      try {
+        models = await drivers[tool].listModels();
+      } catch (e) {
+        console.warn(`listModels failed for tool ${tool}:`, e);
+      }
     }
+
+    // 2) Fallback estático apenas se não conseguimos nada dinâmico
+    if (!models || models.length === 0) {
+      if (tool === "gemini") {
+        models = ["gemini-2.0-flash", "gemini-2.0-flash-lite-preview", "gemini-2.0-pro-exp-02-05", "gemini-2.0-flash-thinking-exp-01-21", "gemini-1.5-flash", "gemini-1.5-pro"];
+      } else if (tool === "claude") {
+        models = ["claude-sonnet-4-20250514", "claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022"];
+      } else if (tool === "copilot") {
+        models = ["gpt-4o", "gpt-4o-mini"];
+      } else if (tool === "opencode") {
+        models = ["gpt-4o", "claude-sonnet-4-20250514"];
+      } else if (tool === "openai") {
+        models = ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo"];
+      }
+    }
+
     return jsonResponse(res, 200, { models });
   }
 

@@ -59,4 +59,9 @@ export interface LLMDriver {
   executeTask(task: Task, agent: Agent, ctx: DriverContext): Promise<void>;
   interruptTask(task: Task): Promise<void>;
   getLogs(taskId: number): string[];
+  /**
+   * Lista modelos disponíveis para este driver, usando CLI ou API real.
+   * Retorna array vazio caso não seja possível descobrir dinamicamente.
+   */
+  listModels?(agent?: Agent): Promise<string[]>;
 }

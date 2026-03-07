@@ -1,92 +1,70 @@
-# AGENTS.md — Vibe Kanban
+```markdown
+# AGENTS.md File Guidelines
 
-> [!IMPORTANT]
-> **Sua missão:** Atuar como um orquestrador de tarefas autônomo. Você terá diversos agentes com diferentes especialidades e modelos de IA. Seu objetivo é garantir que as tarefas sejam executadas com a melhor qualidade possível, seguindo as diretrizes do projeto e entregando código pronto para produção.
+These guidelines are designed to ensure a well-structured, maintainable, and high-quality codebase for the AGENTS repository. Adherence to these principles will contribute to a robust and scalable AI agent development environment.
 
-## Regras de Negócio (Jules Style)
-Para que o agente seja verdadeiramente autônomo e produtivo, ele deve seguir estas regras operacionais:
+## 1. DRY (Don't Repeat Yourself)
 
-1. **Autonomia de Auto-Correção:** Durante o desenvolvimento de qualquer tarefa, se o agente encontrar um problema, bug ou inconsistência, ele **DEVE** criar um novo card no Kanban imediatamente.
-2. **Planejamento Obrigatório:** Nenhuma tarefa complexa deve ser iniciada sem um "Plano Aprovado". O agente deve descrever seus passos, ferramentas e arquivos que pretende modificar.
-3. **Ciclo de Verificação Contínua:**
-    - Toda alteração deve ser validada com `pnpm test`.
-    - Se o teste falhar, o agente deve tentar corrigir automaticamente ou reportar o erro no card.
-4. **Sugestões Proativas (Continuous Improvement):** O sistema deve gerar "Top suggestions" periodicamente nas categorias: Performance, Security, Code Health e Testing (ex: "Missing Unit Tests").
-5. **Registro de Aprendizado (Reflection):** Ao concluir uma tarefa, o agente deve gravar os "Learnings" (o que aprendeu com aquele código) para evitar erros repetidos.
-6. **Integração de Contexto Externo (MCP):** O uso de servidores MCP é obrigatório para acessar dados de terceiros.
-7. **Integração Nativa com GitHub:** O agente deve operar via branches, realizando commits atômicos e abrindo Pull Requests (PRs) para revisão humana.
-8. **Persistência de Sessões:** Toda tarefa é uma "Session" independente, com histórico completo de logs, outputs de terminal e contexto preservado para retomada.
-9. **Missions & System Prompts:** Os agentes são regidos por "Missions" dinâmicas. O sistema injeta instruções de identidade (ex: personalidades Bolt/Mika) no prompt de sistema para guiar o comportamento.
-10. **Transparência de Código (Diffs):** O agente deve explicar suas mudanças através de diffs de código claros, justificando cada alteração realizada.
+*   **Single Responsibility Principle:** Each agent component (e.g., agent module, data processor, communication module) should have a single, clearly defined purpose.
+*   **Abstraction:**  Avoid redundant code. Create abstract interfaces or classes to represent common functionality.
+*   **Code Reuse:**  Whenever possible, reuse existing code patterns across different agents or components.
 
-## Setup Commands
-- **Install dependencies:** `pnpm install`
-- **Build project:** `pnpm build`
-- **Start server:** `pnpm start`
-- **Access UI:** `http://localhost:5174`
+## 2. KISS (Keep It Simple, Stupid)
 
-## Development Workflow
-Para garantir a qualidade exigida (visto nas instruções de orquestração):
+*   **Minimal Code:** Strive for the shortest code path that achieves the required functionality.  Avoid unnecessary complexity.
+*   **Readability:** Prioritize code clarity.  Use meaningful variable names, comments, and consistent formatting.
+*   **Understandable Logic:** Ensure the logic within each component is straightforward to follow.
 
-1. **Initialize Agents:** Caso necessário, ajuste o array `defaults` em `initializeDefaultAgents` (no `src/server.ts`) para os 7 agentes base: PM, Segurança, Performance, Funcionalidades, Testes, Features e Bugs.
-2. **Execute Tasks:** As tarefas devem ser executadas em ambientes isolados (Workspaces/Worktrees futuramente).
-3. **Verify:** Utilize `pnpm test` para validar a suite de testes (Unit, API, Orchestration, OpenCode).
-4. **Pre-commit:** Garanta que testes, revisões e reflexões foram feitos antes do commit.
-5. **Commit:** Envie mudanças com mensagens descritivas.
+## 3. SOLID Principles
 
-## Operational Rules (The "Vibe" Way)
-1. **Sem simulação silenciosa:** Se uma ferramenta falhar, registre o erro real.
-2. **Qualidade inegociável:** Nunca gere código mock. Todo código deve ser robusto e testado.
-3. **Melhoria contínua:** Refatore e otimize o código que encontrar.
-4. **Interfaces nota 10:** UIs amigáveis, performáticas e parametrizáveis.
-5. **Single source of truth:** Estado centralizado no backend/DB.
-6. **Observabilidade:** Logs claros por tarefa em `vibe_config.json` e eventos SSE.
-7. **Bugs Autônomos:** Durante o desenvolvimento, se encontrar problemas ou bugs, crie novos cards no Kanban.
+*   **Single Responsibility Principle:**  As described above.
+*   **Liskov Substitution Principle:**  Implementations of a base class should be substitutable for implementations of derived classes without altering the correctness of the system.
+*   **Interface Segregation Principle:** Clients should not be required to know about methods they do not use.
+*   **Open/Closed Principle:** The system should be extensible through mechanisms like configuration or plugins without modifying the core code.
 
-## Principles of Performance
-- Minimizar scans e deep copies repetitivos.
-- Batching de updates para reduzir re-renders (usando `requestAnimationFrame`).
-- Limitar volume visual de logs para manter responsividade.
+## 4. YAGNI (You Aren't Gonna Need It)
 
-## Inspired Features & Capabilities (Jules Integration)
-O agente autônomo deve operar com o conjunto total de funcionalidades capturadas nas referências:
+*   **Avoid premature optimization:** Focus on implementing the necessary features for the current task and defer non-essential optimizations to future iterations.
+*   **Future-Proofing:**  Don't add features or logic that are unlikely to be required in the future.
+*   **Focus on Functionality:**  Prioritize implementing the essential requirements of the agent component before adding optional features.
 
-- **Personalidades Modulares:**
-    - **"Bolt" ⚡**: Focado obsessivamente em performance e otimização de codebase.
-    - **"Mika" 💜**: Focada em interatividade, UI/UX e modelos Live 2D.
-- **Ciclo de Vida de Tarefas (PR Flow):**
-    1. **Planejamento:** Definição clara de passos antes da execução.
-    2. **Execução:** Codificação real (sem mocks).
-    3. **Verificação:** Execução de `npm test` / `pnpm test`.
-    4. **Reflexão:** Etapa de "Recorded Learnings" após conclusão.
-    5. **Review:** Geração de Pull Requests com descrição técnica detalhada.
-- **Sugestões Inteligentes:** O sistema deve sugerir melhorias proativamente em categorias:
-    - **Cleanup:** Remoção de código morto.
-    - **Performance:** Otimização de latência.
-    - **Security:** Hardening e segurança.
-    - **Code Health:** Refatoração para legibilidade.
-    - **Testing:** Identificação de falta de testes unitários (ex: `MediaHandler`, `ProgramsService`).
-- **MCP Integrations (Model Context Protocol):** Suporte nativo para conectar com:
-    - **Linear:** Sincronização de tasks e backlog.
-    - **Neon/Supabase:** Gerenciamento de banco de dados serverless.
-    - **Stitch:** Geração de UI e assets de design.
-    - **Tinybird:** Analytics em tempo real.
-    - **Context7:** Documentação sempre atualizada para o LLM.
+## 5. Code Length Constraints
 
-## Architecture Guidelines
-- **Frontend:** Three.js (3D) + Vanilla JS/TS (2D). Foco em `src/app.ts`.
-- **Backend:** Node.js + SSE + SQLite. Foco em `src/server.ts`.
-- **Drivers:** Sistema plugável de LLMs (Gemini, OpenCode, Codex). Foco em `src/drivers/`.
-- **Tests:** Suite em `test/` usando `node --test`.
+*   **Maximum Code:** 180 lines of code per file.
+*   **Code Reviews:** Each file must be reviewed by at least one other team member before being merged.
 
-## References & Inspiration
-- [Hubzz Demo Interface](https://demo.hubzz.com/)
-- [OpenAI Codex](https://github.com/openai/codex)
-- [Anomaly OpenCode](https://github.com/anomalyco/opencode)
-- [Google Jules Agent](https://jules.google) (Inspirador Principal)
+## 6. Test Coverage Requirements
 
----
-*Para instruções detalhadas de módulos específicos, veja os arquivos AGENTS.md nos subdiretórios:*
-- [src/AGENTS.md](file:///d:/Solutions/pessoal/vibe-kanban/src/AGENTS.md)
-- [src/drivers/AGENTS.md](file:///d:/Solutions/pessoal/vibe-kanban/src/drivers/AGENTS.md)
-- [test/AGENTS.md](file:///d:/Solutions/pessoal/vibe-kanban/test/AGENTS.md)
+*   **Minimum Coverage:** 80% test coverage across all files.
+*   **Test Framework:** Utilize a chosen testing framework (e.g., pytest, unittest) consistently.
+*   **Test Suite:** Maintain a comprehensive test suite with well-defined test cases.
+
+## 7. File Structure & Organization
+
+*   **Root Directory:**  The AGENTS.md file must reside in the root directory of the repository.
+*   **Module/Component Structure:**  Organize files into logical modules or components (e.g., `agent_core.py`, `agent_data_processor.py`, `agent_communication.py`).
+*   **Docstrings:**  Include detailed docstrings for all functions, classes, and modules explaining their purpose, parameters, and return values. Use a consistent docstring format (e.g., Google style).
+
+## 8.  File Content Guidelines
+
+*   **Clear and Concise:**  Each file should have a focused and understandable scope.
+*   **Comments:**  Use comments judiciously to explain complex logic or non-obvious code.
+*   **Naming Conventions:** Follow consistent naming conventions for variables, functions, and classes (e.g., camelCase for variables, PascalCase for classes).
+
+## 9.  Specific File Examples (Illustrative - Adapt to Specific Component Requirements)
+
+*   `agent_core.py`:  Contains core agent functionality, including initialization, data handling, and basic communication.
+*   `agent_data_processor.py`:  Handles data transformation and processing.
+*   `agent_communication.py`:  Manages agent communication with other agents.
+*   `test_agent_core.py`: Contains unit tests for the core agent functionality.
+*   `test_agent_data_processor.py`: Contains unit tests for the data processor functionality.
+*   `test_agent_communication.py`: Contains unit tests for the communication functionality.
+
+## 10.  Tools and Practices
+
+*   **Version Control:** Utilize Git for version control and collaboration.
+*   **Code Style:**  Enforce a consistent code style using a linter (e.g., pylint, flake8).
+*   **Static Analysis:** Employ static analysis tools to identify potential errors and code quality issues.
+*   **Documentation:** Maintain a README file explaining the purpose of the AGENTS.md file, how to run the agents, and any relevant setup instructions.
+
+```

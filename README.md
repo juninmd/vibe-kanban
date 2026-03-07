@@ -70,20 +70,25 @@ Pré-requisitos:
 - `styles.css`: estilo visual da sala, cards e avatars.
 - `src/server.ts`: backend Node.js que gerencia o estado (tarefas, agentes), SSE e integrações (Drivers).
 - `src/app.ts`: frontend (Three.js + lógica de UI), compilado para `dist/app.js`.
-- `src/drivers/`: implementações dos drivers de LLM (Mock, OpenCode, Copilot, Gemini).
+- `src/drivers/`: implementações dos drivers de LLM (OpenCode, Copilot, Gemini, OpenAI, Claude, Command).
 
-## Drivers LLM
+## Drivers LLM (sem stubs/mocks)
 
-O projeto suporta a execução de comandos via drivers. Atualmente implementados:
-- **MockDriver**: Simula o comportamento sem ferramentas externas.
-- **OpenCodeDriver**: Tenta executar `opencode` via CLI; fallback para simulação se não instalado.
-- **CopilotDriver**: Tenta executar `copilot task` via CLI; fallback para simulação.
+O projeto suporta a execução de comandos via drivers **sempre usando integrações reais** (CLIs ou APIs oficiais), nunca stubs ou mocks:
+- **OpenCodeDriver**: Executa `opencode` via CLI e materializa arquivos a partir do output.
+- **CopilotDriver**: Executa `gh copilot` via CLI para obter sugestões de código reais.
+- **GeminiDriver**: Usa a Gemini CLI (`gemini`) para operar diretamente sobre o workspace/clones.
+- **OpenAIDriver**: Chama a API HTTP oficial da OpenAI para gerar código e arquivos.
+- **ClaudeDriver**: Integra com a CLI/SDK oficial da Anthropic (quando configurada).
+- **CommandDriver**: Driver genérico para orquestrar CLIs como `opencode`, `gemini`, `claude` e outros em modo sandbox.
+
+> Regra: este projeto não deve introduzir drivers fictícios (MockDriver, stubs, fakes etc.). Se a CLI/API não estiver instalada ou configurada, o comportamento esperado é falhar de forma explícita ou pular os testes, nunca simular a ferramenta.
 
 ## Próximos passos sugeridos
 
 1. [x] Persistência em banco (SQLite).
 2. [x] Limpeza de tarefas concluídas.
-3. Execução real de agentes via SDK do Codex/OpenCode (instalação das CLIs no ambiente).
-3. WebSocket para atualizações em tempo real multiusuário (atualmente usa SSE).
-4. Simulação de movimento no espaço 3D com animação por pathfinding (atualmente interpolação simples).
-5. Integração com backlog externo (GitHub/Jira/Linear).
+3. [x] Execução real de agentes via CLIs/SDKs (sem drivers de simulação).
+4. WebSocket para atualizações em tempo real multiusuário (atualmente usa SSE).
+5. Simulação de movimento no espaço 3D com animação por pathfinding (atualmente interpolação simples).
+6. Integração com backlog externo (GitHub/Jira/Linear).

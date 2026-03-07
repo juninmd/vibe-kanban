@@ -1,7 +1,8 @@
 import { Task, Agent, LLMDriver, DriverContext } from "../types.js";
-import { spawn, execSync } from "child_process";
+import { spawn } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
+import { isCommandAvailable } from "../utils/commandUtils.js";
 
 export class OpenCodeDriver implements LLMDriver {
    name: string = "OpenCode AI";
@@ -20,18 +21,8 @@ export class OpenCodeDriver implements LLMDriver {
           fs.mkdirSync(taskDir, { recursive: true });
       }
 
-      // Check if OpenCode is installed
-      let isInstalled = this.checkInstalled();
-
-      if (!isInstalled) {
-         ctx.onLog(task.id, "⚠️ OpenCode CLI not found. Attempting to install 'opencode-ai'...");
-         if (this.installOpenCode(ctx, task.id)) {
-             isInstalled = true;
-         } else {
-             ctx.onLog(task.id, "⚠️ Switching to SIMULATION MODE for demo.");
-             this.runSimulation(task, agent, ctx, taskDir);
-             return;
-         }
+      if (!isCommandAvailable("opencode")) {
+         throw new Error("OpenCode CLI not found in PATH. Please install it: npm install -g opencode-ai");
       }
 
       const cmd = "opencode";
@@ -41,9 +32,8 @@ export class OpenCodeDriver implements LLMDriver {
       }
       ctx.onLog(task.id, `Running: ${cmd} ${args.join(" ")} in ${taskDir}`);
 
-      const child = spawn(cmd, args, { cwd: taskDir });
+      const child = spawn(cmd, args, { cwd: taskDir, shell: true });
       let fullOutput = "";
-      let isSimulation = false;
 
       child.stdout.on("data", (data) => {
          const text = data.toString();
@@ -53,26 +43,14 @@ export class OpenCodeDriver implements LLMDriver {
 
       child.stderr.on("data", (data) => {
          const msg = data.toString();
-         // If simulated, don't treat stderr as bug immediately unless it's critical
-         if (!isSimulation) {
-            ctx.onBugFound(task.id, msg);
-         }
+         ctx.onBugFound(task.id, msg);
       });
 
       child.on("error", (error: any) => {
-         if (error.code === "ENOENT") {
-            // Should not happen if check passed, but just in case
-            ctx.onLog(task.id, "⚠️ OpenCode CLI not found (ENOENT). Switching to SIMULATION MODE.");
-            isSimulation = true;
-            this.runSimulation(task, agent, ctx, taskDir);
-            return;
-         }
          ctx.onBugFound(task.id, error.message);
       });
 
       child.on("close", (code) => {
-         if (isSimulation) return; // Simulation handles its own completion
-
          // Parse files
          const fileRegex = /<<<FILE:(.+?)>>>([\s\S]+?)<<<END>>>/g;
          let match;
@@ -108,84 +86,19 @@ export class OpenCodeDriver implements LLMDriver {
       return Promise.resolve();
    }
 
-   private runSimulation(task: Task, agent: Agent, ctx: DriverContext, taskDir: string) {
-      const steps = [
-         { msg: `[${agent.role}] Analyzing requirements for: ${task.title}...`, delay: 1000 },
-         { msg: `[${agent.role}] Drafting solution architecture...`, delay: 2000 },
-         { msg: `[${agent.role}] Writing code implementation...`, delay: 2000 },
-         { msg: `[${agent.role}] Running test suite...`, delay: 1500 },
-         { msg: `[${agent.role}] 3 tests passed, 0 failures.`, delay: 1000 },
-         { msg: `[${agent.role}] Refactoring and optimizing...`, delay: 1000 },
-         { msg: `[${agent.role}] Commit: "Feat: Implemented ${task.title}"`, delay: 500 },
-      ];
-
-      let currentStep = 0;
-      const interval = setInterval(() => {
-         if (this.runningTasks.get(task.id)?.killed) {
-             clearInterval(interval);
-             return;
-         }
-
-         if (currentStep >= steps.length) {
-            clearInterval(interval);
-            // Create dummy file
-            try {
-                fs.writeFileSync(path.join(taskDir, "solution.ts"), `// Solution for ${task.title}\n// Implemented by ${agent.role}\n\nexport const solution = () => {\n  console.log("Task completed successfully!");\n};\n`);
-                ctx.onLog(task.id, "[FILE] Wrote solution.ts");
-            } catch (e) { }
-
-            ctx.onLog(task.id, "Simulation completed successfully.");
-            ctx.onComplete(task.id);
-            this.runningTasks.delete(task.id);
-            return;
-         }
-
-         const step = steps[currentStep];
-         ctx.onLog(task.id, step.msg);
-
-         // Probabilistic bug generation (20% chance per step)
-         if (Math.random() < 0.2) {
-             ctx.onBugFound(task.id, `Simulated bug found by ${agent.role}: Unexpected edge case in data processing.`);
-         }
-
-         currentStep++;
-      }, 1500); // Average pace
-
-      // Store interval as "process" to allow kill
-      this.runningTasks.set(task.id, { kill: () => clearInterval(interval), killed: false });
-   }
-
    async interruptTask(task: Task): Promise<void> {
       const child = this.runningTasks.get(task.id);
       if (child) {
-         if (child.kill) {
-             child.killed = true; // Mark as killed for simulation
-             child.kill();
+         try {
+            if (child.kill && !child.killed) {
+                child.kill();
+            }
+         } catch (e) {
+            // Process may have already exited
          }
          this.runningTasks.delete(task.id);
       }
       return Promise.resolve();
-   }
-
-   protected checkInstalled(): boolean {
-      try {
-         execSync("opencode --version", { stdio: "ignore" });
-         return true;
-      } catch (e) {
-         return false;
-      }
-   }
-
-   protected installOpenCode(ctx: DriverContext, taskId: number): boolean {
-      try {
-         // Attempt global installation
-         execSync("npm install -g opencode-ai", { stdio: "pipe" });
-         ctx.onLog(taskId, "✅ OpenCode installed successfully.");
-         return true;
-      } catch (installError: any) {
-          ctx.onLog(taskId, `❌ Installation failed: ${installError.message}`);
-          return false;
-      }
    }
 
    getLogs(taskId: number): string[] {

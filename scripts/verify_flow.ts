@@ -45,17 +45,14 @@ async function run() {
         });
         console.log(`Configured clone dir: ${CLONE_DIR}`);
 
-        // 3. Create Task
-        // Use 'roadmap' category to trigger Product Manager or similar,
-        // but let's use 'test' to target Test Agent.
-        // MockDriver is default if no specific driver selected?
-        // server.ts default is 'mock' or 'gemini' if available.
-        // Since we are in sandbox, 'gemini' CLI is likely missing, so it falls back to 'mock'.
-        // Or we can force it.
+        // 3. Configure real driver (sem mocks)
+        // Usamos um driver real (por padrão, OpenCode) e deixamos o fluxo falhar
+        // explicitamente caso a CLI não esteja instalada ou configurada.
+        const driver = process.env.VIBE_VERIFY_DRIVER || "opencode";
         await fetch(`${API_URL}/api/config`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ driver: "mock" })
+            body: JSON.stringify({ driver })
         });
 
         const taskRes = await fetch(`${API_URL}/api/tasks`, {
@@ -82,7 +79,6 @@ async function run() {
         console.log(`Assigned Task #${taskId} to Agent ${assignData.agent.role}`);
 
         // 5. Wait for file creation
-        // MockDriver takes ~6s for 'alta' priority.
         console.log("Waiting for agent to work...");
 
         const taskDir = path.join(CLONE_DIR, `task-${taskId}`);

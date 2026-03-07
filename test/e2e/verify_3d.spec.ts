@@ -32,7 +32,7 @@ test('create agent and verify 3d label', async ({ page }) => {
   const optionValues = await Promise.all(options.map(o => o.getAttribute('value')));
   console.log('Tool Options:', optionTexts, optionValues);
 
-  // Select a valid tool. Prefer 'mock' or any that is not empty.
+  // Select a valid tool (qualquer CLI/API real disponível).
   let toolToSelect = '';
   for (let i = 0; i < optionValues.length; i++) {
       if (optionValues[i] && optionValues[i] !== '') {
