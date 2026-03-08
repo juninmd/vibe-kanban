@@ -24,42 +24,40 @@ const roleColors: Record<string, string> = {
 
 export function getHeadMaterials(role: string): THREE.Material[] {
     const skinColor = '#fce5cd';
-    const hairColor = role === 'Product Manager' ? '#eeeeee' : '#3f2818'; // Jobs gray, others brown
+    const hairColor = role === 'Product Manager' ? '#e2e8f0' : '#452c1e'; // Gray for PM, Brown for others
 
     const faceTex = createTexture(64, 64, (ctx) => {
-        // Skin
+        // Skin base
         ctx.fillStyle = skinColor;
         ctx.fillRect(0, 0, 64, 64);
 
-        // Eyes
+        // Hair block (top half)
+        ctx.fillStyle = hairColor;
+        ctx.fillRect(0, 0, 64, 24);
+        // Sideburns
+        ctx.fillRect(0, 24, 8, 16);
+        ctx.fillRect(56, 24, 8, 16);
+
+        // Eyes (Minecraft style - 2x2 pixels equivalent)
         ctx.fillStyle = '#000000';
         if (role === 'Product Manager') {
             // Glasses
             ctx.fillStyle = '#333';
-            ctx.fillRect(10, 24, 18, 8);
-            ctx.fillRect(36, 24, 18, 8);
-            ctx.fillRect(28, 26, 8, 2);
+            ctx.fillRect(8, 32, 20, 8);
+            ctx.fillRect(36, 32, 20, 8);
+            ctx.fillRect(28, 34, 8, 2);
         } else {
-            ctx.fillRect(14, 26, 8, 8);
-            ctx.fillRect(42, 26, 8, 8);
+            // Simple eyes
+            ctx.fillRect(16, 36, 8, 8);
+            ctx.fillRect(40, 36, 8, 8);
         }
-
-        // Mouth
-        ctx.fillStyle = '#cc8888';
-        ctx.fillRect(24, 46, 16, 4);
-
-        // Hair Fringe
-        ctx.fillStyle = hairColor;
-        ctx.fillRect(0, 0, 64, 16);
-        ctx.fillRect(0, 0, 12, 24);
-        ctx.fillRect(52, 0, 12, 24);
     });
 
     const hairMat = new THREE.MeshStandardMaterial({ color: hairColor });
     const faceMat = new THREE.MeshStandardMaterial({ map: faceTex });
     const skinMat = new THREE.MeshStandardMaterial({ color: skinColor });
 
-    // Order: Right, Left, Top, Bottom, Front, Back
+    // For a blocky head, top, sides, and back are usually hair color
     return [
         hairMat, // Right
         hairMat, // Left
@@ -71,60 +69,30 @@ export function getHeadMaterials(role: string): THREE.Material[] {
 }
 
 export function getBodyMaterials(role: string, modelName?: string, badgeColor?: string): THREE.Material[] {
-    const primaryColor = roleColors[role] || "#888888";
+    const primaryColor = roleColors[role] || "#1e293b";
 
     const frontTex = createTexture(256, 256, (ctx) => {
+        // Shirt base
         ctx.fillStyle = primaryColor;
         ctx.fillRect(0, 0, 256, 256);
 
-        // Details scaled by 4
-        if (role === 'Product Manager') {
-             // Turtleneck shading
-             ctx.fillStyle = '#222';
-             ctx.fillRect(80, 0, 96, 256);
-        } else if (role === 'Segurança') {
-             // Badge
-             ctx.fillStyle = '#fbbf24';
-             ctx.fillRect(160, 40, 32, 40);
-             // Tie
-             ctx.fillStyle = '#000';
-             ctx.fillRect(112, 0, 32, 160);
-        } else {
-             // Generic logo/shirt pocket
-             ctx.fillStyle = 'rgba(255,255,255,0.2)';
-             ctx.fillRect(40, 40, 64, 56);
-        }
-
         if (modelName && badgeColor) {
-            // Convert hex to rgba for transparency
-            const r = parseInt(badgeColor.slice(1, 3), 16);
-            const g = parseInt(badgeColor.slice(3, 5), 16);
-            const b = parseInt(badgeColor.slice(5, 7), 16);
-            ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.9)`;
+            // Simple colored chest rectangle matching screenshot
+            ctx.fillStyle = badgeColor;
 
-            // Draw a badge in the center
-            const badgeWidth = 200;
-            const badgeHeight = 50;
-            const badgeX = (256 - badgeWidth) / 2;
-            const badgeY = 100;
+            const rectWidth = 180;
+            const rectHeight = 60;
+            const rectX = (256 - rectWidth) / 2;
+            const rectY = 98; // Center on chest
 
-            ctx.beginPath();
-            ctx.roundRect(badgeX, badgeY, badgeWidth, badgeHeight, 10);
-            ctx.fill();
+            ctx.fillRect(rectX, rectY, rectWidth, rectHeight);
 
-            ctx.strokeStyle = "#ffffff";
-            ctx.lineWidth = 4;
-            ctx.stroke();
-
-            ctx.font = "bold 28px 'Share Tech Mono', monospace";
+            // Text on chest
+            ctx.font = "bold 26px 'Share Tech Mono', monospace";
             ctx.fillStyle = "#ffffff";
             ctx.textAlign = "center";
             ctx.textBaseline = "middle";
-            ctx.shadowColor = "rgba(0,0,0,0.8)";
-            ctx.shadowBlur = 5;
-            ctx.shadowOffsetX = 2;
-            ctx.shadowOffsetY = 2;
-            ctx.fillText(modelName, 128, badgeY + badgeHeight / 2 + 2);
+            ctx.fillText(modelName, 128, rectY + rectHeight / 2 + 2);
         }
     });
 
