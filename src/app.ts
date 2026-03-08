@@ -998,7 +998,7 @@ function spawnComputers() {
       group.add(rug);
 
       scene.add(group);
-      computers.push(group as unknown as THREE.Group);
+      computers.push(group);
     });
   }, undefined, (error) => {
     console.error("Falha ao carregar modelo old_computer.glb, usando fallback", error);
