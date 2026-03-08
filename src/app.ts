@@ -914,7 +914,7 @@ const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color("#f1f5f9");
+scene.background = new THREE.Color("#e2e8f0"); // Lighter grey base
 const clock = new THREE.Clock();
 
 const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 100);
@@ -927,7 +927,10 @@ const dir = new THREE.DirectionalLight("#ffffff", 1.0);
 dir.position.set(5, 8, 3);
 scene.add(dir);
 
-// No Grid
+// Add subtle grid to the floor
+const grid = new THREE.GridHelper(40, 40, "#cbd5e1", "#e2e8f0");
+grid.position.y = 0;
+scene.add(grid);
 
 function updateLighting() {
   const workingCount = agents.filter(a => a.status === "working").length;
@@ -978,12 +981,24 @@ function spawnComputers() {
   const loader = new GLTFLoader();
   loader.load("/models/old_computer.glb", (gltf) => {
     officeData.padPositions.forEach((pos) => {
+      const group = new THREE.Group();
+      group.position.set(pos.x, 0, pos.z - 1.2);
+
       const computer = gltf.scene.clone();
       computer.scale.set(0.6, 0.6, 0.6);
-      computer.position.set(pos.x, 0, pos.z - 1.2);
       computer.rotation.y = Math.PI;
-      scene.add(computer);
-      computers.push(computer as unknown as THREE.Group);
+      group.add(computer);
+
+      // Oval rug
+      const rugGeo = new THREE.CylinderGeometry(2, 2, 0.01, 32);
+      const rugMat = new THREE.MeshStandardMaterial({ color: "#64748b" });
+      const rug = new THREE.Mesh(rugGeo, rugMat);
+      rug.scale.set(1, 1, 0.6);
+      rug.position.set(0, 0.01, 0);
+      group.add(rug);
+
+      scene.add(group);
+      computers.push(group as unknown as THREE.Group);
     });
   }, undefined, (error) => {
     console.error("Falha ao carregar modelo old_computer.glb, usando fallback", error);
@@ -991,14 +1006,22 @@ function spawnComputers() {
       const deskGroup = new THREE.Group();
       deskGroup.position.set(pos.x, 0, pos.z - 1.2);
 
+      // Oval rug
+      const rugGeo = new THREE.CylinderGeometry(2, 2, 0.01, 32);
+      const rugMat = new THREE.MeshStandardMaterial({ color: "#8b9cb0" });
+      const rug = new THREE.Mesh(rugGeo, rugMat);
+      rug.scale.set(1.2, 1, 0.8);
+      rug.position.set(0, 0.01, 0.5); // Shifted a bit forward
+      deskGroup.add(rug);
+
       const deskGeo = new THREE.BoxGeometry(2.0, 1.0, 1.2);
-      const deskMat = new THREE.MeshStandardMaterial({ color: "#1e293b", roughness: 0.2, metalness: 0.5 });
+      const deskMat = new THREE.MeshStandardMaterial({ color: "#0f172a", roughness: 0.8, metalness: 0.1 }); // Darker desk
       const desk = new THREE.Mesh(deskGeo, deskMat);
       desk.position.set(0, 0.5, 0);
       deskGroup.add(desk);
 
       const monGeo = new THREE.BoxGeometry(0.9, 0.6, 0.05);
-      const monMat = new THREE.MeshStandardMaterial({ color: "#0ea5e9", emissive: 0x003344, emissiveIntensity: 0.6 });
+      const monMat = new THREE.MeshStandardMaterial({ color: "#0284c7", emissive: "#0284c7", emissiveIntensity: 0.3 }); // Cyan blue monitor
       const monitor = new THREE.Mesh(monGeo, monMat);
       monitor.position.set(0, 1.3, 0);
       deskGroup.add(monitor);
@@ -1236,24 +1259,43 @@ function rebuildAgentMeshes() {
 
 const visualAlerts = new Map<number, THREE.Sprite>();
 
-function createStatusTexture(emoji: string) {
+function createStatusTexture(type: string) {
   const canvas = document.createElement("canvas");
-  canvas.width = 64;
-  canvas.height = 64;
+  canvas.width = 128;
+  canvas.height = 128;
   const ctx = canvas.getContext("2d")!;
-  ctx.font = "48px Inter, sans-serif";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText(emoji, 32, 34);
+
+  if (type === "idle") {
+    // Pixel art style Z z
+    ctx.font = "bold 60px 'Share Tech Mono', monospace";
+    ctx.fillStyle = "#60a5fa"; // Light blue
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("z", 32, 80);
+    ctx.font = "bold 80px 'Share Tech Mono', monospace";
+    ctx.fillText("Z", 80, 48);
+  } else {
+    // Fallback emojis
+    const emojiMap: Record<string, string> = {
+      working: "🔨",
+      celebrating: "🎉",
+      walking: "🚶"
+    };
+    ctx.font = "64px Inter, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(emojiMap[type] || "", 64, 68);
+  }
+
   const tex = new THREE.CanvasTexture(canvas);
   return tex;
 }
 
 const statusTextures = {
-  idle: createStatusTexture("💤"),
-  working: createStatusTexture("🔨"),
-  celebrating: createStatusTexture("🎉"),
-  walking: createStatusTexture("🚶")
+  idle: createStatusTexture("idle"),
+  working: createStatusTexture("working"),
+  celebrating: createStatusTexture("celebrating"),
+  walking: createStatusTexture("walking")
 };
 
 function createAlertIcon(type: "bug" | "perf") {
@@ -1262,12 +1304,20 @@ function createAlertIcon(type: "bug" | "perf") {
   canvas.height = 128;
   const ctx = canvas.getContext("2d")!;
 
-  ctx.fillStyle = type === "bug" ? "#ef4444" : "#eab308";
+  // Soft shadow
+  ctx.shadowColor = "rgba(0,0,0,0.3)";
+  ctx.shadowBlur = 10;
+  ctx.shadowOffsetY = 4;
+
+  ctx.fillStyle = type === "bug" ? "#ff7b7b" : "#fbbf24";
   ctx.beginPath();
-  ctx.arc(64, 64, 60, 0, Math.PI * 2);
+  ctx.arc(64, 64, 50, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.font = "bold 80px Inter, sans-serif";
+  ctx.shadowBlur = 0;
+  ctx.shadowOffsetY = 0;
+
+  ctx.font = "bold 60px Inter, sans-serif";
   ctx.fillStyle = "white";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
@@ -1276,7 +1326,7 @@ function createAlertIcon(type: "bug" | "perf") {
   const tex = new THREE.CanvasTexture(canvas);
   const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
   const sprite = new THREE.Sprite(mat);
-  sprite.scale.set(0.6, 0.6, 1);
+  sprite.scale.set(0.8, 0.8, 1);
   return sprite;
 }
 
@@ -1377,59 +1427,59 @@ function createAgentMesh(agent: Agent, index: number) {
       anims![clip.name] = mixer!.clipAction(clip);
     });
   } else {
-    // Fallback: Boxy Avatar
+    // Fallback: Boxy Avatar (Minecraft Style)
 
-    // Body (0.5 x 0.6 x 0.3)
-    const bodyGeo = new THREE.BoxGeometry(0.5, 0.6, 0.3);
+    // Body (wider and thicker to fit the chest label better)
+    const bodyGeo = new THREE.BoxGeometry(0.6, 0.7, 0.3);
     const bodyMats = getBodyMaterials(agent.role, agent.model, badgeColor);
     const body = new THREE.Mesh(bodyGeo, bodyMats);
-    body.position.y = 0.8;
+    body.position.y = 0.85; // Raised slightly due to height increase
     group.add(body);
 
-    // Head (0.4 x 0.4 x 0.4)
-    const headGeo = new THREE.BoxGeometry(0.4, 0.4, 0.4);
+    // Head (Proportionally larger)
+    const headGeo = new THREE.BoxGeometry(0.5, 0.5, 0.5);
     const headMats = getHeadMaterials(agent.role);
     const head = new THREE.Mesh(headGeo, headMats);
-    head.position.y = 1.35; // 0.8 (body y) + 0.3 (half body height) + 0.2 (half head height) + 0.05 (neck space)
+    head.position.y = 1.45; // 0.85 (body y) + 0.35 (half body height) + 0.25 (half head)
     group.add(head);
 
     // Limbs
     const limbMat = getLimbMaterial(agent.role);
-    const armGeo = new THREE.BoxGeometry(0.2, 0.5, 0.2);
-    const legGeo = new THREE.BoxGeometry(0.22, 0.5, 0.22);
+    const armGeo = new THREE.BoxGeometry(0.25, 0.6, 0.25);
+    const legGeo = new THREE.BoxGeometry(0.28, 0.6, 0.28);
 
     // Left Arm Pivot
     const leftArmPivot = new THREE.Group();
-    leftArmPivot.position.set(-0.35, 1.05, 0); // Shoulder position
+    leftArmPivot.position.set(-0.425, 1.15, 0); // Shoulder position
     const leftArm = new THREE.Mesh(armGeo, limbMat);
-    leftArm.position.set(0, -0.25, 0); // Drop down from pivot
+    leftArm.position.set(0, -0.3, 0); // Drop down from pivot
     leftArmPivot.add(leftArm);
     group.add(leftArmPivot);
     group.userData.leftArm = leftArmPivot;
 
     // Right Arm Pivot
     const rightArmPivot = new THREE.Group();
-    rightArmPivot.position.set(0.35, 1.05, 0); // Shoulder position
+    rightArmPivot.position.set(0.425, 1.15, 0); // Shoulder position
     const rightArm = new THREE.Mesh(armGeo, limbMat);
-    rightArm.position.set(0, -0.25, 0);
+    rightArm.position.set(0, -0.3, 0);
     rightArmPivot.add(rightArm);
     group.add(rightArmPivot);
     group.userData.rightArm = rightArmPivot;
 
     // Left Leg Pivot
     const leftLegPivot = new THREE.Group();
-    leftLegPivot.position.set(-0.15, 0.5, 0); // Hip position
+    leftLegPivot.position.set(-0.16, 0.5, 0); // Hip position
     const leftLeg = new THREE.Mesh(legGeo, limbMat);
-    leftLeg.position.set(0, -0.25, 0);
+    leftLeg.position.set(0, -0.3, 0);
     leftLegPivot.add(leftLeg);
     group.add(leftLegPivot);
     group.userData.leftLeg = leftLegPivot;
 
     // Right Leg Pivot
     const rightLegPivot = new THREE.Group();
-    rightLegPivot.position.set(0.15, 0.5, 0); // Hip position
+    rightLegPivot.position.set(0.16, 0.5, 0); // Hip position
     const rightLeg = new THREE.Mesh(legGeo, limbMat);
-    rightLeg.position.set(0, -0.25, 0);
+    rightLeg.position.set(0, -0.3, 0);
     rightLegPivot.add(rightLeg);
     group.add(rightLegPivot);
     group.userData.rightLeg = rightLegPivot;
@@ -1440,9 +1490,9 @@ function createAgentMesh(agent: Agent, index: number) {
 
   let label: THREE.Sprite | undefined = undefined; // We removed the floating label, setting to undefined for TS interface
 
-  const statusMat = new THREE.SpriteMaterial({ map: createStatusTexture("💤"), transparent: true, depthTest: false });
+  const statusMat = new THREE.SpriteMaterial({ map: createStatusTexture("idle"), transparent: true, depthTest: false });
   const statusSprite = new THREE.Sprite(statusMat);
-  statusSprite.scale.set(0.4, 0.4, 1);
+  statusSprite.scale.set(0.6, 0.6, 1);
   statusSprite.position.set(0, 2.2, 0); // Above head
   group.add(statusSprite);
 
