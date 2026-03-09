@@ -15,6 +15,7 @@ import { TerminalManager } from "./terminal/TerminalManager.js";
 import { Memory } from "./memory.js";
 import { createPullRequest } from "./utils/githubUtils.js";
 import { isCommandAvailable } from "./utils/commandUtils.js";
+import { getAvailableTools } from "./providers.js";
 import "dotenv/config";
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 5174;
@@ -558,32 +559,7 @@ const server = createServer(async (req, res) => {
 
   // GET /api/tools
   if (url === "/api/tools" && method === "GET") {
-    const tools: { id: string; name: string }[] = [];
-
-    // CLI-based drivers
-    if (isCommandAvailable("gemini")) {
-      tools.push({ id: "gemini", name: "Gemini CLI" });
-    }
-    if (isCommandAvailable("opencode")) {
-      tools.push({ id: "opencode", name: "OpenCode AI" });
-    }
-    // Copilot usa `gh` CLI com extensão copilot
-    if (isCommandAvailable("gh")) {
-      tools.push({ id: "copilot", name: "GitHub Copilot (gh cli)" });
-    }
-    if (isCommandAvailable("claude")) {
-      tools.push({ id: "claude", name: "Claude Code" });
-    }
-
-    // API-based drivers (sem depender de CLI local)
-    if (process.env.OPENAI_API_KEY) {
-      tools.push({ id: "openai", name: "OpenAI API" });
-    }
-    if (!isCommandAvailable("claude") && process.env.ANTHROPIC_API_KEY) {
-      tools.push({ id: "claude", name: "Claude (API)" });
-    }
-
-    return jsonResponse(res, 200, { tools });
+    return jsonResponse(res, 200, { tools: getAvailableTools() });
   }
 
   // GET /api/models?tool=xxx
