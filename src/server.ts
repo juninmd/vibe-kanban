@@ -218,7 +218,7 @@ function startTask(task: Task, agent: Agent) {
     let attemptIndex = 0;
 
     const runAttempt = (tool: string) => {
-      const executeDriver = drivers[tool] || resolveDriverForAgent(agent);
+const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? drivers[tool] : null) || resolveDriverForAgent(agent);
       const executionAgent = { ...agent, tool };
       activeTaskDrivers.set(task.id, executeDriver);
       addTerminalLine(agent.id, task.id, "system", `🤖 Provider: ${tool}`);
