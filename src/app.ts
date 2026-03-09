@@ -474,17 +474,17 @@ class TerminalInstance {
       fontSize: 14,
       fontFamily: "'Share Tech Mono', monospace",
       theme: {
-        background: "#000000",
-        foreground: "#00f0ff",
-        cursor: "#ff0055",
-        black: "#000000",
+        background: "#ffffff",
+        foreground: "#1e293b",
+        cursor: "#0f172a",
+        black: "#1e293b",
         red: "#ef4444",
-        green: "#22c55e",
+        green: "#15803d",
         yellow: "#eab308",
-        blue: "#3b82f6",
+        blue: "#0284c7",
         magenta: "#a855f7",
         cyan: "#06b6d4",
-        white: "#e2e8f0"
+        white: "#f8fafc"
       }
     });
 
@@ -1383,13 +1383,12 @@ function createAgentMesh(agent: Agent, index: number) {
   group.userData.agentId = agent.id;
 
   const roleColors: Record<string, string> = {
-    "Product Manager": "#a855f7",
-    "Segurança": "#ef4444",
-    "Performance": "#f97316",
-    "Novas Funcionalidades": "#3b82f6",
-    "Testes": "#22c55e",
-
-    "Novas Features": "#00f0ff"
+    "Product Manager": "#111111", // Black turtleneck
+    "Segurança": "#1e3a8a",       // Navy Blue
+    "Performance": "#475569",     // Slate
+    "Novas Funcionalidades": "#0284c7", // Blue
+    "Testes": "#15803d",          // Dark Green
+    "Novas Features": "#0f172a"   // Navy
   };
   const color = new THREE.Color(roleColors[agent.role] || "#888888");
 
