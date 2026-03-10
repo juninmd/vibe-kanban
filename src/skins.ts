@@ -88,11 +88,32 @@ export function getBodyMaterials(role: string, modelName?: string, badgeColor?: 
             ctx.fillRect(rectX, rectY, rectWidth, rectHeight);
 
             // Text on chest
-            ctx.font = "bold 26px 'Share Tech Mono', monospace";
             ctx.fillStyle = "#ffffff";
             ctx.textAlign = "center";
             ctx.textBaseline = "middle";
-            ctx.fillText(modelName, 128, rectY + rectHeight / 2 + 2);
+
+            let fontSize = 26;
+            ctx.font = `bold ${fontSize}px 'Share Tech Mono', monospace`;
+
+            // Handle long text by wrapping to next line
+            if (ctx.measureText(modelName).width > rectWidth - 10) {
+                fontSize = 18;
+                ctx.font = `bold ${fontSize}px 'Share Tech Mono', monospace`;
+
+                // naive split
+                const mid = Math.floor(modelName.length / 2);
+                let splitIdx = modelName.lastIndexOf("-", mid);
+                if (splitIdx === -1) splitIdx = modelName.indexOf("-", mid);
+                if (splitIdx === -1) splitIdx = mid;
+
+                const line1 = modelName.substring(0, splitIdx + 1);
+                const line2 = modelName.substring(splitIdx + 1);
+
+                ctx.fillText(line1, 128, rectY + rectHeight / 2 - 8);
+                ctx.fillText(line2, 128, rectY + rectHeight / 2 + 10);
+            } else {
+                ctx.fillText(modelName, 128, rectY + rectHeight / 2 + 2);
+            }
         }
     });
 
