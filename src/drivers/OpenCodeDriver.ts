@@ -25,12 +25,38 @@ export class OpenCodeDriver implements LLMDriver {
          throw new Error("OpenCode CLI not found in PATH. Please install it: npm install -g opencode-ai");
       }
 
+      const prompt = `
+[SYSTEM: AUTONOMOUS MODE]
+You are an autonomous coding agent integrated into a Kanban board called "Vibe Kanban".
+You are acting as the agent role: "${agent.role}".
+Your goal is to complete the following task in this workspace.
+
+TASK ID: #${task.id}
+TITLE: ${task.title}
+DESCRIPTION: ${task.description || "No description provided."}
+CATEGORY: ${task.category}
+PRIORITY: ${task.priority}
+
+INSTRUCTIONS:
+1. Explore the codebase if necessary.
+2. Implement the requested changes.
+3. Run tests or checks when appropriate.
+4. When finished, provide a brief summary of what you did.
+
+If you don't have tool access, use this format to create/update files:
+<<<FILE:filename.ext>>>
+content
+<<<END>>>
+`;
+
       const cmd = "opencode";
-      const args = ["run", task.title, "--agent", agent.role];
+      const args = ["run"];
       if (agent.model && agent.model !== "default") {
           args.push("--model", agent.model);
       }
-      ctx.onLog(task.id, `Running: ${cmd} ${args.join(" ")} in ${taskDir}`);
+      args.push(prompt);
+
+      ctx.onLog(task.id, `Running: ${cmd} run --model ${agent.model || 'default'} <prompt> in ${taskDir}`);
 
       // 5-minute timeout like Lisa's Session Timeout
       const SESSION_TIMEOUT_MS = 5 * 60 * 1000;
