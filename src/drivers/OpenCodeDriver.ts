@@ -85,7 +85,7 @@ content
 
          const textTrimmed = text.trim();
          if (textTrimmed) {
-             ctx.onBugFound(task.id, textTrimmed);
+             ctx.onLog(task.id, `[STDERR] ${textTrimmed}`);
          }
       });
 
