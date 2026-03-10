@@ -2,7 +2,12 @@ import { Task, Agent, LLMDriver, DriverContext } from "../types.js";
 import { spawn } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
+import * as os from "os";
 import { isCommandAvailable } from "../utils/commandUtils.js";
+import { spawnWithPty, stripAnsi } from "../utils/ptyUtils.js";
+import { createErrorLoopDetector, createSessionTimeout, STUCK_MESSAGE, TIMEOUT_MESSAGE } from "../utils/overseerUtils.js";
+
+const OPENCODE_ERROR_PATTERN = /^Error /;
 
 export class OpenCodeDriver implements LLMDriver {
    name: string = "OpenCode AI";
@@ -49,49 +54,52 @@ content
 <<<END>>>
 `;
 
-      const cmd = "opencode";
-      const args = ["run"];
-      if (agent.model && agent.model !== "default") {
-          args.push("--model", agent.model);
-      }
-      args.push(prompt);
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "lisa-"));
+      const promptFile = path.join(tmpDir, "prompt.md");
+      fs.writeFileSync(promptFile, prompt, "utf-8");
 
-      ctx.onLog(task.id, `Running: ${cmd} run --model ${agent.model || 'default'} <prompt> in ${taskDir}`);
+      const modelFlag = (agent.model && agent.model !== "default") ? `--model ${agent.model}` : "";
+      const cmd = `opencode run ${modelFlag} "$(cat '${promptFile}')"`;
 
-      // 5-minute timeout like Lisa's Session Timeout
-      const SESSION_TIMEOUT_MS = 5 * 60 * 1000;
-      let isTimedOut = false;
-      let timeoutHandle: NodeJS.Timeout | null = null;
+      ctx.onLog(task.id, `Running: opencode run ${modelFlag || '(default model)'} in ${taskDir}`);
 
-      const child = spawn(cmd, args, { cwd: taskDir, shell: true });
+      const { proc, isPty } = spawnWithPty(cmd, { cwd: taskDir, env: process.env });
+
+      const sessionTimeout = createSessionTimeout(proc, 5 * 60); // 5 minutes timeout
+      const errorLoopDetector = createErrorLoopDetector(proc, OPENCODE_ERROR_PATTERN);
+
       let fullOutput = "";
 
-      timeoutHandle = setTimeout(() => {
-          isTimedOut = true;
-          if (child.kill && !child.killed) {
-              child.kill();
-              ctx.onLog(task.id, `[TIMEOUT] Process killed after exceeding ${SESSION_TIMEOUT_MS / 1000}s`);
-          }
-      }, SESSION_TIMEOUT_MS);
-
-      child.stdout.on("data", (data) => {
-         const text = data.toString();
+      proc.stdout?.on("data", (data: Buffer) => {
+         const raw = data.toString();
+         const text = isPty ? stripAnsi(raw) : raw;
          fullOutput += text;
+         errorLoopDetector.check(text);
+
          ctx.onLog(task.id, text);
       });
 
-      child.stderr.on("data", (data) => {
-         const msg = data.toString();
-         ctx.onBugFound(task.id, msg);
+      proc.stderr?.on("data", (data: Buffer) => {
+         const raw = data.toString();
+         const text = isPty ? stripAnsi(raw) : raw;
+
+         const textTrimmed = text.trim();
+         if (textTrimmed) {
+             ctx.onBugFound(task.id, textTrimmed);
+         }
       });
 
-      child.on("error", (error: any) => {
-         if (timeoutHandle) clearTimeout(timeoutHandle);
+      proc.on("error", (error: any) => {
          ctx.onBugFound(task.id, error.message);
       });
 
-      child.on("close", (code) => {
-         if (timeoutHandle) clearTimeout(timeoutHandle);
+      proc.on("close", (code) => {
+         sessionTimeout.stop();
+
+         try {
+            fs.rmSync(tmpDir, { recursive: true, force: true });
+         } catch {}
+
          // Parse files
          const fileRegex = /<<<FILE:(.+?)>>>([\s\S]+?)<<<END>>>/g;
          let match;
@@ -114,9 +122,12 @@ content
             }
          }
 
-         if (isTimedOut) {
-            ctx.onLog(task.id, "Process Timed Out.");
-            ctx.onBugFound(task.id, "Timeout: request took too long.");
+         if (sessionTimeout.wasTimedOut()) {
+            ctx.onLog(task.id, TIMEOUT_MESSAGE);
+            ctx.onBugFound(task.id, TIMEOUT_MESSAGE);
+         } else if (errorLoopDetector.wasKilled()) {
+            ctx.onLog(task.id, STUCK_MESSAGE);
+            ctx.onBugFound(task.id, STUCK_MESSAGE);
          } else if (code === 0) {
             ctx.onLog(task.id, `Process completed. Files created: ${filesCreated}`);
             ctx.onComplete(task.id);
@@ -126,7 +137,7 @@ content
          }
       });
 
-      this.runningTasks.set(task.id, child);
+      this.runningTasks.set(task.id, proc);
       return Promise.resolve();
    }
 
