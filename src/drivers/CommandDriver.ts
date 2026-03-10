@@ -74,7 +74,7 @@ Do not output hypothetical logs. Output the actual file content needed to solve 
                     });
                 }
 
-                const cmd = `opencode run --prompt "${prompt.replace(/"/g, '\\"')}" --model "${agent.model || "gpt-4o"}"\r`;
+                const cmd = `opencode run --model "${agent.model || "gpt-4o"}" "${prompt.replace(/"/g, '\\"')}"\r`;
                 this.terminalManager.write(agent.id, cmd);
 
                 // For PTY, we don't have a simple "on close" for the command since the shell stays alive.
@@ -99,13 +99,13 @@ Do not output hypothetical logs. Output the actual file content needed to solve 
             args = ["run", agent.model, prompt];
         } else if (agent.tool === "gemini") {
             command = "gemini";
-            args = ["-p", prompt, "-m", agent.model || "gemini-2.0-flash", "--yolo"];
+            args = ["--yolo", "--model", agent.model || "gemini-2.0-flash", "-p", prompt];
         } else if (agent.tool === "claude") {
             command = "claude";
             args = ["prompt", prompt, "--model", agent.model || "claude-sonnet-4-20250514"];
         } else if (agent.tool === "opencode") {
             command = "opencode";
-            args = ["run", "--prompt", prompt, "--model", agent.model || "gpt-4o"];
+            args = ["run", "--model", agent.model || "gpt-4o", prompt];
         } else {
             ctx.onLog(task.id, `Unknown tool configured for agent: ${agent.tool}`);
             ctx.onComplete(task.id);

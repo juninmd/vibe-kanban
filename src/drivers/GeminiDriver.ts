@@ -95,7 +95,7 @@ content
 
       // Arguments for gemini CLI
       // We use --yolo to allow it to run tools without asking for confirmation if enabled in its config
-      const args = ["-p", prompt, "-m", agent.model, "--yolo"];
+      const args = ["--yolo", "--model", agent.model, "-p", prompt];
       
       let fullOutput = "";
 
