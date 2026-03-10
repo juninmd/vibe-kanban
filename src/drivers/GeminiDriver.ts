@@ -1,9 +1,15 @@
 import { Task, Agent, LLMDriver, DriverContext } from "../types.js";
 import { spawn } from "child_process";
 import * as fs from "fs";
+import * as os from "os";
 import * as path from "path";
 import { getProjectContext, extractAndWriteFiles } from "../utils/fileUtils.js";
 import { isCommandAvailable } from "../utils/commandUtils.js";
+import { spawnWithPty, stripAnsi } from "../utils/ptyUtils.js";
+import { createErrorLoopDetector, createSessionTimeout, STUCK_MESSAGE, TIMEOUT_MESSAGE } from "../utils/overseerUtils.js";
+
+// Gemini-specific: these prefixes appear on every failed tool call and API error
+const GEMINI_ERROR_PATTERN = /^Error (executing tool|generating content)/;
 
 export class GeminiDriver implements LLMDriver {
    name: string = "Gemini CLI Driver";
@@ -26,8 +32,6 @@ export class GeminiDriver implements LLMDriver {
        if (!isCommandAvailable("gemini")) {
           throw new Error("Gemini CLI not found in PATH. Please install it: npm install -g @google/gemini-cli");
        }
-
-       const cmd = "gemini";
 
       const isPlanMode = task.agentType === "plan";
 
@@ -90,29 +94,38 @@ content
 <<<END>>>
 `;
 
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "lisa-"));
+      const promptFile = path.join(tmpDir, "prompt.md");
+      fs.writeFileSync(promptFile, prompt, "utf-8");
+
       // Pass current environment to the child process (includes GEMINI_API_KEY, etc.)
       const env = { ...process.env };
 
-      // Arguments for gemini CLI
-      // We use --yolo to allow it to run tools without asking for confirmation if enabled in its config
-      const args = ["--yolo", "--model", agent.model, "-p", prompt];
-      
+      const modelFlag = agent.model ? `--model ${agent.model}` : "";
+      const command = `gemini --yolo ${modelFlag} -p "$(cat '${promptFile}')"`;
+
       let fullOutput = "";
 
       ctx.onLog(task.id, `[SYSTEM] Iniciando Gemini CLI para Tarefa #${task.id}`);
       ctx.onLog(task.id, `[SYSTEM] Workspace: ${basePath}`);
-      ctx.onLog(task.id, `[SYSTEM] Modelo: ${agent.model}`);
+      ctx.onLog(task.id, `[SYSTEM] Modelo: ${agent.model || "(default model)"}`);
+      ctx.onLog(task.id, `[gemini] Running: gemini --yolo ${modelFlag || "(default model)"} -p`);
 
       try {
-         const child = spawn(cmd, args, { 
+         const { proc, isPty } = spawnWithPty(command, {
             cwd: basePath,
             env: env,
-            shell: true // Use shell for better compatibility on Windows
          });
 
-         child.stdout.on("data", (data) => {
-            const text = data.toString();
+         const sessionTimeout = createSessionTimeout(proc, 5 * 60); // 5 minutes timeout
+         const errorLoopDetector = createErrorLoopDetector(proc, GEMINI_ERROR_PATTERN);
+
+         proc.stdout?.on("data", (chunk: Buffer) => {
+            const raw = chunk.toString();
+            const text = isPty ? stripAnsi(raw) : raw;
             fullOutput += text;
+            errorLoopDetector.check(text);
+
             // Clean up output for the terminal view
             const lines = text.split("\n");
             lines.forEach(line => {
@@ -121,15 +134,17 @@ content
             });
          });
 
-         child.stderr.on("data", (data) => {
-            const text = data.toString().trim();
-            if (text) {
+         proc.stderr?.on("data", (chunk: Buffer) => {
+            const raw = chunk.toString();
+            const text = isPty ? stripAnsi(raw) : raw;
+            const textTrimmed = text.trim();
+            if (textTrimmed) {
                // We log stderr but identify it
-               ctx.onLog(task.id, `[STDERR] ${text}`);
+               ctx.onLog(task.id, `[STDERR] ${textTrimmed}`);
             }
          });
 
-         child.on("error", (error: any) => {
+         proc.on("error", (error: any) => {
             if (error.code === "ENOENT") {
                ctx.onLog(task.id, "Error: Gemini CLI ('gemini') not found in PATH.");
                ctx.onBugFound(task.id, "Gemini CLI not found.");
@@ -139,8 +154,22 @@ content
             }
          });
 
-         child.on("close", (code) => {
+         proc.on("close", (code) => {
+            sessionTimeout.stop();
             this.runningTasks.delete(task.id);
+            try {
+               fs.rmSync(tmpDir, { recursive: true, force: true });
+            } catch {}
+
+            if (sessionTimeout.wasTimedOut()) {
+               ctx.onLog(task.id, TIMEOUT_MESSAGE);
+               ctx.onBugFound(task.id, TIMEOUT_MESSAGE);
+               return;
+            } else if (errorLoopDetector.wasKilled()) {
+               ctx.onLog(task.id, STUCK_MESSAGE);
+               ctx.onBugFound(task.id, STUCK_MESSAGE);
+               return;
+            }
 
             if (isPlanMode) {
                // Em modo plano, não escrevemos arquivos — apenas retornamos o JSON para os logs.
@@ -166,8 +195,9 @@ content
             }
          });
 
-         this.runningTasks.set(task.id, child);
+         this.runningTasks.set(task.id, proc);
       } catch (e: any) {
+         try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {}
          ctx.onLog(task.id, `[EXCEPTION] ${e.message}`);
          ctx.onBugFound(task.id, e.message);
       }
