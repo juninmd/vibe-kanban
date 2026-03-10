@@ -15,7 +15,7 @@ import { TerminalManager } from "./terminal/TerminalManager.js";
 import { Memory } from "./memory.js";
 import { createPullRequest } from "./utils/githubUtils.js";
 import { isCommandAvailable } from "./utils/commandUtils.js";
-import { getAvailableTools } from "./providers.js";
+import { buildProviderChain, isEligibleForProviderFallback } from "./drivers/providerFallback.js";
 import "dotenv/config";
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 5174;
@@ -93,6 +93,7 @@ function addTerminalLine(agentId: string, taskId: number | null, type: string, c
 
 // Bug rate limiter
 const bugCounts = new Map<number, number>();
+const activeTaskDrivers = new Map<number, LLMDriver>();
 
 // Helper to keep local state and DB in sync
 function updateTask(id: number, updates: Partial<Task>) {
@@ -188,7 +189,7 @@ function parseBody(req: any): Promise<any> {
 function startTask(task: Task, agent: Agent) {
   // Ensure workDir is set and persisted
   const finalWorkDir = task.workDir || path.join(appConfig.cloneDir, `task-${task.id}`);
-  
+
   if (!fs.existsSync(finalWorkDir)) {
     fs.mkdirSync(finalWorkDir, { recursive: true });
   }
@@ -199,7 +200,7 @@ function startTask(task: Task, agent: Agent) {
     interrupted: false,
     workDir: finalWorkDir
   });
-  
+
   // Refresh task object with new workDir
   const updatedTask = DB.getTask(task.id) || task;
 
@@ -210,93 +211,117 @@ function startTask(task: Task, agent: Agent) {
   addEvent(`[AutoPilot] ${agent.role} iniciou a tarefa #${task.id}`);
   addTerminalLine(agent.id, task.id, "system", `=== Tarefa #${task.id}: ${task.title} ===`);
 
-  const executeDriver = resolveDriverForAgent(agent);
+  const providerChain = buildProviderChain(agent, drivers);
   bugCounts.set(task.id, 0);
 
   setTimeout(() => {
-    try {
-      executeDriver.executeTask(updatedTask, agent, {
-        onLog: (tid, msg) => {
-      const t = getTask(tid);
-      if (t) {
-        const updatedLogs = [...t.logs, msg];
-        updateTask(tid, { logs: updatedLogs });
-        // Write to terminal buffer for the assigned agent
-        if (t.assignedTo) {
-          addTerminalLine(t.assignedTo, tid, "stdout", msg);
-        }
-        if (msg.includes("Error") || msg.includes("Completed")) addEvent(`#${tid}: ${msg}`);
-      }
-    },
-    onComplete: async (tid) => {
-      const t = getTask(tid);
-      if (t && t.assignedTo) {
-        addTerminalLine(t.assignedTo, tid, "system", `✅ Tarefa #${tid} concluída!`);
+    let attemptIndex = 0;
 
-        // Auto PR generation
-        if (t.githubRepo && process.env.GITHUB_TOKEN) {
-            addTerminalLine(t.assignedTo, tid, "system", `🔄 Gerando Pull Request para o repositório ${t.githubRepo}...`);
-            try {
+    const runAttempt = (tool: string) => {
+      const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? drivers[tool] : null) || resolveDriverForAgent(agent);
+      const executionAgent = { ...agent, tool };
+      activeTaskDrivers.set(task.id, executeDriver);
+      addTerminalLine(agent.id, task.id, "system", `🤖 Provider: ${tool}`);
+
+      executeDriver.executeTask(updatedTask, executionAgent, {
+        onLog: (tid, msg) => {
+          const t = getTask(tid);
+          if (t) {
+            const updatedLogs = [...t.logs, msg];
+            updateTask(tid, { logs: updatedLogs });
+            // Write to terminal buffer for the assigned agent
+            if (t.assignedTo) {
+              addTerminalLine(t.assignedTo, tid, "stdout", msg);
+            }
+            if (msg.includes("Error") || msg.includes("Completed")) addEvent(`#${tid}: ${msg}`);
+          }
+        },
+        onComplete: async (tid) => {
+          activeTaskDrivers.delete(tid);
+          const t = getTask(tid);
+          if (t && t.assignedTo) {
+            addTerminalLine(t.assignedTo, tid, "system", `✅ Tarefa #${tid} concluída!`);
+
+            // Auto PR generation
+            if (t.githubRepo && process.env.GITHUB_TOKEN) {
+              addTerminalLine(t.assignedTo, tid, "system", `🔄 Gerando Pull Request para o repositório ${t.githubRepo}...`);
+              try {
                 const workDir = t.workDir || path.join(appConfig.cloneDir, `task-${t.id}`);
                 const githubUser = process.env.GITHUB_USER || "vibe-agent";
                 const prResult = await createPullRequest(workDir, t.id, t.title, t.githubRepo, process.env.GITHUB_TOKEN, githubUser);
                 addTerminalLine(t.assignedTo, tid, "system", `✅ ${prResult}`);
                 addEvent(`PR criado para Tarefa #${tid}: ${t.githubRepo}`);
-            } catch (prError: any) {
+              } catch (prError: any) {
                 addTerminalLine(t.assignedTo, tid, "stderr", `❌ Falha ao criar Pull Request: ${prError.message}`);
                 addEvent(`Erro ao criar PR para Tarefa #${tid}.`);
+              }
             }
-        }
 
-        updateAgent(t.assignedTo, { status: "idle", assignedTask: null });
-        updateTask(tid, { assignedTo: null, lane: "done" });
-        addEvent(`Tarefa #${tid} concluída!`);
-        bugCounts.delete(tid);
-      }
-    },
-    onBugFound: (tid, desc) => {
-      const t = getTask(tid);
-      if (!t) return;
-      // Rate limit: max 3 bugs per task
-      const count = (bugCounts.get(tid) || 0) + 1;
-      bugCounts.set(tid, count);
-      if (count > 3) {
-        console.warn(`Bug rate limit reached for task #${tid}`);
-        return;
-      }
-      addEvent(`BUG encontrado em #${tid}: ${desc}`);
-      if (t.assignedTo) {
-        addTerminalLine(t.assignedTo, tid, "stderr", `❌ Bug: ${desc}`);
-        updateAgent(t.assignedTo, { status: "idle", assignedTask: null });
-        updateTask(tid, { assignedTo: null, lane: "backlog", interrupted: true });
-      }
-      // Only create bug task if under limit
-      DB.createTask({
-        title: `Bug: ${desc.substring(0, 100)}`,
-        source: "system",
-        category: "bug",
-        priority: "alta",
-        lane: "backlog",
-        assignedTo: null,
-        interrupted: false,
-        logs: [],
-      });
-    },
-    onInterrupt: (tid) => {
-      const t = getTask(tid);
-      if (t?.assignedTo) {
-        addTerminalLine(t.assignedTo, tid, "system", `⏹️ Tarefa #${tid} interrompida`);
-      }
-    },
-    memory: Memory.getInstance()
+            updateAgent(t.assignedTo, { status: "idle", assignedTask: null });
+            updateTask(tid, { assignedTo: null, lane: "done" });
+            addEvent(`Tarefa #${tid} concluída!`);
+            bugCounts.delete(tid);
+          }
+        },
+        onBugFound: (tid, desc) => {
+          const nextTool = providerChain[attemptIndex + 1];
+          if (nextTool && isEligibleForProviderFallback(desc)) {
+            attemptIndex += 1;
+            addEvent(`[ProviderFallback] Tarefa #${tid} falhou com ${providerChain[attemptIndex - 1]} (${desc}). Tentando ${nextTool}.`);
+            runAttempt(nextTool);
+            return;
+          }
+
+          activeTaskDrivers.delete(tid);
+          const t = getTask(tid);
+          if (!t) return;
+          // Rate limit: max 3 bugs per task
+          const count = (bugCounts.get(tid) || 0) + 1;
+          bugCounts.set(tid, count);
+          if (count > 3) {
+            console.warn(`Bug rate limit reached for task #${tid}`);
+            return;
+          }
+          addEvent(`BUG encontrado em #${tid}: ${desc}`);
+          if (t.assignedTo) {
+            addTerminalLine(t.assignedTo, tid, "stderr", `❌ Bug: ${desc}`);
+            updateAgent(t.assignedTo, { status: "idle", assignedTask: null });
+            updateTask(tid, { assignedTo: null, lane: "backlog", interrupted: true });
+          }
+          // Only create bug task if under limit
+          DB.createTask({
+            title: `Bug: ${desc.substring(0, 100)}`,
+            source: "system",
+            category: "bug",
+            priority: "alta",
+            lane: "backlog",
+            assignedTo: null,
+            interrupted: false,
+            logs: [],
+          });
+        },
+        onInterrupt: (tid) => {
+          const t = getTask(tid);
+          if (t?.assignedTo) {
+            addTerminalLine(t.assignedTo, tid, "system", `⏹️ Tarefa #${tid} interrompida`);
+          }
+        },
+        memory: Memory.getInstance()
       }).catch((err: any) => {
+        activeTaskDrivers.delete(updatedTask.id);
         addEvent(`Erro ao executar tarefa #${updatedTask.id}: ${err.message}`);
         if (agent.id) {
           updateAgent(agent.id, { status: "idle", assignedTask: null });
         }
         updateTask(updatedTask.id, { assignedTo: null, lane: "backlog", interrupted: true });
       });
+    };
+
+    try {
+      const firstTool = providerChain[0] || agent.tool || "gemini";
+      runAttempt(firstTool);
     } catch (err: any) {
+      activeTaskDrivers.delete(updatedTask.id);
       addEvent(`Erro ao executar tarefa #${updatedTask.id}: ${err.message}`);
       if (agent.id) {
         updateAgent(agent.id, { status: "idle", assignedTask: null });
@@ -829,7 +854,8 @@ const server = createServer(async (req, res) => {
     if (!task) return jsonResponse(res, 404, { error: "Task not found" });
 
     if (task.assignedTo) {
-      const executeDriver = releaseTaskAgent(task);
+      const executeDriver = activeTaskDrivers.get(task.id) || releaseTaskAgent(task);
+      activeTaskDrivers.delete(task.id);
       // Stop driver
       executeDriver.interruptTask(task);
       updateTask(task.id, { assignedTo: null, lane: "backlog", interrupted: true });
@@ -847,7 +873,8 @@ const server = createServer(async (req, res) => {
     // If moving out of in_progress, interrupt/finish logic
     if (task.lane === "in_progress" && lane !== "in_progress") {
       if (task.assignedTo) {
-        const executeDriver = releaseTaskAgent(task);
+        const executeDriver = activeTaskDrivers.get(task.id) || releaseTaskAgent(task);
+        activeTaskDrivers.delete(task.id);
         executeDriver.interruptTask(task);
         updateTask(task.id, { assignedTo: null });
       }
