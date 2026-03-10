@@ -32,8 +32,21 @@ export class OpenCodeDriver implements LLMDriver {
       }
       ctx.onLog(task.id, `Running: ${cmd} ${args.join(" ")} in ${taskDir}`);
 
+      // 5-minute timeout like Lisa's Session Timeout
+      const SESSION_TIMEOUT_MS = 5 * 60 * 1000;
+      let isTimedOut = false;
+      let timeoutHandle: NodeJS.Timeout | null = null;
+
       const child = spawn(cmd, args, { cwd: taskDir, shell: true });
       let fullOutput = "";
+
+      timeoutHandle = setTimeout(() => {
+          isTimedOut = true;
+          if (child.kill && !child.killed) {
+              child.kill();
+              ctx.onLog(task.id, `[TIMEOUT] Process killed after exceeding ${SESSION_TIMEOUT_MS / 1000}s`);
+          }
+      }, SESSION_TIMEOUT_MS);
 
       child.stdout.on("data", (data) => {
          const text = data.toString();
@@ -47,10 +60,12 @@ export class OpenCodeDriver implements LLMDriver {
       });
 
       child.on("error", (error: any) => {
+         if (timeoutHandle) clearTimeout(timeoutHandle);
          ctx.onBugFound(task.id, error.message);
       });
 
       child.on("close", (code) => {
+         if (timeoutHandle) clearTimeout(timeoutHandle);
          // Parse files
          const fileRegex = /<<<FILE:(.+?)>>>([\s\S]+?)<<<END>>>/g;
          let match;
@@ -73,7 +88,10 @@ export class OpenCodeDriver implements LLMDriver {
             }
          }
 
-         if (code === 0) {
+         if (isTimedOut) {
+            ctx.onLog(task.id, "Process Timed Out.");
+            ctx.onBugFound(task.id, "Timeout: request took too long.");
+         } else if (code === 0) {
             ctx.onLog(task.id, `Process completed. Files created: ${filesCreated}`);
             ctx.onComplete(task.id);
          } else {
