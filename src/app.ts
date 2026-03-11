@@ -1,7 +1,6 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import * as SkeletonUtils from "three/addons/utils/SkeletonUtils.js";
 import { createOffice } from "./office.js";
 import { getLaneSafe, getTaskCardPosition, shouldRenderTaskIn3D } from "./kanbanMath.js";
 import { getHeadMaterials, getBodyMaterials, getLimbMaterial } from "./skins.js";
@@ -1159,34 +1158,6 @@ function updateLighting() {
 
 // No Particles
 
-let robotModel: THREE.Group | null = null;
-let robotAnimations: THREE.AnimationClip[] = [];
-const loader = new GLTFLoader();
-
-// Force the use of fallback avatars because they project the model name directly on the skin.
-let usingFallbackAvatars = true;
-
-// Preload the gltf, but do not override the fallback flag.
-loader.load("/models/RobotExpressive.glb", (gltf) => {
-  robotModel = gltf.scene;
-  robotAnimations = gltf.animations;
-
-  robotModel.traverse((child: any) => {
-    if (child.isMesh) {
-      child.castShadow = true;
-      child.receiveShadow = true;
-    }
-  });
-  console.log("Robot animations loaded:", robotAnimations.map(a => a.name));
-  // Keep using fallback avatars
-  // usingFallbackAvatars = false;
-  rebuildAgentMeshes();
-}, undefined, (error) => {
-  console.error("Falha ao carregar modelo 3D do robô. Usando avatar fallback.", error);
-  usingFallbackAvatars = true;
-  rebuildAgentMeshes();
-});
-
 let computers: THREE.Group[] = [];
 
 // Desk generation
@@ -1619,28 +1590,7 @@ function createAgentMesh(agent: Agent, index: number) {
   else if (tool.includes("opencode")) badgeColor = "#f97316";
   else if (tool.includes("claude")) badgeColor = "#d97757";
 
-  if (robotModel && !usingFallbackAvatars) {
-    const clonedRobot = SkeletonUtils.clone(robotModel) as THREE.Group;
-    clonedRobot.scale.set(0.45, 0.45, 0.45); // increased height
-    clonedRobot.position.y = 0;
-    group.add(clonedRobot);
-
-    clonedRobot.traverse((child: any) => {
-      if (child.isMesh && child.material) {
-        child.material = child.material.clone();
-        if (child.name !== "Face") {
-          child.material.color.lerp(color, 0.7);
-        }
-      }
-    });
-
-    mixer = new THREE.AnimationMixer(clonedRobot);
-    anims = {};
-    robotAnimations.forEach(clip => {
-      anims![clip.name] = mixer!.clipAction(clip);
-    });
-  } else {
-    // Fallback: Boxy Avatar (Minecraft Style)
+  // Boxy Avatar (Minecraft Style)
 
     // Body (wider and thicker to fit the chest label better)
     const bodyGeo = new THREE.BoxGeometry(0.6, 0.7, 0.3);
@@ -1696,7 +1646,6 @@ function createAgentMesh(agent: Agent, index: number) {
     rightLegPivot.add(rightLeg);
     group.add(rightLegPivot);
     group.userData.rightLeg = rightLegPivot;
-  }
 
   group.position.set(-5 + index * 2, 0, -0.5);
   scene.add(group);
