@@ -1,7 +1,6 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import * as SkeletonUtils from "three/addons/utils/SkeletonUtils.js";
 import { createOffice } from "./office.js";
 import { getLaneSafe, getTaskCardPosition, shouldRenderTaskIn3D } from "./kanbanMath.js";
 import { getHeadMaterials, getBodyMaterials, getLimbMaterial } from "./skins.js";
@@ -55,6 +54,8 @@ let previousTaskState = new Map<number, { lane: string; assignedTo: string | nul
 let renderQueued = false;
 let stateUpdateQueued = false;
 let pendingStateData: any = null;
+let lastUpdateTimestamp = 0;
+const STATE_DEBOUNCE_MS = 100; // Debounce state updates to prevent UI freeze
 
 const els = {
   form: document.getElementById("taskForm") as HTMLFormElement,
@@ -104,6 +105,7 @@ const els = {
   agentCategory: document.getElementById("agentCategory") as HTMLSelectElement,
   agentModalTitle: document.getElementById("agentModalTitle") as HTMLElement,
   agentSubmitBtn: document.getElementById("agentSubmitBtn") as HTMLButtonElement,
+  agentColorBadge: document.getElementById("agentColorBadge") as HTMLElement,
   // New Terminal UI
   terminalsLayer: document.getElementById("terminalsLayer") as HTMLElement,
   terminalsContainer: document.getElementById("terminalsContainer") as HTMLElement,
@@ -120,6 +122,13 @@ const els = {
   taskHistoryContent: document.getElementById("taskHistoryContent") as HTMLElement,
   taskOpenFolderBtn: document.getElementById("taskOpenFolderBtn") as HTMLButtonElement,
   closeTaskDetailsBtn: document.getElementById("closeTaskDetailsBtn") as HTMLButtonElement,
+  // Command Palette
+  commandPalette: document.getElementById("commandPalette") as HTMLDialogElement,
+  commandInput: document.getElementById("commandInput") as HTMLInputElement,
+  commandSuggestions: document.getElementById("commandSuggestions") as HTMLElement,
+  // Magic Add
+  magicTaskInput: document.getElementById("magicTaskInput") as HTMLTextAreaElement,
+  magicTaskBtn: document.getElementById("magicTaskBtn") as HTMLButtonElement,
 };
 
 // --- Toast System ---
@@ -175,9 +184,21 @@ let isOfficeCreated = false;
 export let officeData: { padPositions: THREE.Vector3[] } = { padPositions: [] };
 
 function updateState(data: any) {
+  if (!data) return;
+  
+  // Protect against flickering/empty states that cause agents to disappear
+  if (agents.length > 0 && (!data.agents || data.agents.length === 0)) {
+     console.warn("Received empty agents list while having active agents. Ignoring update to prevent disappearance.");
+     return;
+  }
+
   pendingStateData = data;
-  if (stateUpdateQueued) return;
+  
+  const now = Date.now();
+  if (stateUpdateQueued && (now - lastUpdateTimestamp < STATE_DEBOUNCE_MS)) return;
+  
   stateUpdateQueued = true;
+  lastUpdateTimestamp = now;
 
   requestAnimationFrame(() => {
     const data = pendingStateData;
@@ -474,17 +495,17 @@ class TerminalInstance {
       fontSize: 14,
       fontFamily: "'Share Tech Mono', monospace",
       theme: {
-        background: "#000000",
-        foreground: "#00f0ff",
-        cursor: "#ff0055",
-        black: "#000000",
+        background: "#ffffff",
+        foreground: "#1e293b",
+        cursor: "#0f172a",
+        black: "#1e293b",
         red: "#ef4444",
-        green: "#22c55e",
+        green: "#15803d",
         yellow: "#eab308",
-        blue: "#3b82f6",
+        blue: "#0284c7",
         magenta: "#a855f7",
         cyan: "#06b6d4",
-        white: "#e2e8f0"
+        white: "#f8fafc"
       }
     });
 
@@ -496,7 +517,7 @@ class TerminalInstance {
     this.fitAddon.fit();
 
     this.term.onData((data: string) => {
-      fetch(`/api/terminals/${encodeURIComponent(agentId)}/send`, {
+      fetch(`${API_URL}/api/terminals/${encodeURIComponent(agentId)}/send`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ data })
@@ -569,7 +590,7 @@ class TerminalUIManager {
 
       // Start session on server
       try {
-        await fetch(`/api/terminals/${encodeURIComponent(agentId)}/start`, { method: "POST" });
+        await fetch(`${API_URL}/api/terminals/${encodeURIComponent(agentId)}/start`, { method: "POST" });
       } catch (e) {
         console.error("Failed to start terminal session", e);
       }
@@ -638,7 +659,7 @@ async function openTaskDetailsModal(task: Task) {
   if (task.lane !== "done" && task.workDir) {
     els.taskOpenFolderBtn.style.display = "block";
     els.taskOpenFolderBtn.onclick = () => {
-      fetch(`/api/tasks/${task.id}/open-folder`, { method: "POST" });
+      fetch(`${API_URL}/api/tasks/${task.id}/open-folder`, { method: "POST" });
       showToast("Abrindo pasta local...", "info");
     };
   } else {
@@ -650,7 +671,7 @@ async function openTaskDetailsModal(task: Task) {
   els.taskDetailsModal.showModal();
 
   try {
-    const res = await fetch(`/api/tasks/${task.id}/terminal`);
+    const res = await fetch(`${API_URL}/api/tasks/${task.id}/terminal`);
     const data = await res.json();
     if (data.logs && data.logs.length > 0) {
       els.taskHistoryContent.innerHTML = data.logs.map((log: any) => {
@@ -711,6 +732,7 @@ async function openAgentEditModal(agent: Agent) {
   } else {
     els.agentModelDropdown.innerHTML = `<option value="${agent.model}" selected>${agent.model}</option>`;
   }
+  updateAgentColorBadge();
   els.agentModal.showModal();
 }
 
@@ -778,6 +800,39 @@ els.toggleViewBtn.addEventListener("click", () => {
   els.view2d.classList.toggle("active");
 });
 
+// --- Magic Add Logic ---
+els.magicTaskBtn.addEventListener("click", () => {
+  const input = els.magicTaskInput.value.trim();
+  if (!input) return;
+
+  const lowerInput = input.toLowerCase();
+
+  // Heuristics
+  let category = "feature";
+  let priority = "media";
+
+  if (lowerInput.includes("bug") || lowerInput.includes("erro") || lowerInput.includes("fix") || lowerInput.includes("corrigir")) category = "bug";
+  else if (lowerInput.includes("teste") || lowerInput.includes("qa") || lowerInput.includes("verificar")) category = "test";
+  else if (lowerInput.includes("performance") || lowerInput.includes("otimizar") || lowerInput.includes("lento") || lowerInput.includes("rápido")) category = "performance";
+  else if (lowerInput.includes("segurança") || lowerInput.includes("vulnerabilidade") || lowerInput.includes("auth")) category = "security";
+  else if (lowerInput.includes("planejar") || lowerInput.includes("roadmap")) category = "roadmap";
+
+  if (lowerInput.includes("urgente") || lowerInput.includes("crítico") || lowerInput.includes("alta prioridade") || lowerInput.includes("p0")) priority = "alta";
+  else if (lowerInput.includes("baixa prioridade") || lowerInput.includes("p3")) priority = "baixa";
+
+  els.title.value = input;
+  els.category.value = category;
+  els.priority.value = priority;
+
+  if (els.description) {
+      els.description.value = "Gerado via Magic Fill: " + input;
+  }
+
+  els.magicTaskInput.value = "";
+  showToast("Formulário preenchido com sucesso!", "success");
+  playClickSound();
+});
+
 els.seedTasksBtn.addEventListener("click", () => {
   [
     ["Planejar sprint de IA colaborativa", "product_manager", "roadmap", "alta"],
@@ -801,7 +856,164 @@ els.clearDoneBtn?.addEventListener("click", () => {
   }
 });
 
+// --- Command Palette Logic ---
+let selectedSuggestionIndex = -1;
+
+function closeCommandPalette() {
+  els.commandPalette.close();
+  els.commandInput.value = "";
+  els.commandSuggestions.innerHTML = "";
+  selectedSuggestionIndex = -1;
+}
+
+function openCommandPalette() {
+  els.commandPalette.showModal();
+  els.commandInput.focus();
+}
+
+function renderCommandSuggestions(input: string) {
+  els.commandSuggestions.innerHTML = "";
+  selectedSuggestionIndex = -1;
+
+  if (!input.trim()) return;
+
+  const suggestions: { label: string; action: () => void }[] = [];
+
+  if (input.startsWith("/task ")) {
+    const title = input.replace("/task ", "").trim();
+    if (title) {
+      suggestions.push({
+        label: `📝 Criar Tarefa: "${title}"`,
+        action: () => {
+          // Heuristics
+          const lowerTitle = title.toLowerCase();
+          let category = "feature";
+          let priority = "media";
+
+          if (lowerTitle.includes("bug") || lowerTitle.includes("erro") || lowerTitle.includes("fix") || lowerTitle.includes("corrigir")) category = "bug";
+          if (lowerTitle.includes("teste") || lowerTitle.includes("qa")) category = "test";
+          if (lowerTitle.includes("performance") || lowerTitle.includes("otimizar") || lowerTitle.includes("lento")) category = "performance";
+          if (lowerTitle.includes("segurança") || lowerTitle.includes("vulnerabilidade")) category = "security";
+
+          if (lowerTitle.includes("urgente") || lowerTitle.includes("crítico")) priority = "alta";
+          if (lowerTitle.includes("baixa prioridade")) priority = "baixa";
+
+          createTask({
+            title: title,
+            source: "usuario",
+            category: category,
+            priority: priority,
+          });
+          closeCommandPalette();
+        }
+      });
+    }
+  } else if (input.startsWith("/agent ")) {
+    const role = input.replace("/agent ", "").trim();
+    if (role) {
+      suggestions.push({
+        label: `🤖 Criar Agente: "${role}"`,
+        action: async () => {
+          closeCommandPalette();
+          // Open agent modal prefilled
+          els.createAgentBtn.click();
+          // Wait for modal to open and load tools
+          setTimeout(() => {
+            els.agentRole.value = role;
+            const lowerRole = role.toLowerCase();
+            let category = "misc";
+            if (lowerRole.includes("segurança")) category = "security";
+            if (lowerRole.includes("pm") || lowerRole.includes("product")) category = "roadmap";
+            if (lowerRole.includes("teste") || lowerRole.includes("qa")) category = "test";
+            if (lowerRole.includes("feature") || lowerRole.includes("dev")) category = "feature";
+            els.agentCategory.value = category;
+          }, 300);
+        }
+      });
+    }
+  } else {
+    // Default suggestions based on what they are typing
+    const lowerInput = input.toLowerCase();
+    if ("tarefa".includes(lowerInput) || "nova".includes(lowerInput) || "criar".includes(lowerInput)) {
+      suggestions.push({
+        label: `💡 Dica: Digite "/task [título]" para criar uma tarefa`,
+        action: () => {
+          els.commandInput.value = "/task ";
+          els.commandInput.focus();
+        }
+      });
+    }
+    if ("agente".includes(lowerInput) || "novo".includes(lowerInput) || "criar".includes(lowerInput)) {
+      suggestions.push({
+        label: `💡 Dica: Digite "/agent [papel]" para criar um agente`,
+        action: () => {
+          els.commandInput.value = "/agent ";
+          els.commandInput.focus();
+        }
+      });
+    }
+  }
+
+  suggestions.forEach((s, idx) => {
+    const li = document.createElement("li");
+    li.textContent = s.label;
+    li.onclick = s.action;
+    li.onmouseenter = () => {
+      Array.from(els.commandSuggestions.children).forEach(c => c.classList.remove("selected"));
+      li.classList.add("selected");
+      selectedSuggestionIndex = idx;
+    };
+    els.commandSuggestions.appendChild(li);
+  });
+}
+
+els.commandInput.addEventListener("input", (e) => {
+  renderCommandSuggestions((e.target as HTMLInputElement).value);
+});
+
+els.commandInput.addEventListener("keydown", (e) => {
+  const items = Array.from(els.commandSuggestions.children) as HTMLElement[];
+  if (e.key === "ArrowDown") {
+    e.preventDefault();
+    if (items.length > 0) {
+      selectedSuggestionIndex = (selectedSuggestionIndex + 1) % items.length;
+      items.forEach((item, idx) => {
+        item.classList.toggle("selected", idx === selectedSuggestionIndex);
+      });
+    }
+  } else if (e.key === "ArrowUp") {
+    e.preventDefault();
+    if (items.length > 0) {
+      selectedSuggestionIndex = (selectedSuggestionIndex - 1 + items.length) % items.length;
+      items.forEach((item, idx) => {
+        item.classList.toggle("selected", idx === selectedSuggestionIndex);
+      });
+    }
+  } else if (e.key === "Enter") {
+    e.preventDefault();
+    if (selectedSuggestionIndex >= 0 && selectedSuggestionIndex < items.length) {
+      items[selectedSuggestionIndex].click();
+    }
+  }
+});
+
 // --- Modals Logic ---
+function updateAgentColorBadge() {
+  const role = els.agentRole.value.trim();
+  const roleColors: Record<string, string> = {
+    "Product Manager": "#111111",
+    "Segurança": "#1e3a8a",
+    "Performance": "#475569",
+    "Novas Funcionalidades": "#0284c7",
+    "Testes": "#15803d",
+    "Novas Features": "#0f172a"
+  };
+
+  els.agentColorBadge.style.background = roleColors[role] || "#888888";
+}
+
+els.agentRole.addEventListener("input", updateAgentColorBadge);
+
 els.createAgentBtn.addEventListener("click", async () => {
   // Reset modal to create mode
   els.agentEditId.value = "";
@@ -946,34 +1158,6 @@ function updateLighting() {
 
 // No Particles
 
-let robotModel: THREE.Group | null = null;
-let robotAnimations: THREE.AnimationClip[] = [];
-const loader = new GLTFLoader();
-
-// Force the use of fallback avatars because they project the model name directly on the skin.
-let usingFallbackAvatars = true;
-
-// Preload the gltf, but do not override the fallback flag.
-loader.load("/models/RobotExpressive.glb", (gltf) => {
-  robotModel = gltf.scene;
-  robotAnimations = gltf.animations;
-
-  robotModel.traverse((child: any) => {
-    if (child.isMesh) {
-      child.castShadow = true;
-      child.receiveShadow = true;
-    }
-  });
-  console.log("Robot animations loaded:", robotAnimations.map(a => a.name));
-  // Keep using fallback avatars
-  // usingFallbackAvatars = false;
-  rebuildAgentMeshes();
-}, undefined, (error) => {
-  console.error("Falha ao carregar modelo 3D do robô. Usando avatar fallback.", error);
-  usingFallbackAvatars = true;
-  rebuildAgentMeshes();
-});
-
 let computers: THREE.Group[] = [];
 
 // Desk generation
@@ -1093,6 +1277,7 @@ const controls = new OrbitControls(camera, canvas);
 controls.enableDamping = true;
 controls.dampingFactor = 0.05;
 controls.maxPolarAngle = Math.PI / 2 - 0.1;
+controls.mouseButtons.RIGHT = null;
 
 const kanbanMesh = new THREE.Mesh(new THREE.BoxGeometry(12, 6, 0.2), new THREE.MeshStandardMaterial({ color: "#ffffff" }));
 kanbanMesh.position.set(0, 3, -4.2);
@@ -1383,13 +1568,12 @@ function createAgentMesh(agent: Agent, index: number) {
   group.userData.agentId = agent.id;
 
   const roleColors: Record<string, string> = {
-    "Product Manager": "#a855f7",
-    "Segurança": "#ef4444",
-    "Performance": "#f97316",
-    "Novas Funcionalidades": "#3b82f6",
-    "Testes": "#22c55e",
-
-    "Novas Features": "#00f0ff"
+    "Product Manager": "#111111", // Black turtleneck
+    "Segurança": "#1e3a8a",       // Navy Blue
+    "Performance": "#475569",     // Slate
+    "Novas Funcionalidades": "#0284c7", // Blue
+    "Testes": "#15803d",          // Dark Green
+    "Novas Features": "#0f172a"   // Navy
   };
   const color = new THREE.Color(roleColors[agent.role] || "#888888");
 
@@ -1406,28 +1590,7 @@ function createAgentMesh(agent: Agent, index: number) {
   else if (tool.includes("opencode")) badgeColor = "#f97316";
   else if (tool.includes("claude")) badgeColor = "#d97757";
 
-  if (robotModel && !usingFallbackAvatars) {
-    const clonedRobot = SkeletonUtils.clone(robotModel) as THREE.Group;
-    clonedRobot.scale.set(0.45, 0.45, 0.45); // increased height
-    clonedRobot.position.y = 0;
-    group.add(clonedRobot);
-
-    clonedRobot.traverse((child: any) => {
-      if (child.isMesh && child.material) {
-        child.material = child.material.clone();
-        if (child.name !== "Face") {
-          child.material.color.lerp(color, 0.7);
-        }
-      }
-    });
-
-    mixer = new THREE.AnimationMixer(clonedRobot);
-    anims = {};
-    robotAnimations.forEach(clip => {
-      anims![clip.name] = mixer!.clipAction(clip);
-    });
-  } else {
-    // Fallback: Boxy Avatar (Minecraft Style)
+  // Boxy Avatar (Minecraft Style)
 
     // Body (wider and thicker to fit the chest label better)
     const bodyGeo = new THREE.BoxGeometry(0.6, 0.7, 0.3);
@@ -1483,7 +1646,6 @@ function createAgentMesh(agent: Agent, index: number) {
     rightLegPivot.add(rightLeg);
     group.add(rightLegPivot);
     group.userData.rightLeg = rightLegPivot;
-  }
 
   group.position.set(-5 + index * 2, 0, -0.5);
   scene.add(group);
@@ -1878,20 +2040,45 @@ window.addEventListener('pointerdown', onPointerDown);
 window.addEventListener("keydown", (e) => {
   if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 
-  if (e.key === " ") {
+  if (e.key === "q" || e.key === "Q") {
     e.preventDefault();
     els.toggleViewBtn.click();
     playClickSound();
   }
-  if (e.key === "n" || e.key === "N") {
+  if (e.key === " ") {
     e.preventDefault();
-    els.title.focus();
+    if (!e.repeat) {
+      controls.mouseButtons.LEFT = THREE.MOUSE.PAN;
+    }
+  }
+  if (e.key === "k" && (e.ctrlKey || e.metaKey)) {
+    e.preventDefault();
+    if (els.commandPalette.open) {
+      closeCommandPalette();
+    } else {
+      openCommandPalette();
+    }
     playClickSound();
+  }
+  if (e.key === "n" || e.key === "N") {
+    // Only capture 'n' if not typing in command palette
+    if (document.activeElement !== els.commandInput) {
+      e.preventDefault();
+      els.title.focus();
+      playClickSound();
+    }
   }
   if (e.key === "Escape") {
     els.agentModal.close();
     els.settingsModal.close();
+    if (els.commandPalette.open) closeCommandPalette();
     playClickSound();
+  }
+});
+
+window.addEventListener("keyup", (e) => {
+  if (e.key === " ") {
+    controls.mouseButtons.LEFT = THREE.MOUSE.ROTATE;
   }
 });
 

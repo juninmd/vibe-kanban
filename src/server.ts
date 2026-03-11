@@ -16,6 +16,8 @@ import { Memory } from "./memory.js";
 import { createPullRequest } from "./utils/githubUtils.js";
 import { isCommandAvailable } from "./utils/commandUtils.js";
 import { buildProviderChain, isEligibleForProviderFallback } from "./drivers/providerFallback.js";
+import { getAvailableTools } from "./providers.js";
+import { isEligibleForFallback } from "./utils/fallbackUtils.js";
 import "dotenv/config";
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 5174;
@@ -91,9 +93,11 @@ function addTerminalLine(agentId: string, taskId: number | null, type: string, c
   clients.forEach(c => { try { c.res.write(`data: ${termData}\n\n`); } catch (e) { } });
 }
 
-// Bug rate limiter
+// Bug rate limiter & Fallback State
 const bugCounts = new Map<number, number>();
 const activeTaskDrivers = new Map<number, LLMDriver>();
+const fallbackAttempts = new Map<number, number>();
+const MAX_FALLBACK_ATTEMPTS = 3;
 
 // Helper to keep local state and DB in sync
 function updateTask(id: number, updates: Partial<Task>) {
@@ -208,8 +212,11 @@ function startTask(task: Task, agent: Agent) {
     status: "working",
     assignedTask: task.id
   });
-  addEvent(`[AutoPilot] ${agent.role} iniciou a tarefa #${task.id}`);
-  addTerminalLine(agent.id, task.id, "system", `=== Tarefa #${task.id}: ${task.title} ===`);
+
+  const attempt = (fallbackAttempts.get(task.id) || 0) + 1;
+  const attemptStr = attempt > 1 ? ` (Tentativa de Fallback ${attempt}/${MAX_FALLBACK_ATTEMPTS})` : "";
+  addEvent(`[AutoPilot] ${agent.role} iniciou a tarefa #${task.id}${attemptStr}`);
+  addTerminalLine(agent.id, task.id, "system", `=== Tarefa #${task.id}: ${task.title}${attemptStr} ===`);
 
   const providerChain = buildProviderChain(agent, drivers);
   bugCounts.set(task.id, 0);
@@ -241,6 +248,9 @@ const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? dri
       const t = getTask(tid);
       if (t && t.assignedTo) {
         addTerminalLine(t.assignedTo, tid, "system", `✅ Tarefa #${tid} concluída!`);
+
+        // Reset fallback attempts on success
+        fallbackAttempts.delete(tid);
 
         // Auto PR generation
         if (t.githubRepo && process.env.GITHUB_TOKEN) {
@@ -275,6 +285,29 @@ const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? dri
       activeTaskDrivers.delete(tid);
       const t = getTask(tid);
       if (!t) return;
+
+      if (isEligibleForFallback(desc)) {
+          const attempts = (fallbackAttempts.get(tid) || 0) + 1;
+          fallbackAttempts.set(tid, attempts);
+
+          if (attempts <= MAX_FALLBACK_ATTEMPTS) {
+              addEvent(`[Fallback] Erro transiente em #${tid}: ${desc}. Tentando novamente... (${attempts}/${MAX_FALLBACK_ATTEMPTS})`);
+              if (t.assignedTo) {
+                  addTerminalLine(t.assignedTo, tid, "stderr", `⚠️ Erro transiente detectado. Acionando Fallback (${attempts}/${MAX_FALLBACK_ATTEMPTS}): ${desc}`);
+                  updateAgent(t.assignedTo, { status: "idle", assignedTask: null });
+                  updateTask(tid, { assignedTo: null, lane: "backlog", interrupted: true }); // Will be picked up again
+              }
+              return; // Stop normal bug flow
+          } else {
+              addEvent(`[Fallback] Falha na tarefa #${tid} após ${MAX_FALLBACK_ATTEMPTS} tentativas.`);
+              if (t.assignedTo) {
+                  addTerminalLine(t.assignedTo, tid, "stderr", `❌ Exaustão de provedor após ${MAX_FALLBACK_ATTEMPTS} tentativas: ${desc}`);
+              }
+              fallbackAttempts.delete(tid); // Clean up on ultimate failure
+          }
+      }
+
+      // Normal Bug Flow
       // Rate limit: max 3 bugs per task
       const count = (bugCounts.get(tid) || 0) + 1;
       bugCounts.set(tid, count);
@@ -584,32 +617,7 @@ const server = createServer(async (req, res) => {
 
   // GET /api/tools
   if (url === "/api/tools" && method === "GET") {
-    const tools: { id: string; name: string }[] = [];
-
-    // CLI-based drivers
-    if (isCommandAvailable("gemini")) {
-      tools.push({ id: "gemini", name: "Gemini CLI" });
-    }
-    if (isCommandAvailable("opencode")) {
-      tools.push({ id: "opencode", name: "OpenCode AI" });
-    }
-    // Copilot usa `gh` CLI com extensão copilot
-    if (isCommandAvailable("gh")) {
-      tools.push({ id: "copilot", name: "GitHub Copilot (gh cli)" });
-    }
-    if (isCommandAvailable("claude")) {
-      tools.push({ id: "claude", name: "Claude Code" });
-    }
-
-    // API-based drivers (sem depender de CLI local)
-    if (process.env.OPENAI_API_KEY) {
-      tools.push({ id: "openai", name: "OpenAI API" });
-    }
-    if (!isCommandAvailable("claude") && process.env.ANTHROPIC_API_KEY) {
-      tools.push({ id: "claude", name: "Claude (API)" });
-    }
-
-    return jsonResponse(res, 200, { tools });
+    return jsonResponse(res, 200, { tools: getAvailableTools() });
   }
 
   // GET /api/models?tool=xxx

@@ -2,7 +2,12 @@ import { Task, Agent, LLMDriver, DriverContext } from "../types.js";
 import { spawn } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
+import * as os from "os";
 import { isCommandAvailable } from "../utils/commandUtils.js";
+import { spawnWithPty, stripAnsi } from "../utils/ptyUtils.js";
+import { createErrorLoopDetector, createSessionTimeout, STUCK_MESSAGE, TIMEOUT_MESSAGE } from "../utils/overseerUtils.js";
+
+const OPENCODE_ERROR_PATTERN = /^Error /;
 
 export class OpenCodeDriver implements LLMDriver {
    name: string = "OpenCode AI";
@@ -25,32 +30,76 @@ export class OpenCodeDriver implements LLMDriver {
          throw new Error("OpenCode CLI not found in PATH. Please install it: npm install -g opencode-ai");
       }
 
-      const cmd = "opencode";
-      const args = ["run", task.title, "--agent", agent.role];
-      if (agent.model && agent.model !== "default") {
-          args.push("--model", agent.model);
-      }
-      ctx.onLog(task.id, `Running: ${cmd} ${args.join(" ")} in ${taskDir}`);
+      const prompt = `
+[SYSTEM: AUTONOMOUS MODE]
+You are an autonomous coding agent integrated into a Kanban board called "Vibe Kanban".
+You are acting as the agent role: "${agent.role}".
+Your goal is to complete the following task in this workspace.
 
-      const child = spawn(cmd, args, { cwd: taskDir, shell: true });
+TASK ID: #${task.id}
+TITLE: ${task.title}
+DESCRIPTION: ${task.description || "No description provided."}
+CATEGORY: ${task.category}
+PRIORITY: ${task.priority}
+
+INSTRUCTIONS:
+1. Explore the codebase if necessary.
+2. Implement the requested changes.
+3. Run tests or checks when appropriate.
+4. When finished, provide a brief summary of what you did.
+
+If you don't have tool access, use this format to create/update files:
+<<<FILE:filename.ext>>>
+content
+<<<END>>>
+`;
+
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "lisa-"));
+      const promptFile = path.join(tmpDir, "prompt.md");
+      fs.writeFileSync(promptFile, prompt, "utf-8");
+
+      const modelFlag = (agent.model && agent.model !== "default") ? `--model ${agent.model}` : "";
+      const cmd = `opencode run ${modelFlag} "$(cat '${promptFile}')"`;
+
+      ctx.onLog(task.id, `Running: opencode run ${modelFlag || '(default model)'} in ${taskDir}`);
+
+      const { proc, isPty } = spawnWithPty(cmd, { cwd: taskDir, env: process.env });
+
+      const sessionTimeout = createSessionTimeout(proc, 5 * 60); // 5 minutes timeout
+      const errorLoopDetector = createErrorLoopDetector(proc, OPENCODE_ERROR_PATTERN);
+
       let fullOutput = "";
 
-      child.stdout.on("data", (data) => {
-         const text = data.toString();
+      proc.stdout?.on("data", (data: Buffer) => {
+         const raw = data.toString();
+         const text = isPty ? stripAnsi(raw) : raw;
          fullOutput += text;
+         errorLoopDetector.check(text);
+
          ctx.onLog(task.id, text);
       });
 
-      child.stderr.on("data", (data) => {
-         const msg = data.toString();
-         ctx.onBugFound(task.id, msg);
+      proc.stderr?.on("data", (data: Buffer) => {
+         const raw = data.toString();
+         const text = isPty ? stripAnsi(raw) : raw;
+
+         const textTrimmed = text.trim();
+         if (textTrimmed) {
+             ctx.onLog(task.id, `[STDERR] ${textTrimmed}`);
+         }
       });
 
-      child.on("error", (error: any) => {
+      proc.on("error", (error: any) => {
          ctx.onBugFound(task.id, error.message);
       });
 
-      child.on("close", (code) => {
+      proc.on("close", (code) => {
+         sessionTimeout.stop();
+
+         try {
+            fs.rmSync(tmpDir, { recursive: true, force: true });
+         } catch {}
+
          // Parse files
          const fileRegex = /<<<FILE:(.+?)>>>([\s\S]+?)<<<END>>>/g;
          let match;
@@ -73,7 +122,13 @@ export class OpenCodeDriver implements LLMDriver {
             }
          }
 
-         if (code === 0) {
+         if (sessionTimeout.wasTimedOut()) {
+            ctx.onLog(task.id, TIMEOUT_MESSAGE);
+            ctx.onBugFound(task.id, TIMEOUT_MESSAGE);
+         } else if (errorLoopDetector.wasKilled()) {
+            ctx.onLog(task.id, STUCK_MESSAGE);
+            ctx.onBugFound(task.id, STUCK_MESSAGE);
+         } else if (code === 0) {
             ctx.onLog(task.id, `Process completed. Files created: ${filesCreated}`);
             ctx.onComplete(task.id);
          } else {
@@ -82,7 +137,7 @@ export class OpenCodeDriver implements LLMDriver {
          }
       });
 
-      this.runningTasks.set(task.id, child);
+      this.runningTasks.set(task.id, proc);
       return Promise.resolve();
    }
 
