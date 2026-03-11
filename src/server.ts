@@ -15,6 +15,7 @@ import { TerminalManager } from "./terminal/TerminalManager.js";
 import { Memory } from "./memory.js";
 import { createPullRequest } from "./utils/githubUtils.js";
 import { isCommandAvailable } from "./utils/commandUtils.js";
+import { buildProviderChain, isEligibleForProviderFallback } from "./drivers/providerFallback.js";
 import { getAvailableTools } from "./providers.js";
 import { isEligibleForFallback } from "./utils/fallbackUtils.js";
 import "dotenv/config";
@@ -94,6 +95,7 @@ function addTerminalLine(agentId: string, taskId: number | null, type: string, c
 
 // Bug rate limiter & Fallback State
 const bugCounts = new Map<number, number>();
+const activeTaskDrivers = new Map<number, LLMDriver>();
 const fallbackAttempts = new Map<number, number>();
 const MAX_FALLBACK_ATTEMPTS = 3;
 
@@ -216,12 +218,19 @@ function startTask(task: Task, agent: Agent) {
   addEvent(`[AutoPilot] ${agent.role} iniciou a tarefa #${task.id}${attemptStr}`);
   addTerminalLine(agent.id, task.id, "system", `=== Tarefa #${task.id}: ${task.title}${attemptStr} ===`);
 
-  const executeDriver = resolveDriverForAgent(agent);
+  const providerChain = buildProviderChain(agent, drivers);
   bugCounts.set(task.id, 0);
 
   setTimeout(() => {
-    try {
-      executeDriver.executeTask(updatedTask, agent, {
+    let attemptIndex = 0;
+
+    const runAttempt = (tool: string) => {
+const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? drivers[tool] : null) || resolveDriverForAgent(agent);
+      const executionAgent = { ...agent, tool };
+      activeTaskDrivers.set(task.id, executeDriver);
+      addTerminalLine(agent.id, task.id, "system", `🤖 Provider: ${tool}`);
+
+      executeDriver.executeTask(updatedTask, executionAgent, {
         onLog: (tid, msg) => {
       const t = getTask(tid);
       if (t) {
@@ -235,6 +244,7 @@ function startTask(task: Task, agent: Agent) {
       }
     },
     onComplete: async (tid) => {
+      activeTaskDrivers.delete(tid);
       const t = getTask(tid);
       if (t && t.assignedTo) {
         addTerminalLine(t.assignedTo, tid, "system", `✅ Tarefa #${tid} concluída!`);
@@ -264,6 +274,15 @@ function startTask(task: Task, agent: Agent) {
       }
     },
     onBugFound: (tid, desc) => {
+      const nextTool = providerChain[attemptIndex + 1];
+      if (nextTool && isEligibleForProviderFallback(desc)) {
+        attemptIndex += 1;
+        addEvent(`[ProviderFallback] Tarefa #${tid} falhou com ${providerChain[attemptIndex - 1]} (${desc}). Tentando ${nextTool}.`);
+        runAttempt(nextTool);
+        return;
+      }
+
+      activeTaskDrivers.delete(tid);
       const t = getTask(tid);
       if (!t) return;
 
@@ -322,13 +341,20 @@ function startTask(task: Task, agent: Agent) {
     },
     memory: Memory.getInstance()
       }).catch((err: any) => {
+        activeTaskDrivers.delete(updatedTask.id);
         addEvent(`Erro ao executar tarefa #${updatedTask.id}: ${err.message}`);
         if (agent.id) {
           updateAgent(agent.id, { status: "idle", assignedTask: null });
         }
         updateTask(updatedTask.id, { assignedTo: null, lane: "backlog", interrupted: true });
       });
+    };
+
+    try {
+      const firstTool = providerChain[0] || agent.tool || "gemini";
+      runAttempt(firstTool);
     } catch (err: any) {
+      activeTaskDrivers.delete(updatedTask.id);
       addEvent(`Erro ao executar tarefa #${updatedTask.id}: ${err.message}`);
       if (agent.id) {
         updateAgent(agent.id, { status: "idle", assignedTask: null });
@@ -861,7 +887,8 @@ const server = createServer(async (req, res) => {
     if (!task) return jsonResponse(res, 404, { error: "Task not found" });
 
     if (task.assignedTo) {
-      const executeDriver = releaseTaskAgent(task);
+      const executeDriver = activeTaskDrivers.get(task.id) || releaseTaskAgent(task);
+      activeTaskDrivers.delete(task.id);
       // Stop driver
       executeDriver.interruptTask(task);
       updateTask(task.id, { assignedTo: null, lane: "backlog", interrupted: true });
@@ -879,7 +906,8 @@ const server = createServer(async (req, res) => {
     // If moving out of in_progress, interrupt/finish logic
     if (task.lane === "in_progress" && lane !== "in_progress") {
       if (task.assignedTo) {
-        const executeDriver = releaseTaskAgent(task);
+        const executeDriver = activeTaskDrivers.get(task.id) || releaseTaskAgent(task);
+        activeTaskDrivers.delete(task.id);
         executeDriver.interruptTask(task);
         updateTask(task.id, { assignedTo: null });
       }
