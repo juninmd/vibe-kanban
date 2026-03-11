@@ -36,6 +36,11 @@
     </div>
   </header>
 
+  <div class="agents-topbar">
+    <h2>Agentes</h2>
+    <div id="agentsList" class="agents-list horizontal"></div>
+  </div>
+
   <main class="layout">
     <aside class="sidebar">
       <section id="dashboardStats" class="dashboard-stats">
@@ -136,10 +141,7 @@
         </form>
       </section>
 
-      <section>
-        <h2>Agentes</h2>
-        <div id="agentsList" class="agents-list"></div>
-      </section>
+
 
       <section>
         <h2>Eventos</h2>
@@ -254,8 +256,8 @@
   <!-- Removido o terminalModal antigo em favor do terminalsLayer interativo -->
 
   <!-- Modal Detalhes da Tarefa -->
-  <dialog id="taskDetailsModal" class="modal">
-    <div class="modal-content modal-large">
+  <dialog id="taskDetailsModal" class="modal modal-large">
+    <div class="modal-content">
       <div class="modal-header">
         <h2 id="taskDetailsTitle">Tarefa #0: Título</h2>
         <div class="modal-header-actions">

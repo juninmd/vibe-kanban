@@ -496,7 +496,7 @@ class TerminalInstance {
     this.fitAddon.fit();
 
     this.term.onData((data: string) => {
-      fetch(`/api/terminals/${encodeURIComponent(agentId)}/send`, {
+      fetch(`${API_URL}/api/terminals/${encodeURIComponent(agentId)}/send`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ data })
@@ -569,7 +569,7 @@ class TerminalUIManager {
 
       // Start session on server
       try {
-        await fetch(`/api/terminals/${encodeURIComponent(agentId)}/start`, { method: "POST" });
+        await fetch(`${API_URL}/api/terminals/${encodeURIComponent(agentId)}/start`, { method: "POST" });
       } catch (e) {
         console.error("Failed to start terminal session", e);
       }
@@ -638,7 +638,7 @@ async function openTaskDetailsModal(task: Task) {
   if (task.lane !== "done" && task.workDir) {
     els.taskOpenFolderBtn.style.display = "block";
     els.taskOpenFolderBtn.onclick = () => {
-      fetch(`/api/tasks/${task.id}/open-folder`, { method: "POST" });
+      fetch(`${API_URL}/api/tasks/${task.id}/open-folder`, { method: "POST" });
       showToast("Abrindo pasta local...", "info");
     };
   } else {
@@ -650,7 +650,7 @@ async function openTaskDetailsModal(task: Task) {
   els.taskDetailsModal.showModal();
 
   try {
-    const res = await fetch(`/api/tasks/${task.id}/terminal`);
+    const res = await fetch(`${API_URL}/api/tasks/${task.id}/terminal`);
     const data = await res.json();
     if (data.logs && data.logs.length > 0) {
       els.taskHistoryContent.innerHTML = data.logs.map((log: any) => {
@@ -1093,6 +1093,7 @@ const controls = new OrbitControls(camera, canvas);
 controls.enableDamping = true;
 controls.dampingFactor = 0.05;
 controls.maxPolarAngle = Math.PI / 2 - 0.1;
+controls.mouseButtons.RIGHT = null;
 
 const kanbanMesh = new THREE.Mesh(new THREE.BoxGeometry(12, 6, 0.2), new THREE.MeshStandardMaterial({ color: "#ffffff" }));
 kanbanMesh.position.set(0, 3, -4.2);
@@ -1877,10 +1878,16 @@ window.addEventListener('pointerdown', onPointerDown);
 window.addEventListener("keydown", (e) => {
   if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 
-  if (e.key === " ") {
+  if (e.key === "q" || e.key === "Q") {
     e.preventDefault();
     els.toggleViewBtn.click();
     playClickSound();
+  }
+  if (e.key === " ") {
+    e.preventDefault();
+    if (!e.repeat) {
+      controls.mouseButtons.LEFT = THREE.MOUSE.PAN;
+    }
   }
   if (e.key === "n" || e.key === "N") {
     e.preventDefault();
@@ -1891,6 +1898,12 @@ window.addEventListener("keydown", (e) => {
     els.agentModal.close();
     els.settingsModal.close();
     playClickSound();
+  }
+});
+
+window.addEventListener("keyup", (e) => {
+  if (e.key === " ") {
+    controls.mouseButtons.LEFT = THREE.MOUSE.ROTATE;
   }
 });
 
