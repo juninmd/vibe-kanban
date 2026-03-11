@@ -63,6 +63,12 @@
 
       <section>
         <h2>Criar tarefa</h2>
+
+        <div class="magic-task-container">
+            <textarea id="magicTaskInput" placeholder="Descreva a tarefa naturalmente e a magia auto-preencherá os campos abaixo. Ex: 'Corrigir bug na tela de login urgente'" rows="2"></textarea>
+            <button id="magicTaskBtn" class="secondary-btn magic-btn" type="button">✨ Auto-preencher</button>
+        </div>
+
         <form id="taskForm">
           <label>
             Fonte
@@ -178,13 +184,31 @@
     </section>
   </main>
 
+  <!-- Command Palette Modal -->
+  <dialog id="commandPalette" class="modal command-palette-modal">
+    <div class="command-palette-content">
+      <input type="text" id="commandInput" placeholder="Digite um comando (ex: /task Corrigir bug, /agent DBA)..." autocomplete="off" />
+      <ul id="commandSuggestions" class="command-suggestions"></ul>
+      <div class="command-hints">
+        <span><kbd>Ctrl</kbd> + <kbd>K</kbd> para abrir/fechar</span>
+        <span><kbd>↑</kbd> <kbd>↓</kbd> para navegar</span>
+        <span><kbd>Enter</kbd> para confirmar</span>
+      </div>
+    </div>
+  </dialog>
+
   <!-- Modal Novo Agente -->
   <dialog id="agentModal" class="modal">
     <div class="modal-content">
       <h2 id="agentModalTitle">Criar Novo Agente</h2>
       <form id="agentForm" class="modal-form">
         <input type="hidden" id="agentEditId" value="" />
-        <label>Nome / Role <input id="agentRole" required placeholder="Ex: Desenvolvedor React" /></label>
+        <label>Nome / Role
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <input id="agentRole" required placeholder="Ex: Desenvolvedor React" style="flex: 1;" />
+            <div id="agentColorBadge" class="agent-color-badge" title="Cor na sala 3D"></div>
+          </div>
+        </label>
         <label>Categoria
           <select id="agentCategory">
             <option value="roadmap">Roadmap</option>
