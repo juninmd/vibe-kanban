@@ -55,6 +55,8 @@ let previousTaskState = new Map<number, { lane: string; assignedTo: string | nul
 let renderQueued = false;
 let stateUpdateQueued = false;
 let pendingStateData: any = null;
+let lastUpdateTimestamp = 0;
+const STATE_DEBOUNCE_MS = 100; // Debounce state updates to prevent UI freeze
 
 const els = {
   form: document.getElementById("taskForm") as HTMLFormElement,
@@ -175,9 +177,21 @@ let isOfficeCreated = false;
 export let officeData: { padPositions: THREE.Vector3[] } = { padPositions: [] };
 
 function updateState(data: any) {
+  if (!data) return;
+  
+  // Protect against flickering/empty states that cause agents to disappear
+  if (agents.length > 0 && (!data.agents || data.agents.length === 0)) {
+     console.warn("Received empty agents list while having active agents. Ignoring update to prevent disappearance.");
+     return;
+  }
+
   pendingStateData = data;
-  if (stateUpdateQueued) return;
+  
+  const now = Date.now();
+  if (stateUpdateQueued && (now - lastUpdateTimestamp < STATE_DEBOUNCE_MS)) return;
+  
   stateUpdateQueued = true;
+  lastUpdateTimestamp = now;
 
   requestAnimationFrame(() => {
     const data = pendingStateData;

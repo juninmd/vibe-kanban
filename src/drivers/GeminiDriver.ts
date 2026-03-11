@@ -4,7 +4,7 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import { getProjectContext, extractAndWriteFiles } from "../utils/fileUtils.js";
-import { isCommandAvailable } from "../utils/commandUtils.js";
+import { isCommandAvailable, getGlobalCommandPath } from "../utils/commandUtils.js";
 import { spawnWithPty, stripAnsi } from "../utils/ptyUtils.js";
 import { createErrorLoopDetector, createSessionTimeout, STUCK_MESSAGE, TIMEOUT_MESSAGE } from "../utils/overseerUtils.js";
 
@@ -102,7 +102,8 @@ content
       const env = { ...process.env };
 
       const modelFlag = agent.model ? `--model ${agent.model}` : "";
-      const command = `gemini --yolo ${modelFlag} -p "$(cat '${promptFile}')"`;
+      const geminiPath = getGlobalCommandPath("gemini") || "gemini";
+      const command = `"${geminiPath}" --yolo ${modelFlag} -p "$(cat '${promptFile}')"`;
 
       let fullOutput = "";
 
