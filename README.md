@@ -1,94 +1,51 @@
-# Vibe Kanban — MVP inicial
+# 📋 Vibe Kanban
 
-Protótipo inicial de uma sala de orquestração com:
+[![Status: Active](https://img.shields.io/badge/Status-Active-brightgreen.svg)]()
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript)](https://www.typescriptlang.org/)
+[![Three.js](https://img.shields.io/badge/Three.js-0.160.0-black?logo=threedotjs)](https://threejs.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-- **Visão 3D** com agentes (bonecos) e cenário básico (kanban + computadores).
-- **Visão 2D full-screen** para acompanhamento do fluxo de tarefas.
-- Criação de tarefas por **Product Manager** e **usuário**.
-- Agentes especializados (PM, Segurança, Performance, Funcionalidades, Testes, Features).
-- Priorização, interrupção e criação de novos cards de bug durante execução.
-- Limpeza de tarefas concluídas para manter o quadro organizado.
+> A modern, high-performance Kanban board with 3D visualization, CLI integration, and built-in automation using TypeScript and SQLite.
 
-## Como executar
+## ✨ Features
 
-O projeto utiliza um backend em Node.js para gerenciar o estado dos agentes e a fila de tarefas.
+- **3D Visualization**: Explore your tasks in an immersive 3D environment powered by Three.js.
+- **CLI-First**: Powerful command-line interface (`vibe`) for rapid task management and orchestration.
+- **Embedded Database**: Fast and reliable persistence with SQLite (via `better-sqlite3`).
+- **Playwright Testing**: Robust E2E tests for both UI and orchestration logic.
+- **Kind/K8s Ready**: Scripts included for local Kubernetes development.
 
-1. Instale as dependências (com `pnpm`):
-   ```bash
-   pnpm install
-   ```
+## 🛠️ Tech Stack
 
-2. Compile o código TypeScript:
-   ```bash
-   pnpm build
-   ```
+- **Runtime**: Node.js (TypeScript)
+- **Database**: SQLite
+- **3D Engine**: Three.js
+- **CLI Framework**: Commander.js
+- **Testing**: Node.js Native Test Runner + Playwright
 
-3. Inicie o servidor:
-   ```bash
-   pnpm start
-   ```
+## 🚀 Getting Started
 
-> Dica: para máxima compatibilidade entre Linux/macOS/Windows, prefira caminhos relativos no app (ex.: `./clones`).
+```bash
+# Install dependencies
+pnpm install
 
-4. Acesse a aplicação em `http://localhost:5174`.
+# Run tests
+pnpm test:all
 
+# Start the server
+pnpm start
 
-## Rodando com kind (Kubernetes local)
+# Use the CLI
+node dist/cli/vibe.js --help
+```
 
-Pré-requisitos:
-- `kind`
-- `kubectl`
-- `docker`
+## 🛡️ Antigravity Protocol
 
-1. Suba o cluster local, build da imagem e deploy:
-   ```bash
-   ./scripts/kind-up.sh
-   ```
+This project adheres to the **Antigravity** engineering standards:
+- **Modular CLI**: Command logic is isolated for high testability.
+- **Strict Typing**: TypeScript is enforced across all domain and integration layers.
+- **150-Line Limit**: Mandatory for keeping the 3D and orchestration logic manageable.
 
-2. Faça o port-forward para acessar no navegador:
-   ```bash
-   kubectl -n vibe-kanban port-forward svc/vibe-kanban 5174:5174
-   ```
+---
 
-3. Abra `http://localhost:5174`.
-
-4. Para ver logs da aplicação:
-   ```bash
-   kubectl -n vibe-kanban logs -f deploy/vibe-kanban
-   ```
-
-5. Para remover o cluster local:
-   ```bash
-   ./scripts/kind-down.sh
-   ```
-
-> Observação: os manifests estão em `k8s/` e usam a imagem local `vibe-kanban:kind` com `imagePullPolicy: IfNotPresent`.
-
-## Estrutura
-
-- `index.html`: layout principal (painel lateral, visão 3D e kanban 2D).
-- `styles.css`: estilo visual da sala, cards e avatars.
-- `src/server.ts`: backend Node.js que gerencia o estado (tarefas, agentes), SSE e integrações (Drivers).
-- `src/app.ts`: frontend (Three.js + lógica de UI), compilado para `dist/app.js`.
-- `src/drivers/`: implementações dos drivers de LLM (OpenCode, Copilot, Gemini, OpenAI, Claude, Command).
-
-## Drivers LLM (sem stubs/mocks)
-
-O projeto suporta a execução de comandos via drivers **sempre usando integrações reais** (CLIs ou APIs oficiais), nunca stubs ou mocks:
-- **OpenCodeDriver**: Executa `opencode` via CLI e materializa arquivos a partir do output.
-- **CopilotDriver**: Executa `gh copilot` via CLI para obter sugestões de código reais.
-- **GeminiDriver**: Usa a Gemini CLI (`gemini`) para operar diretamente sobre o workspace/clones.
-- **OpenAIDriver**: Chama a API HTTP oficial da OpenAI para gerar código e arquivos.
-- **ClaudeDriver**: Integra com a CLI/SDK oficial da Anthropic (quando configurada).
-- **CommandDriver**: Driver genérico para orquestrar CLIs como `opencode`, `gemini`, `claude` e outros em modo sandbox.
-
-> Regra: este projeto não deve introduzir drivers fictícios (MockDriver, stubs, fakes etc.). Se a CLI/API não estiver instalada ou configurada, o comportamento esperado é falhar de forma explícita ou pular os testes, nunca simular a ferramenta.
-
-## Próximos passos sugeridos
-
-1. [x] Persistência em banco (SQLite).
-2. [x] Limpeza de tarefas concluídas.
-3. [x] Execução real de agentes via CLIs/SDKs (sem drivers de simulação).
-4. WebSocket para atualizações em tempo real multiusuário (atualmente usa SSE).
-5. Simulação de movimento no espaço 3D com animação por pathfinding (atualmente interpolação simples).
-6. Integração com backlog externo (GitHub/Jira/Linear).
+*"Visualize the workflow, feel the vibe."*
