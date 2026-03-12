@@ -40,14 +40,22 @@ export async function createPullRequest(
     }
 
     // Determine current branch to branch off of (usually main or master)
-    const currentBranch = await runGit(["rev-parse", "--abbrev-ref", "HEAD"]);
-
-    // Check if branch already exists locally
+    let currentBranch = "main";
     try {
-        await runGit(["show-ref", "--verify", "--quiet", `refs/heads/${branchName}`], true);
-        await runGit(["checkout", branchName]);
+         currentBranch = await runGit(["rev-parse", "--abbrev-ref", "HEAD"]);
     } catch {
-        await runGit(["checkout", "-b", branchName]);
+         // ignore
+    }
+
+    // Worktree ensures we are already on branchName. However, if worktree creation failed
+    // and we fell back to a regular directory, we need to ensure the branch exists.
+    if (currentBranch !== branchName) {
+         try {
+             await runGit(["show-ref", "--verify", "--quiet", `refs/heads/${branchName}`], true);
+             await runGit(["checkout", branchName]);
+         } catch {
+             await runGit(["checkout", "-b", branchName]);
+         }
     }
 
     // Add and commit changes
