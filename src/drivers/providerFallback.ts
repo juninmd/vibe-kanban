@@ -39,8 +39,8 @@ export function buildProviderChain(agent: Agent, drivers: Record<string, LLMDriv
     .map((value) => value.trim())
     .filter(Boolean);
 
-  const chain = [...new Set([agent.tool, ...custom].filter(Boolean))]
-.filter((tool) => Boolean(tool) && Object.prototype.hasOwnProperty.call(drivers, tool))
+  const chain = [...new Set([agent.tool, ...custom].filter((x): x is string => Boolean(x)))]
+    .filter((tool) => Object.prototype.hasOwnProperty.call(drivers, tool))
     .filter((tool) => (TOOL_CHECKS[tool] ? TOOL_CHECKS[tool]() : true));
 
   return chain;
