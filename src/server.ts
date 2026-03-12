@@ -15,8 +15,10 @@ import { TerminalManager } from "./terminal/TerminalManager.js";
 import { Memory } from "./memory.js";
 import { createPullRequest } from "./utils/githubUtils.js";
 import { isCommandAvailable } from "./utils/commandUtils.js";
+import { buildProviderChain, isEligibleForProviderFallback } from "./drivers/providerFallback.js";
 import { getAvailableTools } from "./providers.js";
 import { isEligibleForFallback } from "./utils/fallbackUtils.js";
+import { prepareWorktree, cleanupWorktree } from "./utils/worktreeUtils.js";
 import "dotenv/config";
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 5174;
@@ -94,6 +96,7 @@ function addTerminalLine(agentId: string, taskId: number | null, type: string, c
 
 // Bug rate limiter & Fallback State
 const bugCounts = new Map<number, number>();
+const activeTaskDrivers = new Map<number, LLMDriver>();
 const fallbackAttempts = new Map<number, number>();
 const MAX_FALLBACK_ATTEMPTS = 3;
 
@@ -188,40 +191,71 @@ function parseBody(req: any): Promise<any> {
 }
 
 // --- Auto-Pilot Logic ---
-function startTask(task: Task, agent: Agent) {
-  // Ensure workDir is set and persisted
-  const finalWorkDir = task.workDir || path.join(appConfig.cloneDir, `task-${task.id}`);
-  
-  if (!fs.existsSync(finalWorkDir)) {
-    fs.mkdirSync(finalWorkDir, { recursive: true });
-  }
-
+async function startTask(task: Task, agent: Agent) {
+  // 1. Immediately claim the task and agent to prevent race conditions during async worktree setup
   updateTask(task.id, {
     assignedTo: agent.id,
     lane: "in_progress",
     interrupted: false,
-    workDir: finalWorkDir
   });
-  
-  // Refresh task object with new workDir
-  const updatedTask = DB.getTask(task.id) || task;
 
   updateAgent(agent.id, {
     status: "working",
     assignedTask: task.id
   });
 
+  let finalWorkDir = task.workDir || path.join(appConfig.cloneDir, `task-${task.id}`);
+  let taskBaseRepoDir: string | undefined = undefined;
+
+  // 2. Perform slow async Git worktree setup
+  // 2. Perform slow async Git worktree setup
+  if (task.githubRepo) {
+    try {
+      const branchName = `feature/task-${task.id}`;
+      addEvent(`[Worktree] Preparando isolamento para Tarefa #${task.id}...`);
+      const wtInfo = await prepareWorktree(appConfig.cloneDir, task.githubRepo, branchName, process.env.GITHUB_TOKEN);
+      finalWorkDir = wtInfo.worktreeDir;
+      taskBaseRepoDir = wtInfo.baseRepoDir;
+    } catch (err: any) {
+      addEvent(`[Worktree Error] Falha ao preparar repositório para a Tarefa #${task.id}: ${err.message}`);
+    }
+  }
+
+  // If worktree setup failed or was not applicable, ensure the fallback directory exists.
+  // `prepareWorktree` is responsible for creating its own directory on success.
+  if (!taskBaseRepoDir) {
+    if (!fs.existsSync(finalWorkDir)) {
+      fs.mkdirSync(finalWorkDir, { recursive: true });
+    }
+  }
+
+  // 3. Update task with final directory info
+  updateTask(task.id, {
+    workDir: finalWorkDir,
+    baseRepoDir: taskBaseRepoDir
+  });
+
+  // Refresh task object with new workDir
+  const updatedTask = DB.getTask(task.id) || task;
+
   const attempt = (fallbackAttempts.get(task.id) || 0) + 1;
   const attemptStr = attempt > 1 ? ` (Tentativa de Fallback ${attempt}/${MAX_FALLBACK_ATTEMPTS})` : "";
   addEvent(`[AutoPilot] ${agent.role} iniciou a tarefa #${task.id}${attemptStr}`);
   addTerminalLine(agent.id, task.id, "system", `=== Tarefa #${task.id}: ${task.title}${attemptStr} ===`);
 
-  const executeDriver = resolveDriverForAgent(agent);
+  const providerChain = buildProviderChain(agent, drivers);
   bugCounts.set(task.id, 0);
 
   setTimeout(() => {
-    try {
-      executeDriver.executeTask(updatedTask, agent, {
+    let attemptIndex = 0;
+
+    const runAttempt = (tool: string) => {
+const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? drivers[tool] : null) || resolveDriverForAgent(agent);
+      const executionAgent = { ...agent, tool };
+      activeTaskDrivers.set(task.id, executeDriver);
+      addTerminalLine(agent.id, task.id, "system", `🤖 Provider: ${tool}`);
+
+      executeDriver.executeTask(updatedTask, executionAgent, {
         onLog: (tid, msg) => {
       const t = getTask(tid);
       if (t) {
@@ -235,6 +269,7 @@ function startTask(task: Task, agent: Agent) {
       }
     },
     onComplete: async (tid) => {
+      activeTaskDrivers.delete(tid);
       const t = getTask(tid);
       if (t && t.assignedTo) {
         addTerminalLine(t.assignedTo, tid, "system", `✅ Tarefa #${tid} concluída!`);
@@ -257,6 +292,15 @@ function startTask(task: Task, agent: Agent) {
             }
         }
 
+        if (t.baseRepoDir && t.workDir) {
+            const branchName = `feature/task-${tid}`;
+            try {
+                await cleanupWorktree(t.baseRepoDir, t.workDir, branchName);
+            } catch(e: any) {
+                addEvent(`Erro ao limpar worktree para a Tarefa #${tid}: ${e.message}`);
+            }
+        }
+
         updateAgent(t.assignedTo, { status: "idle", assignedTask: null });
         updateTask(tid, { assignedTo: null, lane: "done" });
         addEvent(`Tarefa #${tid} concluída!`);
@@ -264,6 +308,15 @@ function startTask(task: Task, agent: Agent) {
       }
     },
     onBugFound: (tid, desc) => {
+      const nextTool = providerChain[attemptIndex + 1];
+      if (nextTool && isEligibleForProviderFallback(desc)) {
+        attemptIndex += 1;
+        addEvent(`[ProviderFallback] Tarefa #${tid} falhou com ${providerChain[attemptIndex - 1]} (${desc}). Tentando ${nextTool}.`);
+        runAttempt(nextTool);
+        return;
+      }
+
+      activeTaskDrivers.delete(tid);
       const t = getTask(tid);
       if (!t) return;
 
@@ -322,13 +375,20 @@ function startTask(task: Task, agent: Agent) {
     },
     memory: Memory.getInstance()
       }).catch((err: any) => {
+        activeTaskDrivers.delete(updatedTask.id);
         addEvent(`Erro ao executar tarefa #${updatedTask.id}: ${err.message}`);
         if (agent.id) {
           updateAgent(agent.id, { status: "idle", assignedTask: null });
         }
         updateTask(updatedTask.id, { assignedTo: null, lane: "backlog", interrupted: true });
       });
+    };
+
+    try {
+      const firstTool = providerChain[0] || agent.tool || "gemini";
+      runAttempt(firstTool);
     } catch (err: any) {
+      activeTaskDrivers.delete(updatedTask.id);
       addEvent(`Erro ao executar tarefa #${updatedTask.id}: ${err.message}`);
       if (agent.id) {
         updateAgent(agent.id, { status: "idle", assignedTask: null });
@@ -358,7 +418,7 @@ function autoAssign() {
     if (task.assignedTo) {
       const assignedAgent = agentsById.get(task.assignedTo);
       if (assignedAgent && assignedAgent.status === "idle") {
-        startTask(task, assignedAgent);
+        startTask(task, assignedAgent).catch(console.error);
         assignedAgent.status = "working";
       }
       continue; // Stop here for explicitly assigned tasks (wait until agent is free)
@@ -369,7 +429,7 @@ function autoAssign() {
     const agent = availableAgents?.find(a => a.status === "idle");
 
     if (agent) {
-      startTask(task, agent);
+      startTask(task, agent).catch(console.error);
       agent.status = "working";
     }
   }
@@ -846,7 +906,7 @@ const server = createServer(async (req, res) => {
     if (!task) return jsonResponse(res, 404, { error: "Task not found" });
     if (!agent) return jsonResponse(res, 404, { error: "No available agent" });
 
-    startTask(task, agent);
+    await startTask(task, agent);
 
     const updatedTask = getTask(task.id);
     const updatedAgent = getAgent(agent.id);
@@ -861,7 +921,8 @@ const server = createServer(async (req, res) => {
     if (!task) return jsonResponse(res, 404, { error: "Task not found" });
 
     if (task.assignedTo) {
-      const executeDriver = releaseTaskAgent(task);
+      const executeDriver = activeTaskDrivers.get(task.id) || releaseTaskAgent(task);
+      activeTaskDrivers.delete(task.id);
       // Stop driver
       executeDriver.interruptTask(task);
       updateTask(task.id, { assignedTo: null, lane: "backlog", interrupted: true });
@@ -879,7 +940,8 @@ const server = createServer(async (req, res) => {
     // If moving out of in_progress, interrupt/finish logic
     if (task.lane === "in_progress" && lane !== "in_progress") {
       if (task.assignedTo) {
-        const executeDriver = releaseTaskAgent(task);
+        const executeDriver = activeTaskDrivers.get(task.id) || releaseTaskAgent(task);
+        activeTaskDrivers.delete(task.id);
         executeDriver.interruptTask(task);
         updateTask(task.id, { assignedTo: null });
       }

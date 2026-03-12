@@ -55,6 +55,11 @@ try {
   db.exec(`ALTER TABLE tasks ADD COLUMN workDir TEXT`);
 } catch (e) { /* column already exists */ }
 
+// Migration: add baseRepoDir column if missing
+try {
+  db.exec(`ALTER TABLE tasks ADD COLUMN baseRepoDir TEXT`);
+} catch (e) { /* column already exists */ }
+
 export const DB = {
   // Tasks
   getTasks(): Task[] {
@@ -79,8 +84,8 @@ export const DB = {
   createTask(task: Partial<Task>): Task {
     const now = Date.now();
     const result = db.prepare(`
-      INSERT INTO tasks (title, source, category, priority, lane, assignedTo, interrupted, logs, githubRepo, description, agentType, createdAt, updatedAt, workDir)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO tasks (title, source, category, priority, lane, assignedTo, interrupted, logs, githubRepo, description, agentType, createdAt, updatedAt, workDir, baseRepoDir)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       task.title,
       task.source || "user",
@@ -95,7 +100,8 @@ export const DB = {
       task.agentType || null,
       task.createdAt || now,
       task.updatedAt || now,
-      task.workDir || null
+      task.workDir || null,
+      task.baseRepoDir || null
     );
     return this.getTask(Number(result.lastInsertRowid))!;
   },
@@ -109,7 +115,7 @@ export const DB = {
       UPDATE tasks SET
         title = ?, source = ?, category = ?, priority = ?, lane = ?,
         assignedTo = ?, interrupted = ?, logs = ?, githubRepo = ?,
-        description = ?, agentType = ?, updatedAt = ?, workDir = ?
+        description = ?, agentType = ?, updatedAt = ?, workDir = ?, baseRepoDir = ?
       WHERE id = ?
     `).run(
       updatedTask.title,
@@ -125,6 +131,7 @@ export const DB = {
       updatedTask.agentType,
       updatedTask.updatedAt,
       updatedTask.workDir || null,
+      updatedTask.baseRepoDir || null,
       id
     );
   },

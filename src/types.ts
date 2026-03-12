@@ -14,6 +14,7 @@ export interface Task {
   createdAt: number;
   updatedAt: number;
   workDir?: string;
+  baseRepoDir?: string;
 }
 
 export interface Agent {
