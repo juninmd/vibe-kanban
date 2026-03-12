@@ -75,6 +75,7 @@ const els = {
   view3d: document.getElementById("view3d") as HTMLElement,
   view2d: document.getElementById("view2d") as HTMLElement,
   toggleViewBtn: document.getElementById("toggleViewBtn") as HTMLButtonElement,
+  fullscreenBtn: document.getElementById("fullscreenBtn") as HTMLButtonElement,
   seedTasksBtn: document.getElementById("seedTasksBtn") as HTMLButtonElement,
   resetDataBtn: document.getElementById("resetDataBtn") as HTMLButtonElement,
   clearDoneBtn: document.getElementById("clearDoneBtn") as HTMLButtonElement,
@@ -798,6 +799,17 @@ els.form.addEventListener("submit", (e) => {
 els.toggleViewBtn.addEventListener("click", () => {
   els.view3d.classList.toggle("active");
   els.view2d.classList.toggle("active");
+});
+
+els.fullscreenBtn.addEventListener("click", () => {
+  els.view2d.classList.toggle("fullscreen");
+  if (els.view2d.classList.contains("fullscreen")) {
+    els.fullscreenBtn.textContent = "Sair da Tela Cheia";
+    els.view2d.classList.add("active");
+    els.view3d.classList.remove("active");
+  } else {
+    els.fullscreenBtn.textContent = "Tela Cheia Kanban";
+  }
 });
 
 // --- Magic Add Logic ---
