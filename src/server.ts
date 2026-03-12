@@ -208,6 +208,7 @@ async function startTask(task: Task, agent: Agent) {
   let taskBaseRepoDir: string | undefined = undefined;
 
   // 2. Perform slow async Git worktree setup
+  // 2. Perform slow async Git worktree setup
   if (task.githubRepo) {
     try {
       const branchName = `feature/task-${task.id}`;
@@ -217,11 +218,12 @@ async function startTask(task: Task, agent: Agent) {
       taskBaseRepoDir = wtInfo.baseRepoDir;
     } catch (err: any) {
       addEvent(`[Worktree Error] Falha ao preparar repositório para a Tarefa #${task.id}: ${err.message}`);
-      if (!fs.existsSync(finalWorkDir)) {
-        fs.mkdirSync(finalWorkDir, { recursive: true });
-      }
     }
-  } else {
+  }
+
+  // If worktree setup failed or was not applicable, ensure the fallback directory exists.
+  // `prepareWorktree` is responsible for creating its own directory on success.
+  if (!taskBaseRepoDir) {
     if (!fs.existsSync(finalWorkDir)) {
       fs.mkdirSync(finalWorkDir, { recursive: true });
     }
