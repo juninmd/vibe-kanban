@@ -10,8 +10,6 @@ const TOOL_CHECKS: Record<string, () => boolean> = {
   openai: () => Boolean(process.env.OPENAI_API_KEY),
 };
 
-export { isEligibleForProviderFallback };
-
 export function buildProviderChain(agent: Agent, drivers: Record<string, LLMDriver>): string[] {
   const custom = (process.env.VIBE_PROVIDER_FALLBACK || "")
     .split(",")
