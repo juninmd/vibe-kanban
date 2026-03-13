@@ -1,6 +1,6 @@
 import { Agent, LLMDriver } from "../types.js";
 import { isCommandAvailable } from "../utils/commandUtils.js";
-import { isEligibleForFallback as isEligibleForProviderFallback } from "../utils/fallbackUtils.js";
+export { isEligibleForFallback as isEligibleForProviderFallback } from "../utils/fallbackUtils.js";
 
 const TOOL_CHECKS: Record<string, () => boolean> = {
   gemini: () => isCommandAvailable("gemini"),
