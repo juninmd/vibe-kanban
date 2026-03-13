@@ -1,4 +1,4 @@
-import { isCommandAvailable } from "./utils/commandUtils.js";
+import { isCommandAvailable, resolveOpenCodeExecutable } from "./utils/commandUtils.js";
 
 export interface ToolDescriptor {
   id: string;
@@ -13,7 +13,7 @@ interface ToolProvider {
 
 const providerFactories: ToolProvider[] = [
   { id: "gemini", name: "Gemini CLI", isAvailable: () => isCommandAvailable("gemini") },
-  { id: "opencode", name: "OpenCode AI", isAvailable: () => isCommandAvailable("opencode") },
+  { id: "opencode", name: "OpenCode AI", isAvailable: () => Boolean(resolveOpenCodeExecutable()) },
   { id: "copilot", name: "GitHub Copilot (gh cli)", isAvailable: () => isCommandAvailable("gh") },
   { id: "claude", name: "Claude Code", isAvailable: () => isCommandAvailable("claude") },
   { id: "openai", name: "OpenAI API", isAvailable: () => Boolean(process.env.OPENAI_API_KEY) },

@@ -5,6 +5,34 @@ import path from "path";
 
 const execFileAsync = promisify(execFile);
 
+export function normalizeGithubRepo(githubRepo: string): string {
+    const trimmed = githubRepo.trim().replace(/\.git$/i, "");
+    const withoutPrefix = trimmed
+        .replace(/^https?:\/\/github\.com\//i, "")
+        .replace(/^ssh:\/\/git@github\.com\//i, "")
+        .replace(/^git@github\.com:/i, "");
+    const parts = withoutPrefix.split("/").filter(Boolean);
+
+    if (parts.length >= 2) {
+        return `${parts[parts.length - 2]}/${parts[parts.length - 1]}`;
+    }
+
+    return withoutPrefix;
+}
+
+export function getGithubRepoName(githubRepo: string): string {
+    const normalizedRepo = normalizeGithubRepo(githubRepo);
+    return normalizedRepo.split("/").pop() || normalizedRepo.replace(/\//g, "-");
+}
+
+export function buildGithubRemoteUrl(githubRepo: string, githubToken?: string): string {
+    const normalizedRepo = normalizeGithubRepo(githubRepo);
+    if (githubToken) {
+        return `https://oauth2:${githubToken}@github.com/${normalizedRepo}.git`;
+    }
+    return `https://github.com/${normalizedRepo}.git`;
+}
+
 /**
  * Prepares a git worktree for a task.
  * Clones the base repository if it doesn't exist, fetches the latest changes,
@@ -22,7 +50,8 @@ export async function prepareWorktree(
     branchName: string,
     githubToken?: string
 ): Promise<{ baseRepoDir: string; worktreeDir: string }> {
-    const repoName = githubRepo.split("/").pop() || githubRepo.replace(/\//g, "-");
+    const normalizedRepo = normalizeGithubRepo(githubRepo);
+    const repoName = getGithubRepoName(normalizedRepo);
     const baseRepoDir = path.join(cloneDir, repoName);
     const worktreeDir = path.join(cloneDir, `worktree-${branchName.replace(/\//g, "-")}`);
 
@@ -55,19 +84,14 @@ export async function prepareWorktree(
         // Initialize an empty repository to avoid git clone failures when the repo is empty
         await runGit(["init"], baseRepoDir);
 
-        let remoteUrl = `https://github.com/${githubRepo}.git`;
-        if (githubToken) {
-             remoteUrl = `https://oauth2:${githubToken}@github.com/${githubRepo}.git`;
-        }
-
-        await runGit(["remote", "add", "origin", remoteUrl], baseRepoDir);
+           await runGit(["remote", "add", "origin", buildGithubRemoteUrl(normalizedRepo, githubToken)], baseRepoDir);
     }
 
     // 2. Fetch the latest changes from the default branch (assuming main)
     try {
         await runGit(["fetch", "origin"], baseRepoDir);
     } catch (e) {
-        console.warn(`[Worktree] Failed to fetch origin for ${githubRepo}, it might be an empty repository or require authentication.`);
+        console.warn(`[Worktree] Failed to fetch origin for ${normalizedRepo}, it might be an empty repository or require authentication.`);
     }
 
     // 3. Cleanup any existing worktree with the same path or branch

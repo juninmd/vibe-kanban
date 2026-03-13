@@ -1,5 +1,6 @@
 import { execFile } from "child_process";
 import { promisify } from "util";
+import { normalizeGithubRepo } from "./worktreeUtils.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -11,6 +12,7 @@ export async function createPullRequest(
     githubToken: string,
     githubUser: string = "vibe-agent"
 ): Promise<string> {
+    const normalizedRepo = normalizeGithubRepo(githubRepo);
     const branchName = `feature/task-${taskId}`;
     const commitMessage = `feat: ${taskTitle}`;
 
@@ -71,7 +73,7 @@ export async function createPullRequest(
 
     // Push to remote. We need to set up the remote URL with the token for authentication.
     // If the remote doesn't exist, we add it, otherwise we update it.
-    const remoteUrl = `https://${githubUser}:${githubToken}@github.com/${githubRepo}.git`;
+    const remoteUrl = `https://${githubUser}:${githubToken}@github.com/${normalizedRepo}.git`;
 
     try {
         await runGit(["remote", "set-url", "origin", remoteUrl], true);
@@ -89,7 +91,7 @@ export async function createPullRequest(
         base: currentBranch // Or default to main if unknown
     };
 
-    const response = await fetch(`https://api.github.com/repos/${githubRepo}/pulls`, {
+    const response = await fetch(`https://api.github.com/repos/${normalizedRepo}/pulls`, {
         method: "POST",
         headers: {
             "Authorization": `token ${githubToken}`,

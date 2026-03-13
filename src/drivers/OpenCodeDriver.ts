@@ -1,13 +1,51 @@
 import { Task, Agent, LLMDriver, DriverContext } from "../types.js";
-import { spawn } from "child_process";
+import { spawn, type ChildProcess } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
-import * as os from "os";
-import { isCommandAvailable } from "../utils/commandUtils.js";
-import { spawnWithPty, stripAnsi } from "../utils/ptyUtils.js";
+import { resolveOpenCodeCommand } from "../utils/commandUtils.js";
+import { stripAnsi } from "../utils/ptyUtils.js";
 import { createErrorLoopDetector, createSessionTimeout, STUCK_MESSAGE, TIMEOUT_MESSAGE } from "../utils/overseerUtils.js";
 
 const OPENCODE_ERROR_PATTERN = /^Error /;
+const MISSING_OPENCODE_MESSAGE = "OpenCode CLI not found. Set OPENCODE_PATH, add opencodePath to vibe_config.json, or install opencode globally in PATH.";
+
+function shouldPassModel(model: string | undefined): boolean {
+   if (!model || model === "default") {
+      return false;
+   }
+
+   return /[:/]/.test(model);
+}
+
+export function buildOpenCodeArgs(task: Task, agent: Agent, prompt: string): string[] {
+   const args = ["run"];
+
+   if (task.category !== "roadmap") {
+      args.push("--agent", "build");
+   }
+   if (shouldPassModel(agent.model)) {
+      args.push("--model", agent.model);
+   }
+
+   args.push(prompt);
+   return args;
+}
+
+function spawnOpenCode(executable: string, args: string[], cwd: string, env: NodeJS.ProcessEnv): ChildProcess {
+   const stdio: ["ignore", "pipe", "pipe"] = ["ignore", "pipe", "pipe"];
+   const options = {
+      cwd,
+      env,
+      stdio,
+      windowsHide: true,
+   };
+
+   if (process.platform === "win32" && /\.(cmd|bat)$/i.test(executable)) {
+      return spawn(process.env.comspec || "cmd.exe", ["/d", "/s", "/c", executable, ...args], options);
+   }
+
+   return spawn(executable, args, options);
+}
 
 export class OpenCodeDriver implements LLMDriver {
    name: string = "OpenCode AI";
@@ -20,14 +58,15 @@ export class OpenCodeDriver implements LLMDriver {
 
    async executeTask(task: Task, agent: Agent, ctx: DriverContext): Promise<void> {
       const baseDir = this.getCloneDir();
-      const taskDir = path.join(baseDir, `task-${task.id}`);
+      const taskDir = task.workDir || path.join(baseDir, `task-${task.id}`);
 
       if (!fs.existsSync(taskDir)) {
           fs.mkdirSync(taskDir, { recursive: true });
       }
 
-      if (!isCommandAvailable("opencode")) {
-         throw new Error("OpenCode CLI not found in PATH. Please install it: npm install -g opencode-ai");
+      const openCode = resolveOpenCodeCommand();
+      if (!openCode.command) {
+         throw new Error(MISSING_OPENCODE_MESSAGE);
       }
 
       const prompt = `
@@ -54,16 +93,12 @@ content
 <<<END>>>
 `;
 
-      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "lisa-"));
-      const promptFile = path.join(tmpDir, "prompt.md");
-      fs.writeFileSync(promptFile, prompt, "utf-8");
+   const args = buildOpenCodeArgs(task, agent, prompt);
+   const visibleArgs = args.slice(0, -1).join(" ") || "run";
+   ctx.onLog(task.id, `[SYSTEM] OpenCode executable: ${openCode.command} (${openCode.source})`);
+   ctx.onLog(task.id, `Running: ${visibleArgs} in ${taskDir}`);
 
-      const modelFlag = (agent.model && agent.model !== "default") ? `--model ${agent.model}` : "";
-      const cmd = `opencode run ${modelFlag} "$(cat '${promptFile}')"`;
-
-      ctx.onLog(task.id, `Running: opencode run ${modelFlag || '(default model)'} in ${taskDir}`);
-
-      const { proc, isPty } = spawnWithPty(cmd, { cwd: taskDir, env: process.env });
+   const proc = spawnOpenCode(openCode.command, args, taskDir, process.env);
 
       const sessionTimeout = createSessionTimeout(proc, 5 * 60); // 5 minutes timeout
       const errorLoopDetector = createErrorLoopDetector(proc, OPENCODE_ERROR_PATTERN);
@@ -72,7 +107,7 @@ content
 
       proc.stdout?.on("data", (data: Buffer) => {
          const raw = data.toString();
-         const text = isPty ? stripAnsi(raw) : raw;
+         const text = stripAnsi(raw);
          fullOutput += text;
          errorLoopDetector.check(text);
 
@@ -81,7 +116,7 @@ content
 
       proc.stderr?.on("data", (data: Buffer) => {
          const raw = data.toString();
-         const text = isPty ? stripAnsi(raw) : raw;
+         const text = stripAnsi(raw);
 
          const textTrimmed = text.trim();
          if (textTrimmed) {
@@ -90,15 +125,17 @@ content
       });
 
       proc.on("error", (error: any) => {
+         this.runningTasks.delete(task.id);
+         if (error.code === "ENOENT") {
+            ctx.onBugFound(task.id, MISSING_OPENCODE_MESSAGE);
+            return;
+         }
          ctx.onBugFound(task.id, error.message);
       });
 
       proc.on("close", (code) => {
          sessionTimeout.stop();
-
-         try {
-            fs.rmSync(tmpDir, { recursive: true, force: true });
-         } catch {}
+         this.runningTasks.delete(task.id);
 
          // Parse files
          const fileRegex = /<<<FILE:(.+?)>>>([\s\S]+?)<<<END>>>/g;

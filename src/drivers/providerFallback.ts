@@ -1,10 +1,10 @@
 import { Agent, LLMDriver } from "../types.js";
-import { isCommandAvailable } from "../utils/commandUtils.js";
+import { isCommandAvailable, resolveOpenCodeExecutable } from "../utils/commandUtils.js";
 export { isEligibleForFallback as isEligibleForProviderFallback } from "../utils/fallbackUtils.js";
 
 const TOOL_CHECKS: Record<string, () => boolean> = {
   gemini: () => isCommandAvailable("gemini"),
-  opencode: () => isCommandAvailable("opencode"),
+  opencode: () => Boolean(resolveOpenCodeExecutable()),
   copilot: () => isCommandAvailable("gh"),
   claude: () => isCommandAvailable("claude") || Boolean(process.env.ANTHROPIC_API_KEY),
   openai: () => Boolean(process.env.OPENAI_API_KEY),
