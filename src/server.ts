@@ -33,6 +33,34 @@ try {
 
 // --- State and Persistence ---
 function initializeState(): State {
+  const tasks = DB.getTasks();
+  if (tasks.length === 0) {
+    DB.createTask({
+      title: "Analisar repositório openai/codex",
+      source: "usuario",
+      category: "roadmap",
+      priority: "alta",
+      lane: "backlog",
+      assignedTo: null,
+      interrupted: false,
+      logs: [],
+      githubRepo: "https://github.com/openai/codex",
+      description: "Explorar e criar tarefas para o repositório codex."
+    });
+    DB.createTask({
+      title: "Desenvolver novas features para opencode",
+      source: "usuario",
+      category: "feature",
+      priority: "alta",
+      lane: "backlog",
+      assignedTo: null,
+      interrupted: false,
+      logs: [],
+      githubRepo: "https://github.com/anomalyco/opencode",
+      description: "Implementar novas integrações no opencode."
+    });
+  }
+
   return {
     tasks: DB.getTasks(),
     agents: DB.getAgents(),
