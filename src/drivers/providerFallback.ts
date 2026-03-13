@@ -1,24 +1,6 @@
 import { Agent, LLMDriver } from "../types.js";
 import { isCommandAvailable } from "../utils/commandUtils.js";
-
-const ELIGIBLE_ERROR_PATTERNS = [
-  /429/i,
-  /quota/i,
-  /rate.?limit/i,
-  /too many requests/i,
-  /resource.?exhausted/i,
-  /overloaded/i,
-  /unavailable/i,
-  /ETIMEDOUT/i,
-  /ECONNREFUSED/i,
-  /ECONNRESET/i,
-  /ENOTFOUND/i,
-  /network.?error/i,
-  /timeout/i,
-  /not installed/i,
-  /not in PATH/i,
-  /command not found/i,
-];
+export { isEligibleForFallback as isEligibleForProviderFallback } from "../utils/fallbackUtils.js";
 
 const TOOL_CHECKS: Record<string, () => boolean> = {
   gemini: () => isCommandAvailable("gemini"),
@@ -28,10 +10,7 @@ const TOOL_CHECKS: Record<string, () => boolean> = {
   openai: () => Boolean(process.env.OPENAI_API_KEY),
 };
 
-
-export function isEligibleForProviderFallback(message: string): boolean {
-  return ELIGIBLE_ERROR_PATTERNS.some((pattern) => pattern.test(message));
-}
+export { isEligibleForProviderFallback };
 
 export function buildProviderChain(agent: Agent, drivers: Record<string, LLMDriver>): string[] {
   const custom = (process.env.VIBE_PROVIDER_FALLBACK || "")
