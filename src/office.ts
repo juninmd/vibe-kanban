@@ -18,14 +18,6 @@ export function createOffice(scene: THREE.Scene, agentCount: number = 6): Office
     ctx.fillStyle = '#e2e8f0';
     ctx.fillRect(0, 0, 512, 512);
 
-    // Carpet tiles lines
-    ctx.strokeStyle = '#cbd5e1';
-    ctx.lineWidth = 2;
-    for (let i = 0; i <= 512; i += 64) {
-        ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, 512); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(512, i); ctx.stroke();
-    }
-
     const floorTex = new THREE.CanvasTexture(canvas);
     floorTex.wrapS = THREE.RepeatWrapping;
     floorTex.wrapT = THREE.RepeatWrapping;
@@ -44,38 +36,30 @@ export function createOffice(scene: THREE.Scene, agentCount: number = 6): Office
 
     // 2. Walls (White/Beige office walls)
     const wallMat = new THREE.MeshStandardMaterial({
-        color: '#f8fafc',
+        color: '#e2e8f0', // Match the light grey from the screenshot
         roughness: 0.9,
         metalness: 0.1
     });
 
-    // Back Wall
-    const backWall = new THREE.Mesh(new THREE.BoxGeometry(32, 12, 0.5), wallMat);
-    backWall.position.set(0, 6, -6);
-    scene.add(backWall);
+    // Back Wall Panels
+    const numPanels = 4;
+    const panelWidth = 32 / numPanels;
+    for (let i = 0; i < numPanels; i++) {
+        const xPos = -16 + (panelWidth / 2) + (i * panelWidth);
+        const panel = new THREE.Mesh(new THREE.BoxGeometry(panelWidth - 0.1, 12, 0.5), wallMat);
+        panel.position.set(xPos, 6, -6);
+        scene.add(panel);
 
-    // Side Walls
-    const leftWall = new THREE.Mesh(new THREE.BoxGeometry(0.5, 12, 18), wallMat);
-    leftWall.position.set(-16, 6, 3);
-    scene.add(leftWall);
-
-    const rightWall = new THREE.Mesh(new THREE.BoxGeometry(0.5, 12, 18), wallMat);
-    rightWall.position.set(16, 6, 3);
-    scene.add(rightWall);
-
-    // 3. Trim / Skirting Boards
-    function createTrim(x: number, y: number, z: number, isVertical: boolean) {
-        const geo = isVertical ? new THREE.BoxGeometry(0.2, 8, 0.2) : new THREE.BoxGeometry(10, 0.2, 0.2);
-        const mat = new THREE.MeshStandardMaterial({ color: '#cbd5e1' });
-        const strip = new THREE.Mesh(geo, mat);
-        strip.position.set(x, y, z);
-        scene.add(strip);
+        // Add subtle dividers between panels
+        if (i < numPanels - 1) {
+            const divider = new THREE.Mesh(
+                new THREE.BoxGeometry(0.1, 12, 0.51),
+                new THREE.MeshStandardMaterial({ color: '#cbd5e1' })
+            );
+            divider.position.set(xPos + (panelWidth / 2), 6, -6);
+            scene.add(divider);
+        }
     }
-
-    createTrim(-10, 0.1, -5.7, false);
-    createTrim(10, 0.1, -5.7, false);
-    createTrim(-15.7, 0.1, 0, false);
-    createTrim(15.7, 0.1, 0, false);
 
     // 4. Workstations Pads
     const spacing = 4;

@@ -40,17 +40,9 @@ export function getHeadMaterials(role: string): THREE.Material[] {
 
         // Eyes (Minecraft style - 2x2 pixels equivalent)
         ctx.fillStyle = '#000000';
-        if (role === 'Product Manager') {
-            // Glasses
-            ctx.fillStyle = '#333';
-            ctx.fillRect(8, 32, 20, 8);
-            ctx.fillRect(36, 32, 20, 8);
-            ctx.fillRect(28, 34, 8, 2);
-        } else {
-            // Simple eyes
-            ctx.fillRect(16, 36, 8, 8);
-            ctx.fillRect(40, 36, 8, 8);
-        }
+        // Simple eyes
+        ctx.fillRect(16, 36, 8, 8);
+        ctx.fillRect(40, 36, 8, 8);
     });
 
     const hairMat = new THREE.MeshStandardMaterial({ color: hairColor });
@@ -69,7 +61,7 @@ export function getHeadMaterials(role: string): THREE.Material[] {
 }
 
 export function getBodyMaterials(role: string, modelName?: string, badgeColor?: string): THREE.Material[] {
-    const primaryColor = roleColors[role] || "#1e293b";
+    const primaryColor = "#1e293b";
 
     const frontTex = createTexture(256, 256, (ctx) => {
         // Shirt base
@@ -77,15 +69,9 @@ export function getBodyMaterials(role: string, modelName?: string, badgeColor?: 
         ctx.fillRect(0, 0, 256, 256);
 
         if (modelName && badgeColor) {
-            // Simple colored chest rectangle matching screenshot
-            ctx.fillStyle = badgeColor;
-
             const rectWidth = 180;
             const rectHeight = 60;
-            const rectX = (256 - rectWidth) / 2;
             const rectY = 98; // Center on chest
-
-            ctx.fillRect(rectX, rectY, rectWidth, rectHeight);
 
             // Text on chest
             ctx.fillStyle = "#ffffff";
@@ -131,6 +117,6 @@ export function getBodyMaterials(role: string, modelName?: string, badgeColor?: 
 }
 
 export function getLimbMaterial(role: string): THREE.Material {
-    const color = role === 'Product Manager' ? '#3b82f6' : '#1f2937'; // Jeans vs Dark Pants
+    const color = '#1f2937'; // Dark Pants for everyone to match dark body
     return new THREE.MeshStandardMaterial({ color });
 }

@@ -1330,14 +1330,6 @@ function spawnComputers() {
       const deskGroup = new THREE.Group();
       deskGroup.position.set(pos.x, 0, pos.z - 1.2);
 
-      // Oval rug
-      const rugGeo = new THREE.CylinderGeometry(2, 2, 0.01, 32);
-      const rugMat = new THREE.MeshStandardMaterial({ color: "#8b9cb0" });
-      const rug = new THREE.Mesh(rugGeo, rugMat);
-      rug.scale.set(1.2, 1, 0.8);
-      rug.position.set(0, 0.01, 0.5); // Shifted a bit forward
-      deskGroup.add(rug);
-
       const deskGeo = new THREE.BoxGeometry(2.0, 1.0, 1.2);
       const deskMat = new THREE.MeshStandardMaterial({ color: "#0f172a", roughness: 0.8, metalness: 0.1 }); // Darker desk
       const desk = new THREE.Mesh(deskGeo, deskMat);
@@ -1345,7 +1337,7 @@ function spawnComputers() {
       deskGroup.add(desk);
 
       const monGeo = new THREE.BoxGeometry(0.9, 0.6, 0.05);
-      const monMat = new THREE.MeshStandardMaterial({ color: "#0284c7", emissive: "#0284c7", emissiveIntensity: 0.3 }); // Cyan blue monitor
+      const monMat = new THREE.MeshStandardMaterial({ color: "#0ea5e9", emissive: "#0ea5e9", emissiveIntensity: 0.3 }); // Cyan blue monitor
       const monitor = new THREE.Mesh(monGeo, monMat);
       monitor.position.set(0, 1.3, 0);
       deskGroup.add(monitor);
@@ -1592,13 +1584,15 @@ function createStatusTexture(type: string) {
 
   if (type === "idle") {
     // Pixel art style Z z
-    ctx.font = "bold 60px 'Share Tech Mono', monospace";
     ctx.fillStyle = "#60a5fa"; // Light blue
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
+    ctx.font = "bold 30px 'Share Tech Mono', monospace";
     ctx.fillText("z", 32, 80);
-    ctx.font = "bold 80px 'Share Tech Mono', monospace";
-    ctx.fillText("Z", 80, 48);
+    ctx.font = "bold 45px 'Share Tech Mono', monospace";
+    ctx.fillText("z", 64, 48);
+    ctx.font = "bold 60px 'Share Tech Mono', monospace";
+    ctx.fillText("Z", 96, 24);
   } else {
     // Fallback emojis
     const emojiMap: Record<string, string> = {
@@ -1629,18 +1623,10 @@ function createAlertIcon(type: "bug" | "perf") {
   canvas.height = 128;
   const ctx = canvas.getContext("2d")!;
 
-  // Soft shadow
-  ctx.shadowColor = "rgba(0,0,0,0.3)";
-  ctx.shadowBlur = 10;
-  ctx.shadowOffsetY = 4;
-
-  ctx.fillStyle = type === "bug" ? "#ff7b7b" : "#fbbf24";
+  ctx.fillStyle = type === "bug" ? "#ffb3b3" : "#fbbf24";
   ctx.beginPath();
   ctx.arc(64, 64, 50, 0, Math.PI * 2);
   ctx.fill();
-
-  ctx.shadowBlur = 0;
-  ctx.shadowOffsetY = 0;
 
   ctx.font = "bold 60px Inter, sans-serif";
   ctx.fillStyle = "white";
