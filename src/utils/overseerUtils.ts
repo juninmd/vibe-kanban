@@ -28,20 +28,23 @@ export function createStallDetector(
 		return { reset() {}, wasKilled: () => false, stop() {} };
 	}
 
-	let killed = false;
-	let timer: ReturnType<typeof setTimeout> | null = setTimeout(() => {
-		killed = true;
-		proc.kill("SIGTERM");
-	}, timeout * 1000);
+    let killed = false;
+	let timer: ReturnType<typeof setTimeout> | null;
+
+	const startTimer = () => {
+		timer = setTimeout(() => {
+			killed = true;
+			proc.kill("SIGTERM");
+		}, timeout * 1000);
+	};
+
+	startTimer();
 
 	return {
 		reset() {
 			if (killed || !timer) return;
 			clearTimeout(timer);
-			timer = setTimeout(() => {
-				killed = true;
-				proc.kill("SIGTERM");
-			}, timeout * 1000);
+			startTimer();
 		},
 		wasKilled() {
 			return killed;
