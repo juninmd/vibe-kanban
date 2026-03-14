@@ -21,7 +21,8 @@ const providerFactories: ToolProvider[] = [
     id: "claude",
     name: "Claude (API)",
     isAvailable: () => !isCommandAvailable("claude") && Boolean(process.env.ANTHROPIC_API_KEY)
-  }
+  },
+  { id: "mock", name: "Mock Tool", isAvailable: () => true }
 ];
 
 export function getAvailableTools(providers: ToolProvider[] = providerFactories): ToolDescriptor[] {
