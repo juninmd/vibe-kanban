@@ -59,7 +59,7 @@ export function isEligibleForFallback(output: string, exitCode?: number): boolea
  * infrastructure issues (eligible errors or binary not found), meaning no
  * provider was able to attempt the task itself.
  */
-export function isCompleteProviderExhaustion(attempts: any[]): boolean {
+export function isCompleteProviderExhaustion(attempts: { success: boolean; error?: string }[]): boolean {
     if (attempts.length === 0) return false;
     return attempts.every((a) => !a.success && a.error && isEligibleForFallback(a.error));
 }
