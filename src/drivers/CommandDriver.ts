@@ -3,6 +3,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { Task, Agent, LLMDriver, DriverContext } from "../types.js";
 import { extractAndWriteFiles } from "../utils/fileUtils.js";
+import { logDebugBlock, logDebugCommand } from "./debugLogging.js";
 
 export class CommandDriver implements LLMDriver {
     name: string = "CLI Command Driver";
@@ -59,6 +60,7 @@ print("Hello World")
 <<<END>>>
 
 Do not output hypothetical logs. Output the actual file content needed to solve the task.`;
+        logDebugBlock(ctx, task.id, "AGENT PROMPT", prompt);
 
         if (agent.tool === "opencode" && this.terminalManager) {
             // Use TerminalManager for OpenCode
@@ -75,6 +77,7 @@ Do not output hypothetical logs. Output the actual file content needed to solve 
                 }
 
                 const cmd = `opencode run --model "${agent.model || "gpt-4o"}" "${prompt.replace(/"/g, '\\"')}"\r`;
+                logDebugCommand(ctx, task.id, "opencode", ["run", "--model", agent.model || "gpt-4o", "<prompt>"]);
                 this.terminalManager.write(agent.id, cmd);
 
                 // For PTY, we don't have a simple "on close" for the command since the shell stays alive.
@@ -112,6 +115,7 @@ Do not output hypothetical logs. Output the actual file content needed to solve 
             return;
         }
 
+        logDebugCommand(ctx, task.id, command, [...args.slice(0, -1), "<prompt>"]);
         ctx.onLog(task.id, `Starting: ${command} ${args[0]} in ${taskDir}`);
 
         try {

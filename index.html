@@ -26,11 +26,11 @@
       <select id="driverSelect" style="margin-right: 10px;">
         <option value="">Carregando...</option>
       </select>
+      <button id="createTaskBtn">Nova Tarefa</button>
       <button id="createAgentBtn">Novo Agente</button>
       <button id="settingsBtn">Configurações</button>
       <button id="toggleViewBtn">Alternar 2D / 3D</button>
       <button id="fullscreenBtn">Tela Cheia Kanban</button>
-      <button id="seedTasksBtn">Gerar tarefas exemplo</button>
       <button id="clearDoneBtn" style="border-color: #5ea6ff; color: #5ea6ff; margin-right: 5px;">Limpar
         Concluídos</button>
       <button id="resetDataBtn" style="border-color: #ff6f6f; color: #ff6f6f;">Resetar Dados</button>
@@ -44,112 +44,6 @@
 
   <main class="layout">
     <aside class="sidebar">
-      <section id="dashboardStats" class="dashboard-stats">
-        <h2>📊 Dashboard</h2>
-        <div class="stat-grid">
-          <div class="stat-item">
-            <span class="stat-label">Pendentes</span>
-            <span class="stat-value" id="statPending">0</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-label">Concluídas</span>
-            <span class="stat-value" id="statDone">0</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-label">Agentes</span>
-            <span class="stat-value" id="statAgents">0</span>
-          </div>
-        </div>
-      </section>
-
-      <section>
-        <h2>Criar tarefa</h2>
-
-        <div class="magic-task-container">
-            <textarea id="magicTaskInput" placeholder="Descreva a tarefa naturalmente e a magia auto-preencherá os campos abaixo. Ex: 'Corrigir bug na tela de login urgente'" rows="2"></textarea>
-            <button id="magicTaskBtn" class="secondary-btn magic-btn" type="button">✨ Auto-preencher</button>
-        </div>
-
-        <form id="taskForm">
-          <label>
-            Fonte
-            <select id="taskSource">
-              <option value="product_manager">Product Manager</option>
-              <option value="usuario">Usuário</option>
-            </select>
-          </label>
-          <label>
-            Título
-            <input id="taskTitle" required placeholder="Ex: implementar autenticação" />
-          </label>
-          <label>
-            Categoria
-            <select id="taskCategory">
-              <option value="roadmap">Roadmap</option>
-              <option value="security">Segurança</option>
-              <option value="performance">Performance</option>
-              <option value="feature">Feature Builder</option>
-              <option value="test">QA / Testes</option>
-              <option value="bug">Correções / Bugs</option>
-            </select>
-          </label>
-          <label>
-            Prioridade
-            <select id="taskPriority">
-              <option value="alta">Alta</option>
-              <option value="media" selected>Média</option>
-              <option value="baixa">Baixa</option>
-            </select>
-          </label>
-          <label>
-            Diretório de Trabalho
-            <select id="taskWorkMode">
-              <option value="auto">Automático (clones/task-id)</option>
-              <option value="local">Diretório Local Existente</option>
-              <option value="github">Repositório GitHub</option>
-              <option value="new">Novo Projeto</option>
-            </select>
-          </label>
-          <label id="taskWorkDirLabel" style="display:none">
-            Caminho do Diretório
-            <input id="taskWorkDir" placeholder="ex: D:\Projects\meu-app" />
-          </label>
-          <label id="taskGithubRepoLabel">
-            Repositório (Github)
-            <input id="taskGithubRepo" placeholder="ex: empresa/projeto" />
-          </label>
-          <label id="taskNewProjectLabel" style="display:none">
-            Nome do Novo Projeto
-            <input id="taskNewProject" placeholder="ex: meu-novo-app" />
-          </label>
-          <label>
-            Descrição
-            <textarea id="taskDescription" placeholder="Detalhes do card..." rows="3"></textarea>
-          </label>
-          <label>
-            Tipo de Agente (CLI/Integração)
-            <select id="taskAgentType">
-              <option value="">Automático / Opcional</option>
-            </select>
-          </label>
-          <label>
-            Designar Agente Voluntário (Opcional)
-            <select id="taskAgentAssign">
-              <option value="">- Automático Direcionado -</option>
-            </select>
-          </label>
-          <label>
-            Modelo Lógico
-            <select id="taskAgentModel">
-              <option value="">Selecione um agente ou ferramenta</option>
-            </select>
-          </label>
-          <button type="submit">Adicionar card</button>
-        </form>
-      </section>
-
-
-
       <section>
         <h2>Eventos</h2>
         <ul id="eventLog" class="event-log"></ul>
@@ -195,6 +89,85 @@
         <span><kbd>↑</kbd> <kbd>↓</kbd> para navegar</span>
         <span><kbd>Enter</kbd> para confirmar</span>
       </div>
+    </div>
+  </dialog>
+
+  <!-- Modal Nova Tarefa -->
+  <dialog id="taskCreateModal" class="modal modal-large">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Criar Nova Tarefa</h2>
+        <div class="modal-header-actions">
+          <button id="closeTaskCreateBtn" class="close-btn" type="button">×</button>
+        </div>
+      </div>
+      <div class="magic-task-container">
+        <textarea id="magicTaskInput" placeholder="Descreva a tarefa naturalmente e o modal preenche os campos. Ex: 'Corrigir bug na tela de login urgente'" rows="2"></textarea>
+        <button id="magicTaskBtn" class="secondary-btn magic-btn" type="button">Auto-preencher</button>
+      </div>
+      <form id="taskForm" class="modal-form task-form-grid">
+        <label>
+          Fonte
+          <select id="taskSource">
+            <option value="product_manager">Product Manager</option>
+            <option value="agente">Agente</option>
+            <option value="usuario" selected>Usuário</option>
+          </select>
+        </label>
+        <label class="field-span-2">
+          Título
+          <input id="taskTitle" required placeholder="Ex: implementar autenticação" />
+        </label>
+        <label>
+          Categoria
+          <select id="taskCategory">
+            <option value="roadmap">Roadmap</option>
+            <option value="security">Segurança</option>
+            <option value="performance">Performance</option>
+            <option value="feature">Feature Builder</option>
+            <option value="test">QA / Testes</option>
+            <option value="bug">Correções / Bugs</option>
+          </select>
+        </label>
+        <label>
+          Prioridade
+          <select id="taskPriority">
+            <option value="alta">Alta</option>
+            <option value="media" selected>Média</option>
+            <option value="baixa">Baixa</option>
+          </select>
+        </label>
+        <label class="field-span-2">
+          Repositório
+          <input id="taskGithubRepo" placeholder="ex: empresa/projeto ou https://github.com/empresa/projeto" />
+        </label>
+        <label class="field-span-2">
+          Descrição
+          <textarea id="taskDescription" placeholder="Detalhes do card..." rows="4"></textarea>
+        </label>
+        <label>
+          Tipo de Agente
+          <select id="taskAgentType">
+            <option value="">Automático / Opcional</option>
+          </select>
+        </label>
+        <label>
+          Designar Agente
+          <select id="taskAgentAssign">
+            <option value="">- Automático Direcionado -</option>
+          </select>
+        </label>
+        <label class="field-span-2">
+          Modelo Lógico
+          <select id="taskAgentModel">
+            <option value="">Selecione um agente ou ferramenta</option>
+          </select>
+        </label>
+        <div class="modal-actions field-span-2">
+          <button type="button" id="cancelTaskBtn">Cancelar</button>
+          <button type="submit" class="primary-btn">Adicionar card</button>
+        </div>
+      </form>
     </div>
   </dialog>
 
@@ -297,6 +270,10 @@
             <p id="taskDetailsDescription" class="detail-value">Sem descrição.</p>
           </div>
           <div class="detail-group">
+            <span class="detail-label">Repositório</span>
+            <a id="taskDetailsRepo" class="detail-link" href="#" target="_blank" rel="noreferrer">Sem repositório vinculado</a>
+          </div>
+          <div class="detail-group">
             <span class="detail-label">Status</span>
             <span id="taskDetailsStatus" class="tag">Backlog</span>
           </div>
@@ -310,7 +287,10 @@
           </div>
         </div>
         <div class="task-history-pane">
-          <span class="detail-label">Histórico de Conversa / Logs</span>
+          <div class="task-history-header">
+            <span class="detail-label">Terminal / Logs</span>
+            <span id="taskHistoryStatus" class="live-badge">Aguardando</span>
+          </div>
           <div id="taskHistoryContent" class="terminal-mini">
             <!-- Logs will be loaded here -->
           </div>

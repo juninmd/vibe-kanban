@@ -33,34 +33,6 @@ try {
 
 // --- State and Persistence ---
 function initializeState(): State {
-  const tasks = DB.getTasks();
-  if (tasks.length === 0) {
-    DB.createTask({
-      title: "Analisar repositório openai/codex",
-      source: "usuario",
-      category: "roadmap",
-      priority: "alta",
-      lane: "backlog",
-      assignedTo: null,
-      interrupted: false,
-      logs: [],
-      githubRepo: "https://github.com/openai/codex",
-      description: "Explorar e criar tarefas para o repositório codex."
-    });
-    DB.createTask({
-      title: "Desenvolver novas features para opencode",
-      source: "usuario",
-      category: "feature",
-      priority: "alta",
-      lane: "backlog",
-      assignedTo: null,
-      interrupted: false,
-      logs: [],
-      githubRepo: "https://github.com/anomalyco/opencode",
-      description: "Implementar novas integrações no opencode."
-    });
-  }
-
   return {
     tasks: DB.getTasks(),
     agents: DB.getAgents(),
@@ -68,36 +40,7 @@ function initializeState(): State {
   };
 }
 
-function initializeDefaultAgents() {
-  const existing = DB.getAgents();
-  if (existing.length === 0) {
-    const defaults = [
-      { role: "Product Manager", category: "roadmap", model: "gpt-4o", tool: "openai" },
-      { role: "Segurança", category: "security", model: "gemini-2.0-flash", tool: "gemini" },
-      { role: "Performance", category: "performance", model: "gpt-4o", tool: "copilot" },
-      { role: "Novas Funcionalidades", category: "feature", model: "claude-3-5-sonnet-20241022", tool: "claude" },
-      { role: "Testes", category: "test", model: "gpt-4o", tool: "opencode" },
-      { role: "Novas Features", category: "feature", model: "gpt-4o", tool: "opencode" },
-    ];
-
-    defaults.forEach((def, idx) => {
-      DB.saveAgent({
-        id: `agent-${Date.now()}-${idx}-${Math.random().toString(36).substr(2, 9)}`,
-        role: def.role,
-        model: def.model,
-        category: def.category,
-        status: "idle",
-        assignedTask: null,
-        tool: def.tool,
-        terminalId: `term-${Date.now()}-${idx}-${Math.random().toString(36).substr(2, 9)}`
-      });
-    });
-    console.log("Initialized default agents.");
-  }
-}
-
 initializeState();
-initializeDefaultAgents();
 
 // SSE Clients
 let clients: { id: string; res: any }[] = [];
@@ -1084,7 +1027,6 @@ const server = createServer(async (req, res) => {
   // Reset
   if (url === "/api/reset" && method === "POST") {
     DB.reset();
-    initializeDefaultAgents();
     addEvent("Sistema resetado.");
     broadcastState();
     return jsonResponse(res, 200, { ok: true });

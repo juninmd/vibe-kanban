@@ -5,6 +5,7 @@ import * as path from "path";
 import { resolveOpenCodeCommand } from "../utils/commandUtils.js";
 import { stripAnsi } from "../utils/ptyUtils.js";
 import { createErrorLoopDetector, createSessionTimeout, STUCK_MESSAGE, TIMEOUT_MESSAGE } from "../utils/overseerUtils.js";
+import { logDebugBlock, logDebugCommand } from "./debugLogging.js";
 
 const OPENCODE_ERROR_PATTERN = /^Error /;
 const MISSING_OPENCODE_MESSAGE = "OpenCode CLI not found. Set OPENCODE_PATH, add opencodePath to vibe_config.json, or install opencode globally in PATH.";
@@ -95,6 +96,8 @@ content
 
    const args = buildOpenCodeArgs(task, agent, prompt);
    const visibleArgs = args.slice(0, -1).join(" ") || "run";
+   logDebugBlock(ctx, task.id, "AGENT PROMPT", prompt);
+   logDebugCommand(ctx, task.id, openCode.command, [...args.slice(0, -1), "<prompt>"]);
    ctx.onLog(task.id, `[SYSTEM] OpenCode executable: ${openCode.command} (${openCode.source})`);
    ctx.onLog(task.id, `Running: ${visibleArgs} in ${taskDir}`);
 

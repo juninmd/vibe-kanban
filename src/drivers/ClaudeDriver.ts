@@ -1,5 +1,6 @@
 import { Task, Agent, LLMDriver, DriverContext } from "../types.js";
 import { spawn } from "child_process";
+import { logDebugBlock, logDebugCommand } from "./debugLogging.js";
 
 export class ClaudeDriver implements LLMDriver {
    name: string = "Claude Code";
@@ -8,6 +9,13 @@ export class ClaudeDriver implements LLMDriver {
    async executeTask(task: Task, agent: Agent, ctx: DriverContext): Promise<void> {
       const cmd = "claude";
       const args = ["prompt", task.title, "--model", agent.model];
+      logDebugBlock(
+         ctx,
+         task.id,
+         "AGENT PROMPT",
+         `TITLE: ${task.title}\nDESCRIPTION: ${task.description || "No description provided."}`,
+      );
+      logDebugCommand(ctx, task.id, cmd, ["prompt", "<prompt>", "--model", agent.model]);
       ctx.onLog(task.id, `Running: ${cmd} ${args.join(" ")}`);
 
       const child = spawn(cmd, args);

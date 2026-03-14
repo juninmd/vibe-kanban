@@ -39,6 +39,14 @@ type EventLog = {
   text: string;
 };
 
+type TaskTerminalLog = {
+  agentId?: string;
+  taskId: number | null;
+  type: string;
+  content: string;
+  timestamp: number;
+};
+
 const lanes = ["backlog", "in_progress", "review", "done"];
 const laneLabels: Record<string, string> = {
   backlog: "Backlog",
@@ -56,8 +64,11 @@ let stateUpdateQueued = false;
 let pendingStateData: any = null;
 let lastUpdateTimestamp = 0;
 const STATE_DEBOUNCE_MS = 100; // Debounce state updates to prevent UI freeze
+let activeTaskDetailsId: number | null = null;
+let activeTaskLogKeys = new Set<string>();
 
 const els = {
+  createTaskBtn: document.getElementById("createTaskBtn") as HTMLButtonElement,
   form: document.getElementById("taskForm") as HTMLFormElement,
   source: document.getElementById("taskSource") as HTMLSelectElement,
   title: document.getElementById("taskTitle") as HTMLInputElement,
@@ -76,9 +87,11 @@ const els = {
   view2d: document.getElementById("view2d") as HTMLElement,
   toggleViewBtn: document.getElementById("toggleViewBtn") as HTMLButtonElement,
   fullscreenBtn: document.getElementById("fullscreenBtn") as HTMLButtonElement,
-  seedTasksBtn: document.getElementById("seedTasksBtn") as HTMLButtonElement,
   resetDataBtn: document.getElementById("resetDataBtn") as HTMLButtonElement,
   clearDoneBtn: document.getElementById("clearDoneBtn") as HTMLButtonElement,
+  taskCreateModal: document.getElementById("taskCreateModal") as HTMLDialogElement,
+  closeTaskCreateBtn: document.getElementById("closeTaskCreateBtn") as HTMLButtonElement,
+  cancelTaskBtn: document.getElementById("cancelTaskBtn") as HTMLButtonElement,
   createAgentBtn: document.getElementById("createAgentBtn") as HTMLButtonElement,
   settingsBtn: document.getElementById("settingsBtn") as HTMLButtonElement,
   agentModal: document.getElementById("agentModal") as HTMLDialogElement,
@@ -117,9 +130,11 @@ const els = {
   taskDetailsModal: document.getElementById("taskDetailsModal") as HTMLDialogElement,
   taskDetailsTitle: document.getElementById("taskDetailsTitle") as HTMLElement,
   taskDetailsDescription: document.getElementById("taskDetailsDescription") as HTMLElement,
+  taskDetailsRepo: document.getElementById("taskDetailsRepo") as HTMLAnchorElement,
   taskDetailsStatus: document.getElementById("taskDetailsStatus") as HTMLElement,
   taskDetailsAgent: document.getElementById("taskDetailsAgent") as HTMLElement,
   taskDetailsMeta: document.getElementById("taskDetailsMeta") as HTMLElement,
+  taskHistoryStatus: document.getElementById("taskHistoryStatus") as HTMLElement,
   taskHistoryContent: document.getElementById("taskHistoryContent") as HTMLElement,
   taskOpenFolderBtn: document.getElementById("taskOpenFolderBtn") as HTMLButtonElement,
   closeTaskDetailsBtn: document.getElementById("closeTaskDetailsBtn") as HTMLButtonElement,
@@ -178,6 +193,193 @@ function updateDashboard() {
   document.title = `(${pending}) Vibe Kanban 3D`;
 }
 
+function normalizeRepoLink(repo?: string) {
+  const value = repo?.trim() || "";
+  if (!value) return "";
+  if (/^https?:\/\//i.test(value)) return value;
+  return `https://github.com/${value.replace(/^github\.com\//i, "").replace(/^\/+/, "")}`;
+}
+
+function inferTaskDraft(input: string) {
+  const lowerInput = input.toLowerCase();
+  let category = "feature";
+  let priority = "media";
+
+  if (lowerInput.includes("bug") || lowerInput.includes("erro") || lowerInput.includes("fix") || lowerInput.includes("corrigir")) category = "bug";
+  else if (lowerInput.includes("teste") || lowerInput.includes("qa") || lowerInput.includes("verificar")) category = "test";
+  else if (lowerInput.includes("performance") || lowerInput.includes("otimizar") || lowerInput.includes("lento") || lowerInput.includes("rápido")) category = "performance";
+  else if (lowerInput.includes("segurança") || lowerInput.includes("vulnerabilidade") || lowerInput.includes("auth")) category = "security";
+  else if (lowerInput.includes("planejar") || lowerInput.includes("roadmap")) category = "roadmap";
+
+  if (lowerInput.includes("urgente") || lowerInput.includes("crítico") || lowerInput.includes("alta prioridade") || lowerInput.includes("p0")) priority = "alta";
+  else if (lowerInput.includes("baixa prioridade") || lowerInput.includes("p3")) priority = "baixa";
+
+  return {
+    title: input,
+    category,
+    priority,
+    description: `Gerado via preenchimento assistido: ${input}`,
+  };
+}
+
+function resetTaskForm() {
+  els.form.reset();
+  els.source.value = "usuario";
+  els.category.value = "feature";
+  els.priority.value = "media";
+  els.agentType.value = "";
+  els.agentAssign.value = "";
+  els.agentModel.innerHTML = '<option value="">Selecione um agente ou ferramenta</option>';
+}
+
+function openTaskCreateModal(draft: Partial<Record<string, string>> = {}) {
+  resetTaskForm();
+  if (draft.source) els.source.value = draft.source;
+  if (draft.title) els.title.value = draft.title;
+  if (draft.category) els.category.value = draft.category;
+  if (draft.priority) els.priority.value = draft.priority;
+  if (draft.githubRepo) els.githubRepo.value = draft.githubRepo;
+  if (draft.description) els.description.value = draft.description;
+  if (draft.agentType) els.agentType.value = draft.agentType;
+  if (draft.assignedTo) els.agentAssign.value = draft.assignedTo;
+  if (draft.model) els.agentModel.value = draft.model;
+  if (!els.taskCreateModal.open) els.taskCreateModal.showModal();
+  updateTaskAgentModels();
+  requestAnimationFrame(() => els.title.focus());
+}
+
+function closeTaskCreateModal() {
+  if (els.taskCreateModal.open) els.taskCreateModal.close();
+  resetTaskForm();
+  els.magicTaskInput.value = "";
+}
+
+function buildTaskLogKey(log: TaskTerminalLog) {
+  return [log.timestamp, log.type, log.agentId || "", log.taskId ?? "", log.content].join("|");
+}
+
+function scrollTaskHistoryToBottom(force = false) {
+  const isNearBottom = els.taskHistoryContent.scrollTop + els.taskHistoryContent.clientHeight >= els.taskHistoryContent.scrollHeight - 80;
+  if (force || isNearBottom) {
+    els.taskHistoryContent.scrollTop = els.taskHistoryContent.scrollHeight;
+  }
+}
+
+function setTaskHistoryPlaceholder(message: string) {
+  activeTaskLogKeys.clear();
+  els.taskHistoryContent.innerHTML = "";
+  const empty = document.createElement("div");
+  empty.className = "terminal-placeholder";
+  empty.textContent = message;
+  els.taskHistoryContent.append(empty);
+}
+
+function appendTaskHistoryEntry(log: TaskTerminalLog) {
+  const key = buildTaskLogKey(log);
+  if (activeTaskLogKeys.has(key)) return;
+  activeTaskLogKeys.add(key);
+
+  const placeholder = els.taskHistoryContent.querySelector(".terminal-placeholder");
+  if (placeholder) placeholder.remove();
+
+  const entry = document.createElement("div");
+  entry.className = "log-entry";
+
+  const meta = document.createElement("div");
+  const time = document.createElement("span");
+  time.className = "log-time";
+  time.textContent = `[${new Date(log.timestamp).toLocaleTimeString()}]`;
+  meta.append(time);
+
+  if (log.agentId) {
+    const source = document.createElement("span");
+    source.className = "log-source";
+    source.textContent = agents.find((agent) => agent.id === log.agentId)?.role || log.agentId;
+    meta.append(source);
+  }
+
+  const text = document.createElement("pre");
+  text.className = `log-text log-${log.type}`;
+  text.textContent = log.content;
+
+  entry.append(meta, text);
+  els.taskHistoryContent.append(entry);
+  scrollTaskHistoryToBottom();
+}
+
+function renderTaskHistory(logs: TaskTerminalLog[]) {
+  activeTaskLogKeys.clear();
+  els.taskHistoryContent.innerHTML = "";
+
+  if (logs.length === 0) {
+    setTaskHistoryPlaceholder("Nenhum histórico disponível para esta tarefa.");
+    return;
+  }
+
+  logs.forEach(appendTaskHistoryEntry);
+  scrollTaskHistoryToBottom(true);
+}
+
+function updateTaskHistoryStatus(task: Task) {
+  els.taskHistoryStatus.className = "live-badge";
+  if (task.lane === "done") {
+    els.taskHistoryStatus.textContent = "Finalizada";
+    els.taskHistoryStatus.classList.add("is-done");
+    return;
+  }
+  if (task.assignedTo) {
+    els.taskHistoryStatus.textContent = "Ao vivo";
+    els.taskHistoryStatus.classList.add("is-live");
+    return;
+  }
+  els.taskHistoryStatus.textContent = "Aguardando";
+}
+
+function renderTaskDetails(task: Task) {
+  els.taskDetailsTitle.textContent = `Tarefa #${task.id}: ${task.title}`;
+  els.taskDetailsDescription.textContent = task.description || "Sem descrição.";
+  els.taskDetailsStatus.textContent = laneLabels[task.lane] || task.lane;
+  els.taskDetailsStatus.className = `tag lane-${task.lane}`;
+
+  const agentsById = new Map(agents.map((agent) => [agent.id, agent.role]));
+  els.taskDetailsAgent.textContent = task.assignedTo ? agentsById.get(task.assignedTo) || task.assignedTo : "Ninguém designado";
+
+  const repoLink = normalizeRepoLink(task.githubRepo);
+  if (repoLink) {
+    els.taskDetailsRepo.textContent = repoLink;
+    els.taskDetailsRepo.href = repoLink;
+    els.taskDetailsRepo.style.pointerEvents = "auto";
+  } else {
+    els.taskDetailsRepo.textContent = "Sem repositório vinculado";
+    els.taskDetailsRepo.removeAttribute("href");
+    els.taskDetailsRepo.style.pointerEvents = "none";
+  }
+
+  els.taskDetailsMeta.innerHTML = `
+    <span class="tag">${task.category}</span>
+    <span class="tag priority-${task.priority}">${task.priority}</span>
+    ${task.agentType ? `<span class="tag">cli/sdk: ${task.agentType}</span>` : ""}
+  `;
+
+  if (task.workDir) {
+    els.taskOpenFolderBtn.style.display = "block";
+    els.taskOpenFolderBtn.onclick = () => {
+      fetch(`${API_URL}/api/tasks/${task.id}/open-folder`, { method: "POST" });
+      showToast("Abrindo pasta local...", "info");
+    };
+  } else {
+    els.taskOpenFolderBtn.style.display = "none";
+  }
+
+  updateTaskHistoryStatus(task);
+}
+
+function syncActiveTaskDetails() {
+  if (activeTaskDetailsId === null || !els.taskDetailsModal.open) return;
+  const task = tasks.find((item) => item.id === activeTaskDetailsId);
+  if (task) renderTaskDetails(task);
+}
+
 // Confetti State
 const confettiParticles: any[] = [];
 
@@ -185,13 +387,7 @@ let isOfficeCreated = false;
 export let officeData: { padPositions: THREE.Vector3[] } = { padPositions: [] };
 
 function updateState(data: any) {
-  if (!data) return;
-  
-  // Protect against flickering/empty states that cause agents to disappear
-  if (agents.length > 0 && (!data.agents || data.agents.length === 0)) {
-     console.warn("Received empty agents list while having active agents. Ignoring update to prevent disappearance.");
-     return;
-  }
+  if (!data || !Array.isArray(data.tasks) || !Array.isArray(data.agents) || !Array.isArray(data.events)) return;
 
   pendingStateData = data;
   
@@ -240,6 +436,7 @@ function updateState(data: any) {
     }
 
     eventLog = data.events || [];
+    syncActiveTaskDetails();
     render();
   });
 }
@@ -306,10 +503,15 @@ async function apiCall(endpoint: string, method: string, body: any) {
   }
 }
 
-function createTask(taskParams: { title: string; source: string; category: string; priority: string; githubRepo?: string; description?: string; agentType?: string; assignedTo?: string; model?: string; }) {
-  apiCall("/api/tasks", "POST", taskParams);
+async function createTask(taskParams: { title: string; source: string; category: string; priority: string; githubRepo?: string; description?: string; agentType?: string; assignedTo?: string; model?: string; }) {
+  const response = await apiCall("/api/tasks", "POST", taskParams);
+  if (response?.error) {
+    showToast(`Erro ao criar tarefa: ${response.error}`, "error");
+    return;
+  }
   playSuccessSound();
   showToast(`Tarefa criada: ${taskParams.title}`, "success");
+  closeTaskCreateModal();
 }
 
 function pickTask(task: Task) {
@@ -336,12 +538,13 @@ function reprioritize(task: Task, direction: number) {
 }
 
 function bugFromTask(task: Task) {
-  createTask({
+  openTaskCreateModal({
     title: `Bug reportado em: ${task.title}`,
     source: "agente",
     category: "bug",
     priority: "alta",
     githubRepo: task.githubRepo,
+    description: `Contexto da tarefa original #${task.id}: ${task.title}`,
   });
 }
 
@@ -642,53 +845,19 @@ function openTerminal(agentId: string) {
 }
 
 async function openTaskDetailsModal(task: Task) {
-  els.taskDetailsTitle.textContent = `Tarefa #${task.id}: ${task.title}`;
-  els.taskDetailsDescription.textContent = task.description || "Sem descrição.";
-  els.taskDetailsStatus.textContent = laneLabels[task.lane] || task.lane;
-  els.taskDetailsStatus.className = `tag lane-${task.lane}`;
-  
-  const agentsById = new Map(agents.map((agent) => [agent.id, agent.role]));
-  els.taskDetailsAgent.textContent = task.assignedTo ? agentsById.get(task.assignedTo) || task.assignedTo : "Ninguém designado";
-  
-  els.taskDetailsMeta.innerHTML = `
-    <span class="tag">${task.category}</span>
-    <span class="tag priority-${task.priority}">${task.priority}</span>
-    ${task.githubRepo ? `<span class="tag">Repo: ${task.githubRepo}</span>` : ""}
-  `;
-
-  // WorkDir handling
-  if (task.lane !== "done" && task.workDir) {
-    els.taskOpenFolderBtn.style.display = "block";
-    els.taskOpenFolderBtn.onclick = () => {
-      fetch(`${API_URL}/api/tasks/${task.id}/open-folder`, { method: "POST" });
-      showToast("Abrindo pasta local...", "info");
-    };
-  } else {
-    els.taskOpenFolderBtn.style.display = "none";
-  }
-
-  // Load History
-  els.taskHistoryContent.innerHTML = "Carregando histórico...";
-  els.taskDetailsModal.showModal();
+  activeTaskDetailsId = task.id;
+  renderTaskDetails(task);
+  setTaskHistoryPlaceholder("Carregando terminal...");
+  if (!els.taskDetailsModal.open) els.taskDetailsModal.showModal();
 
   try {
     const res = await fetch(`${API_URL}/api/tasks/${task.id}/terminal`);
     const data = await res.json();
-    if (data.logs && data.logs.length > 0) {
-      els.taskHistoryContent.innerHTML = data.logs.map((log: any) => {
-        const time = new Date(log.timestamp).toLocaleTimeString();
-        return `<div class="log-entry">
-          <span class="log-time">[${time}]</span>
-          <span class="log-${log.type}">> ${log.content}</span>
-        </div>`;
-      }).join("");
-      // Scroll to bottom
-      setTimeout(() => els.taskHistoryContent.scrollTop = els.taskHistoryContent.scrollHeight, 50);
-    } else {
-      els.taskHistoryContent.innerHTML = "Nenhum histórico disponível para esta tarefa.";
-    }
+    if (activeTaskDetailsId !== task.id) return;
+    renderTaskHistory((data.logs || []) as TaskTerminalLog[]);
   } catch (e) {
-    els.taskHistoryContent.innerHTML = "Erro ao carregar histórico.";
+    if (activeTaskDetailsId !== task.id) return;
+    setTaskHistoryPlaceholder("Erro ao carregar histórico.");
     console.error(e);
   }
 }
@@ -776,9 +945,11 @@ els.driverSelect?.addEventListener("change", async () => {
 els.agentAssign?.addEventListener("change", () => {
   updateTaskAgentModels();
 });
-els.form.addEventListener("submit", (e) => {
+els.createTaskBtn.addEventListener("click", () => openTaskCreateModal());
+
+els.form.addEventListener("submit", async (e) => {
   e.preventDefault();
-  createTask({
+  await createTask({
     title: els.title.value.trim(),
     source: els.source.value,
     category: els.category.value,
@@ -789,11 +960,6 @@ els.form.addEventListener("submit", (e) => {
     assignedTo: els.agentAssign?.value || undefined,
     model: els.agentModel?.value
   });
-  els.title.value = "";
-  if (els.description) els.description.value = "";
-  if (els.githubRepo) els.githubRepo.value = "";
-  if (els.agentType) els.agentType.value = "";
-  if (els.agentAssign) els.agentAssign.value = "";
 });
 
 els.toggleViewBtn.addEventListener("click", () => {
@@ -816,44 +982,14 @@ els.fullscreenBtn.addEventListener("click", () => {
 els.magicTaskBtn.addEventListener("click", () => {
   const input = els.magicTaskInput.value.trim();
   if (!input) return;
-
-  const lowerInput = input.toLowerCase();
-
-  // Heuristics
-  let category = "feature";
-  let priority = "media";
-
-  if (lowerInput.includes("bug") || lowerInput.includes("erro") || lowerInput.includes("fix") || lowerInput.includes("corrigir")) category = "bug";
-  else if (lowerInput.includes("teste") || lowerInput.includes("qa") || lowerInput.includes("verificar")) category = "test";
-  else if (lowerInput.includes("performance") || lowerInput.includes("otimizar") || lowerInput.includes("lento") || lowerInput.includes("rápido")) category = "performance";
-  else if (lowerInput.includes("segurança") || lowerInput.includes("vulnerabilidade") || lowerInput.includes("auth")) category = "security";
-  else if (lowerInput.includes("planejar") || lowerInput.includes("roadmap")) category = "roadmap";
-
-  if (lowerInput.includes("urgente") || lowerInput.includes("crítico") || lowerInput.includes("alta prioridade") || lowerInput.includes("p0")) priority = "alta";
-  else if (lowerInput.includes("baixa prioridade") || lowerInput.includes("p3")) priority = "baixa";
-
-  els.title.value = input;
-  els.category.value = category;
-  els.priority.value = priority;
-
-  if (els.description) {
-      els.description.value = "Gerado via Magic Fill: " + input;
-  }
-
+  const draft = inferTaskDraft(input);
+  els.title.value = draft.title;
+  els.category.value = draft.category;
+  els.priority.value = draft.priority;
+  if (els.description) els.description.value = draft.description;
   els.magicTaskInput.value = "";
   showToast("Formulário preenchido com sucesso!", "success");
   playClickSound();
-});
-
-els.seedTasksBtn.addEventListener("click", () => {
-  [
-    ["Planejar sprint de IA colaborativa", "product_manager", "roadmap", "alta"],
-    ["Auditar permissões do backend", "product_manager", "security", "alta"],
-    ["Otimizar render do quadro 3D", "usuario", "performance", "media"],
-    ["Criar painel de métricas de agente", "usuario", "feature", "media"]
-  ].forEach(([title, source, category, priority]) =>
-    createTask({ title: title as string, source: source as string, category: category as string, priority: priority as string }),
-  );
 });
 
 els.resetDataBtn.addEventListener("click", () => {
@@ -897,26 +1033,8 @@ function renderCommandSuggestions(input: string) {
       suggestions.push({
         label: `📝 Criar Tarefa: "${title}"`,
         action: () => {
-          // Heuristics
-          const lowerTitle = title.toLowerCase();
-          let category = "feature";
-          let priority = "media";
-
-          if (lowerTitle.includes("bug") || lowerTitle.includes("erro") || lowerTitle.includes("fix") || lowerTitle.includes("corrigir")) category = "bug";
-          if (lowerTitle.includes("teste") || lowerTitle.includes("qa")) category = "test";
-          if (lowerTitle.includes("performance") || lowerTitle.includes("otimizar") || lowerTitle.includes("lento")) category = "performance";
-          if (lowerTitle.includes("segurança") || lowerTitle.includes("vulnerabilidade")) category = "security";
-
-          if (lowerTitle.includes("urgente") || lowerTitle.includes("crítico")) priority = "alta";
-          if (lowerTitle.includes("baixa prioridade")) priority = "baixa";
-
-          createTask({
-            title: title,
-            source: "usuario",
-            category: category,
-            priority: priority,
-          });
           closeCommandPalette();
+          openTaskCreateModal({ ...inferTaskDraft(title), source: "usuario" });
         }
       });
     }
@@ -1100,8 +1218,18 @@ els.settingsBtn.addEventListener("click", async () => {
   } catch (e) { console.error(e); }
 });
 
+els.closeTaskCreateBtn.addEventListener("click", () => closeTaskCreateModal());
+els.cancelTaskBtn.addEventListener("click", () => closeTaskCreateModal());
 els.cancelSettingsBtn.addEventListener("click", () => els.settingsModal.close());
 els.closeTaskDetailsBtn.addEventListener("click", () => els.taskDetailsModal.close());
+els.taskDetailsModal.addEventListener("close", () => {
+  activeTaskDetailsId = null;
+  activeTaskLogKeys.clear();
+});
+els.taskCreateModal.addEventListener("close", () => {
+  resetTaskForm();
+  els.magicTaskInput.value = "";
+});
 
 els.settingsForm.addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -1961,7 +2089,12 @@ evtSource.onmessage = (event) => {
   try {
     const msg = JSON.parse(event.data);
 
-    if (msg.type === "terminal:data") {
+    if (msg.terminalUpdate) {
+      const update = msg.terminalUpdate as TaskTerminalLog;
+      if (activeTaskDetailsId !== null && update.taskId === activeTaskDetailsId && els.taskDetailsModal.open) {
+        appendTaskHistoryEntry(update);
+      }
+    } else if (msg.type === "terminal:data") {
       terminalUIManager.handleTerminalData(msg.agentId, msg.content);
     } else if (msg.type === "terminal:exit") {
       terminalUIManager.handleTerminalExit(msg.agentId, msg.code);
@@ -2073,16 +2206,19 @@ window.addEventListener("keydown", (e) => {
     playClickSound();
   }
   if (e.key === "n" || e.key === "N") {
-    // Only capture 'n' if not typing in command palette
-    if (document.activeElement !== els.commandInput) {
+    const activeEl = document.activeElement as HTMLElement | null;
+    const isTypingField = !!activeEl && ["INPUT", "TEXTAREA", "SELECT"].includes(activeEl.tagName);
+    if (!isTypingField && document.activeElement !== els.commandInput) {
       e.preventDefault();
-      els.title.focus();
+      openTaskCreateModal();
       playClickSound();
     }
   }
   if (e.key === "Escape") {
-    els.agentModal.close();
-    els.settingsModal.close();
+    if (els.taskCreateModal.open) els.taskCreateModal.close();
+    if (els.taskDetailsModal.open) els.taskDetailsModal.close();
+    if (els.agentModal.open) els.agentModal.close();
+    if (els.settingsModal.open) els.settingsModal.close();
     if (els.commandPalette.open) closeCommandPalette();
     playClickSound();
   }

@@ -7,6 +7,7 @@ import { getProjectContext, extractAndWriteFiles } from "../utils/fileUtils.js";
 import { isCommandAvailable, getGlobalCommandPath } from "../utils/commandUtils.js";
 import { spawnWithPty, stripAnsi } from "../utils/ptyUtils.js";
 import { createErrorLoopDetector, createSessionTimeout, STUCK_MESSAGE, TIMEOUT_MESSAGE } from "../utils/overseerUtils.js";
+import { logDebugBlock, logDebugCommand } from "./debugLogging.js";
 
 // Gemini-specific: these prefixes appear on every failed tool call and API error
 const GEMINI_ERROR_PATTERN = /^Error (executing tool|generating content)/;
@@ -107,6 +108,13 @@ content
 
       let fullOutput = "";
 
+      logDebugBlock(ctx, task.id, "AGENT PROMPT", prompt);
+      logDebugCommand(
+         ctx,
+         task.id,
+         geminiPath,
+         ["--yolo", ...(agent.model ? ["--model", agent.model] : []), "-p", "<prompt>"],
+      );
       ctx.onLog(task.id, `[SYSTEM] Iniciando Gemini CLI para Tarefa #${task.id}`);
       ctx.onLog(task.id, `[SYSTEM] Workspace: ${basePath}`);
       ctx.onLog(task.id, `[SYSTEM] Modelo: ${agent.model || "(default model)"}`);
