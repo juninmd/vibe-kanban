@@ -1,6 +1,7 @@
 import { Task, Agent, LLMDriver, DriverContext } from "../types.js";
 import { spawn } from "child_process";
 import { logDebugBlock, logDebugCommand } from "./debugLogging.js";
+import { createStallDetector, STALL_MESSAGE } from "../utils/overseerUtils.js";
 
 export class ClaudeDriver implements LLMDriver {
    name: string = "Claude Code";
@@ -19,8 +20,10 @@ export class ClaudeDriver implements LLMDriver {
       ctx.onLog(task.id, `Running: ${cmd} ${args.join(" ")}`);
 
       const child = spawn(cmd, args);
+      const stallDetector = createStallDetector(child, 120);
 
       child.stdout.on("data", (data) => {
+         stallDetector.reset();
          ctx.onLog(task.id, data.toString());
       });
 
@@ -42,8 +45,12 @@ export class ClaudeDriver implements LLMDriver {
       });
 
       child.on("close", (code) => {
+         stallDetector.stop();
          this.runningTasks.delete(task.id);
-         if (code === 0) {
+         if (stallDetector.wasKilled()) {
+            ctx.onLog(task.id, STALL_MESSAGE);
+            ctx.onBugFound(task.id, STALL_MESSAGE);
+         } else if (code === 0) {
             ctx.onComplete(task.id);
          } else {
             ctx.onBugFound(task.id, `Claude exited with code ${code}`);

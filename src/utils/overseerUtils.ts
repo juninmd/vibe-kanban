@@ -2,10 +2,63 @@ import type { ChildProcess } from "node:child_process";
 
 export const STUCK_MESSAGE = "Provider killed: no git changes detected within the stuck threshold. Eligible for fallback.";
 export const TIMEOUT_MESSAGE = "Provider killed: exceeded session_timeout. Eligible for fallback.";
+export const STALL_MESSAGE = "[lisa-stall] Provider killed: no output received within the stall timeout. Eligible for fallback.";
+
+export interface OutputStallHandle {
+	reset(): void;
+	wasKilled(): boolean;
+	stop(): void;
+}
+
+const DEFAULT_OUTPUT_STALL_TIMEOUT = 120;
+
+/**
+ * Monitors provider stdout for prolonged silence. Kills the process if no
+ * output is received within `timeoutSeconds`. Each call to `reset()` restarts
+ * the countdown — call it from the stdout data handler.
+ *
+ * Returns a no-op handle when timeoutSeconds is 0 or undefined (disabled).
+ */
+export function createStallDetector(
+	proc: ChildProcess,
+	timeoutSeconds?: number,
+): OutputStallHandle {
+	const timeout = timeoutSeconds ?? DEFAULT_OUTPUT_STALL_TIMEOUT;
+	if (timeout <= 0) {
+		return { reset() {}, wasKilled: () => false, stop() {} };
+	}
+
+	let killed = false;
+	let timer: ReturnType<typeof setTimeout> | null = setTimeout(() => {
+		killed = true;
+		proc.kill("SIGTERM");
+	}, timeout * 1000);
+
+	return {
+		reset() {
+			if (killed || !timer) return;
+			clearTimeout(timer);
+			timer = setTimeout(() => {
+				killed = true;
+				proc.kill("SIGTERM");
+			}, timeout * 1000);
+		},
+		wasKilled() {
+			return killed;
+		},
+		stop() {
+			if (timer) {
+				clearTimeout(timer);
+				timer = null;
+			}
+		},
+	};
+}
 
 export interface ErrorLoopDetectorHandle {
 	check(text: string): void;
 	wasKilled(): boolean;
+	stop(): void;
 }
 
 /**
@@ -44,6 +97,7 @@ export function createErrorLoopDetector(
 		wasKilled() {
 			return killed;
 		},
+		stop() {},
 	};
 }
 

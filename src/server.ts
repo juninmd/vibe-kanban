@@ -17,7 +17,7 @@ import { createPullRequest } from "./utils/githubUtils.js";
 import { isCommandAvailable } from "./utils/commandUtils.js";
 import { buildProviderChain, isEligibleForProviderFallback } from "./drivers/providerFallback.js";
 import { getAvailableTools } from "./providers.js";
-import { isEligibleForFallback } from "./utils/fallbackUtils.js";
+import { isEligibleForFallback, isCompleteProviderExhaustion } from "./utils/fallbackUtils.js";
 import { prepareWorktree, cleanupWorktree } from "./utils/worktreeUtils.js";
 import "dotenv/config";
 
@@ -238,6 +238,7 @@ async function startTask(task: Task, agent: Agent) {
 
   setTimeout(() => {
     let attemptIndex = 0;
+    const currentTaskAttempts: any[] = [];
 
     const runAttempt = (tool: string) => {
 const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? drivers[tool] : null) || resolveDriverForAgent(agent);
@@ -266,6 +267,7 @@ const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? dri
 
         // Reset fallback attempts on success
         fallbackAttempts.delete(tid);
+        currentTaskAttempts.push({ success: true });
 
         // Auto PR generation
         if (t.githubRepo && process.env.GITHUB_TOKEN) {
@@ -298,6 +300,8 @@ const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? dri
       }
     },
     onBugFound: (tid, desc) => {
+      currentTaskAttempts.push({ success: false, error: desc });
+
       const nextTool = providerChain[attemptIndex + 1];
       if (nextTool && isEligibleForProviderFallback(desc)) {
         attemptIndex += 1;
@@ -309,6 +313,17 @@ const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? dri
       activeTaskDrivers.delete(tid);
       const t = getTask(tid);
       if (!t) return;
+
+      if (isCompleteProviderExhaustion(currentTaskAttempts)) {
+          addEvent(`[Fallback] Exaustão total de provedores na tarefa #${tid} devido a erros de infraestrutura/timeout.`);
+          if (t.assignedTo) {
+              addTerminalLine(t.assignedTo, tid, "stderr", `❌ Exaustão completa de provedor (Infra/Timeout).`);
+              updateAgent(t.assignedTo, { status: "idle", assignedTask: null });
+          }
+          updateTask(tid, { assignedTo: null, lane: "done" });
+          fallbackAttempts.delete(tid);
+          return; // Stop and don't retry
+      }
 
       if (isEligibleForFallback(desc)) {
           const attempts = (fallbackAttempts.get(tid) || 0) + 1;

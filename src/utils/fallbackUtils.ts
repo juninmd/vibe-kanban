@@ -23,6 +23,7 @@ export const ELIGIBLE_ERROR_PATTERNS = [
     /command not found/i,
     /lisa-overseer/i,
     /lisa-timeout/i,
+    /lisa-stall/i,
     /named models unavailable/i,
     /free plans can only use/i,
     /empty commit/i,
@@ -51,4 +52,14 @@ export function isEligibleForFallback(output: string, exitCode?: number): boolea
     }
 
     return false;
+}
+
+/**
+ * Returns true when every attempt in a fallback chain failed due to provider
+ * infrastructure issues (eligible errors or binary not found), meaning no
+ * provider was able to attempt the task itself.
+ */
+export function isCompleteProviderExhaustion(attempts: any[]): boolean {
+    if (attempts.length === 0) return false;
+    return attempts.every((a) => !a.success && a.error && isEligibleForFallback(a.error));
 }
