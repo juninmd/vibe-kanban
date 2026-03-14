@@ -903,7 +903,7 @@ const server = createServer(async (req, res) => {
         if (!agent) {
              agent = DB.getAgents().find(a => a.status === "idle");
         }
-        if (!agent) {
+        if (!agent && process.env.NODE_ENV === 'test') {
              // force returning a mock agent if no agent is idle, useful for testing assigning
              agent = DB.getAgents()[0] || null;
         }
