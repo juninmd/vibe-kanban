@@ -53,6 +53,13 @@ describe('Orchestration API', async () => {
   });
 
   test('Default: Auto-assigns tasks after interval', async () => {
+    // Create an agent to ensure one is available
+    await fetch(`${API_URL}/api/agents`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role: 'Tester', category: 'test', tool: 'opencode', model: 'default' })
+    });
+
     // 1. Create a task suitable for an idle agent (e.g., 'test' category)
     const taskRes = await fetch(`${API_URL}/api/tasks`, {
       method: 'POST',
@@ -120,6 +127,13 @@ describe('Orchestration API', async () => {
   });
 
   test('Manual Trigger: Assigns task when triggered manually', async () => {
+    // Create an agent to ensure one is available
+    await fetch(`${API_URL}/api/agents`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role: 'Tester', category: 'test', tool: 'opencode', model: 'default' })
+    });
+
     // 1. Disable orchestration first
     await fetch(`${API_URL}/api/orchestrator/config`, {
         method: 'POST',

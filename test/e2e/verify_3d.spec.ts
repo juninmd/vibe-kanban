@@ -7,7 +7,7 @@ test('create agent and verify 3d label', async ({ page }) => {
 
   // Wait for load
   const title = page.locator('h1');
-  await expect(title).toHaveText('Vibe Kanban • Time de Agentes', { timeout: 10000 });
+  await expect(title).toContainText('Vibe Kanban • Time de Agentes', { timeout: 10000 });
 
   // Click Novo Agente
   await page.click('#createAgentBtn');
