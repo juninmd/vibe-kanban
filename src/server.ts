@@ -238,7 +238,7 @@ async function startTask(task: Task, agent: Agent) {
 
   setTimeout(() => {
     let attemptIndex = 0;
-    const currentTaskAttempts: any[] = [];
+    const currentTaskAttempts: { success: boolean; error?: string }[] = [];
 
     const runAttempt = (tool: string) => {
 const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? drivers[tool] : null) || resolveDriverForAgent(agent);
