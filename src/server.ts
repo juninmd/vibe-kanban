@@ -314,13 +314,21 @@ const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? dri
       const t = getTask(tid);
       if (!t) return;
 
-      if (isCompleteProviderExhaustion(currentTaskAttempts)) {
-          addEvent(`[Fallback] Exaustão total de provedores na tarefa #${tid} devido a erros de infraestrutura/timeout.`);
+      const terminateTask = (msgTerminal: string, msgEvent: string, laneToMoveTo: string) => {
+          addEvent(msgEvent);
           if (t.assignedTo) {
-              addTerminalLine(t.assignedTo, tid, "stderr", `❌ Exaustão completa de provedor (Infra/Timeout).`);
+              addTerminalLine(t.assignedTo, tid, "stderr", msgTerminal);
               updateAgent(t.assignedTo, { status: "idle", assignedTask: null });
           }
-          updateTask(tid, { assignedTo: null, lane: "done" });
+          updateTask(tid, { assignedTo: null, lane: laneToMoveTo as any, interrupted: laneToMoveTo === "backlog" });
+      };
+
+      if (isCompleteProviderExhaustion(currentTaskAttempts)) {
+          terminateTask(
+            `❌ Exaustão completa de provedor (Infra/Timeout).`,
+            `[Fallback] Exaustão total de provedores na tarefa #${tid} devido a erros de infraestrutura/timeout.`,
+            "done"
+          );
           fallbackAttempts.delete(tid);
           return; // Stop and don't retry
       }
@@ -330,12 +338,11 @@ const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? dri
           fallbackAttempts.set(tid, attempts);
 
           if (attempts <= MAX_FALLBACK_ATTEMPTS) {
-              addEvent(`[Fallback] Erro transiente em #${tid}: ${desc}. Tentando novamente... (${attempts}/${MAX_FALLBACK_ATTEMPTS})`);
-              if (t.assignedTo) {
-                  addTerminalLine(t.assignedTo, tid, "stderr", `⚠️ Erro transiente detectado. Acionando Fallback (${attempts}/${MAX_FALLBACK_ATTEMPTS}): ${desc}`);
-                  updateAgent(t.assignedTo, { status: "idle", assignedTask: null });
-                  updateTask(tid, { assignedTo: null, lane: "backlog", interrupted: true }); // Will be picked up again
-              }
+              terminateTask(
+                `⚠️ Erro transiente detectado. Acionando Fallback (${attempts}/${MAX_FALLBACK_ATTEMPTS}): ${desc}`,
+                `[Fallback] Erro transiente em #${tid}: ${desc}. Tentando novamente... (${attempts}/${MAX_FALLBACK_ATTEMPTS})`,
+                "backlog"
+              );
               return; // Stop normal bug flow
           } else {
               addEvent(`[Fallback] Falha na tarefa #${tid} após ${MAX_FALLBACK_ATTEMPTS} tentativas.`);
@@ -354,12 +361,13 @@ const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? dri
         console.warn(`Bug rate limit reached for task #${tid}`);
         return;
       }
-      addEvent(`BUG encontrado em #${tid}: ${desc}`);
-      if (t.assignedTo) {
-        addTerminalLine(t.assignedTo, tid, "stderr", `❌ Bug: ${desc}`);
-        updateAgent(t.assignedTo, { status: "idle", assignedTask: null });
-        updateTask(tid, { assignedTo: null, lane: "backlog", interrupted: true });
-      }
+
+      terminateTask(
+         `❌ Bug: ${desc}`,
+         `BUG encontrado em #${tid}: ${desc}`,
+         "backlog"
+      );
+
       // Only create bug task if under limit
       DB.createTask({
         title: `Bug: ${desc.substring(0, 100)}`,
