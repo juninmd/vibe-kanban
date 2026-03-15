@@ -22,7 +22,7 @@ export interface Agent {
   role: string;
   model: string;
   category: string;
-  status: "idle" | "working";
+    status: "idle" | "working" | "error";
   assignedTask: number | null;
   tool?: string;
   terminalId?: string;

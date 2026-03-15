@@ -2,6 +2,7 @@ import { Task, Agent, LLMDriver, DriverContext } from "../types.js";
 import { spawn } from "child_process";
 import { isCommandAvailable } from "../utils/commandUtils.js";
 import { logDebugBlock, logDebugCommand } from "./debugLogging.js";
+import { createStallDetector, STALL_MESSAGE } from "../utils/overseerUtils.js";
 
 export class CopilotDriver implements LLMDriver {
    name: string = "Copilot CLI";
@@ -20,8 +21,10 @@ export class CopilotDriver implements LLMDriver {
       ctx.onLog(task.id, `Running: ${cmd} ${args.join(" ")}`);
 
       const child = spawn(cmd, args, { shell: true });
+      const stallDetector = createStallDetector(child, 120);
 
       child.stdout.on("data", (data) => {
+         stallDetector.update();
          ctx.onLog(task.id, data.toString());
       });
 
@@ -35,7 +38,12 @@ export class CopilotDriver implements LLMDriver {
       });
 
       child.on("close", (code) => {
-         if (code === 0) {
+         stallDetector.stop();
+
+         if (stallDetector.wasStalled()) {
+            ctx.onLog(task.id, STALL_MESSAGE);
+            ctx.onBugFound(task.id, STALL_MESSAGE);
+         } else if (code === 0) {
             ctx.onComplete(task.id);
          }
       });
