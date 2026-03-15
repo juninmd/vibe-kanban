@@ -2,6 +2,7 @@ import type { ChildProcess } from "node:child_process";
 
 export const STUCK_MESSAGE = "Provider killed: no git changes detected within the stuck threshold. Eligible for fallback.";
 export const TIMEOUT_MESSAGE = "Provider killed: exceeded session_timeout. Eligible for fallback.";
+export const STALL_MESSAGE = "Provider killed: output stalled. Eligible for fallback.";
 
 export interface ErrorLoopDetectorHandle {
 	check(text: string): void;
@@ -43,6 +44,50 @@ export function createErrorLoopDetector(
 		},
 		wasKilled() {
 			return killed;
+		},
+	};
+}
+
+export interface StallDetectorHandle {
+	update(): void;
+	stop(): void;
+	wasStalled(): boolean;
+}
+
+export function createStallDetector(
+	proc: ChildProcess,
+	timeoutSeconds = 120, // default 2 minutes
+): StallDetectorHandle {
+	if (!timeoutSeconds || timeoutSeconds <= 0) {
+		return { update() {}, stop() {}, wasStalled: () => false };
+	}
+
+	let stalled = false;
+	let timer: NodeJS.Timeout | null = null;
+
+	const resetTimer = () => {
+		if (timer) clearTimeout(timer);
+		if (stalled) return; // Already killed
+		timer = setTimeout(() => {
+			stalled = true;
+			try {
+				if (proc.kill) proc.kill("SIGTERM");
+			} catch (e) {}
+		}, timeoutSeconds * 1000);
+	};
+
+	// start initially
+	resetTimer();
+
+	return {
+		update() {
+			resetTimer();
+		},
+		stop() {
+			if (timer) clearTimeout(timer);
+		},
+		wasStalled() {
+			return stalled;
 		},
 	};
 }

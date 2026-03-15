@@ -88,6 +88,7 @@ function addTerminalLine(agentId: string, taskId: number | null, type: string, c
 const bugCounts = new Map<number, number>();
 const activeTaskDrivers = new Map<number, LLMDriver>();
 const fallbackAttempts = new Map<number, number>();
+const agentExhaustionCount = new Map<string, number>();
 const MAX_FALLBACK_ATTEMPTS = 3;
 
 // Helper to keep local state and DB in sync
@@ -142,6 +143,14 @@ function addEvent(text: string) {
 
 function getTask(id: number) { return DB.getTask(id); }
 function getAgent(id: string) { return DB.getAgent(id); }
+
+function terminateTask(taskId: number, lane: "backlog" | "done", interrupted: boolean) {
+  const task = getTask(taskId);
+  if (task && task.assignedTo) {
+    updateAgent(task.assignedTo, { status: "idle", assignedTask: null });
+  }
+  updateTask(taskId, { assignedTo: null, lane, interrupted });
+}
 
 function resolveDriverForAgent(agent?: Agent | null): LLMDriver {
   if (agent?.tool && drivers[agent.tool]) {
@@ -291,8 +300,7 @@ const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? dri
             }
         }
 
-        updateAgent(t.assignedTo, { status: "idle", assignedTask: null });
-        updateTask(tid, { assignedTo: null, lane: "done" });
+        terminateTask(tid, "done", false);
         addEvent(`Tarefa #${tid} concluída!`);
         bugCounts.delete(tid);
       }
@@ -314,20 +322,33 @@ const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? dri
           const attempts = (fallbackAttempts.get(tid) || 0) + 1;
           fallbackAttempts.set(tid, attempts);
 
-          if (attempts <= MAX_FALLBACK_ATTEMPTS) {
-              addEvent(`[Fallback] Erro transiente em #${tid}: ${desc}. Tentando novamente... (${attempts}/${MAX_FALLBACK_ATTEMPTS})`);
-              if (t.assignedTo) {
-                  addTerminalLine(t.assignedTo, tid, "stderr", `⚠️ Erro transiente detectado. Acionando Fallback (${attempts}/${MAX_FALLBACK_ATTEMPTS}): ${desc}`);
-                  updateAgent(t.assignedTo, { status: "idle", assignedTask: null });
-                  updateTask(tid, { assignedTo: null, lane: "backlog", interrupted: true }); // Will be picked up again
+          const isCompleteProviderExhaustion = attempts > MAX_FALLBACK_ATTEMPTS && attemptIndex >= providerChain.length - 1;
+
+          if (!isCompleteProviderExhaustion) {
+              if (attempts <= MAX_FALLBACK_ATTEMPTS) {
+                  addEvent(`[Fallback] Erro transiente em #${tid}: ${desc}. Tentando novamente... (${attempts}/${MAX_FALLBACK_ATTEMPTS})`);
+                  if (t.assignedTo) {
+                      addTerminalLine(t.assignedTo, tid, "stderr", `⚠️ Erro transiente detectado. Acionando Fallback (${attempts}/${MAX_FALLBACK_ATTEMPTS}): ${desc}`);
+                      terminateTask(tid, "backlog", true); // Will be picked up again
+                  }
+                  return; // Stop normal bug flow
               }
-              return; // Stop normal bug flow
           } else {
               addEvent(`[Fallback] Falha na tarefa #${tid} após ${MAX_FALLBACK_ATTEMPTS} tentativas.`);
               if (t.assignedTo) {
-                  addTerminalLine(t.assignedTo, tid, "stderr", `❌ Exaustão de provedor após ${MAX_FALLBACK_ATTEMPTS} tentativas: ${desc}`);
+                  addTerminalLine(t.assignedTo, tid, "stderr", `❌ Exaustão completa de provedores. Tarefa não pode ser concluída: ${desc}`);
+                  const currentExhaustions = (agentExhaustionCount.get(t.assignedTo) || 0) + 1;
+                  agentExhaustionCount.set(t.assignedTo, currentExhaustions);
+
+                  if (currentExhaustions >= 3) {
+                      addTerminalLine(t.assignedTo, tid, "system", `❌ Agente entrou em estado de ERRO após sucessivas exaustões.`);
+                      updateAgent(t.assignedTo, { status: "error" });
+                  }
               }
+
               fallbackAttempts.delete(tid); // Clean up on ultimate failure
+              terminateTask(tid, "done", false); // Unassigns and sets to done
+              return; // Stop normal bug flow
           }
       }
 
@@ -342,8 +363,7 @@ const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? dri
       addEvent(`BUG encontrado em #${tid}: ${desc}`);
       if (t.assignedTo) {
         addTerminalLine(t.assignedTo, tid, "stderr", `❌ Bug: ${desc}`);
-        updateAgent(t.assignedTo, { status: "idle", assignedTask: null });
-        updateTask(tid, { assignedTo: null, lane: "backlog", interrupted: true });
+        terminateTask(tid, "backlog", true);
       }
       // Only create bug task if under limit
       DB.createTask({
@@ -367,10 +387,7 @@ const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? dri
       }).catch((err: any) => {
         activeTaskDrivers.delete(updatedTask.id);
         addEvent(`Erro ao executar tarefa #${updatedTask.id}: ${err.message}`);
-        if (agent.id) {
-          updateAgent(agent.id, { status: "idle", assignedTask: null });
-        }
-        updateTask(updatedTask.id, { assignedTo: null, lane: "backlog", interrupted: true });
+        terminateTask(updatedTask.id, "backlog", true);
       });
     };
 
@@ -380,10 +397,7 @@ const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? dri
     } catch (err: any) {
       activeTaskDrivers.delete(updatedTask.id);
       addEvent(`Erro ao executar tarefa #${updatedTask.id}: ${err.message}`);
-      if (agent.id) {
-        updateAgent(agent.id, { status: "idle", assignedTask: null });
-      }
-      updateTask(updatedTask.id, { assignedTo: null, lane: "backlog", interrupted: true });
+      terminateTask(updatedTask.id, "backlog", true);
     }
   }, 0);
 }
@@ -729,7 +743,7 @@ const server = createServer(async (req, res) => {
       if (task) {
         const driver = resolveDriverForAgent(existing);
         driver.interruptTask(task);
-        updateTask(task.id, { assignedTo: null, lane: "backlog", interrupted: true });
+        terminateTask(task.id, "backlog", true);
       }
     }
     DB.deleteAgent(agentId);
@@ -932,7 +946,7 @@ const server = createServer(async (req, res) => {
       activeTaskDrivers.delete(task.id);
       // Stop driver
       executeDriver.interruptTask(task);
-      updateTask(task.id, { assignedTo: null, lane: "backlog", interrupted: true });
+      terminateTask(task.id, "backlog", true);
       addEvent(`Tarefa #${taskId} interrompida.`);
     }
     return jsonResponse(res, 200, { task: getTask(taskId) });

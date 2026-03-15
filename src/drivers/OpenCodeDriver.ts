@@ -4,7 +4,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { resolveOpenCodeCommand } from "../utils/commandUtils.js";
 import { stripAnsi } from "../utils/ptyUtils.js";
-import { createErrorLoopDetector, createSessionTimeout, STUCK_MESSAGE, TIMEOUT_MESSAGE } from "../utils/overseerUtils.js";
+import { createErrorLoopDetector, createSessionTimeout, createStallDetector, STUCK_MESSAGE, TIMEOUT_MESSAGE, STALL_MESSAGE } from "../utils/overseerUtils.js";
 import { logDebugBlock, logDebugCommand } from "./debugLogging.js";
 
 const OPENCODE_ERROR_PATTERN = /^Error /;
@@ -105,6 +105,7 @@ content
 
       const sessionTimeout = createSessionTimeout(proc, 5 * 60); // 5 minutes timeout
       const errorLoopDetector = createErrorLoopDetector(proc, OPENCODE_ERROR_PATTERN);
+      const stallDetector = createStallDetector(proc, 120);
 
       let fullOutput = "";
 
@@ -113,6 +114,7 @@ content
          const text = stripAnsi(raw);
          fullOutput += text;
          errorLoopDetector.check(text);
+         stallDetector.update();
 
          ctx.onLog(task.id, text);
       });
@@ -138,6 +140,7 @@ content
 
       proc.on("close", (code) => {
          sessionTimeout.stop();
+         stallDetector.stop();
          this.runningTasks.delete(task.id);
 
          // Parse files
@@ -168,6 +171,9 @@ content
          } else if (errorLoopDetector.wasKilled()) {
             ctx.onLog(task.id, STUCK_MESSAGE);
             ctx.onBugFound(task.id, STUCK_MESSAGE);
+         } else if (stallDetector.wasStalled()) {
+            ctx.onLog(task.id, STALL_MESSAGE);
+            ctx.onBugFound(task.id, STALL_MESSAGE);
          } else if (code === 0) {
             ctx.onLog(task.id, `Process completed. Files created: ${filesCreated}`);
             ctx.onComplete(task.id);
