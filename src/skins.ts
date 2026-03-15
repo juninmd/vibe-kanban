@@ -60,7 +60,7 @@ export function getHeadMaterials(role: string): THREE.Material[] {
     ];
 }
 
-export function getBodyMaterials(role: string, modelName?: string): THREE.Material[] {
+export function getBodyMaterials(role: string, modelName?: string, badgeColorFallback: string = "#555555"): THREE.Material[] {
     const primaryColor = "#1e293b";
 
     const frontTex = createTexture(256, 256, (ctx) => {
@@ -72,6 +72,10 @@ export function getBodyMaterials(role: string, modelName?: string): THREE.Materi
             const rectWidth = 180;
             const rectHeight = 60;
             const rectY = 98; // Center on chest
+
+            // Badge Background
+            ctx.fillStyle = roleColors[role] || badgeColorFallback;
+            ctx.fillRect(128 - rectWidth / 2, rectY, rectWidth, rectHeight);
 
             // Text on chest
             ctx.fillStyle = "#ffffff";
