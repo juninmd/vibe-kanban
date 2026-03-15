@@ -45,6 +45,8 @@ export class CopilotDriver implements LLMDriver {
             ctx.onBugFound(task.id, STALL_MESSAGE);
          } else if (code === 0) {
             ctx.onComplete(task.id);
+         } else {
+            ctx.onBugFound(task.id, `Copilot CLI exited with code ${code}`);
          }
       });
 
