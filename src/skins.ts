@@ -120,7 +120,7 @@ export function getBodyMaterials(role: string, modelName?: string, badgeColorFal
     ];
 }
 
-export function getLimbMaterial(role?: string): THREE.Material {
+export function getLimbMaterial(_role?: string): THREE.Material {
     const color = '#1f2937'; // Dark Pants for everyone to match dark body
     return new THREE.MeshStandardMaterial({ color });
 }
