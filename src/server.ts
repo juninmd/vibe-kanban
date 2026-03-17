@@ -61,6 +61,9 @@ function initializeState(): State {
   };
 }
 
+// Initialize the state when the server starts
+initializeState();
+
 // SSE Clients
 let clients: { id: string; res: any }[] = [];
 let broadcastScheduled = false;
