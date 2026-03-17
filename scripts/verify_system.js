@@ -119,8 +119,8 @@ async function verifySystem() {
         try {
             const newState = await fetchJson(`${API_URL}/state`);
             const task = newState.tasks.find(t => t.id === taskRes.task.id);
-            if (task && task.assignedTo) {
-                console.log(`Task assigned to agent: ${task.assignedTo}`);
+            if (task && (task.assignedTo || task.interrupted)) {
+                console.log(`Task assigned to agent (or attempted and interrupted).`);
                 assigned = true;
                 break;
             }

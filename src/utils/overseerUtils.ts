@@ -150,7 +150,7 @@ export function startOverseer(
 	proc: ChildProcess,
 	cwd: string,
 	config: OverseerConfig,
-	getSnapshot: (cwd: string) => Promise<string> = getGitSnapshot,
+	getSnapshot: (cwd: string) => Promise<string | null> = getGitSnapshot,
 ): OverseerHandle {
 	if (!config.enabled) {
 		return {
@@ -162,7 +162,7 @@ export function startOverseer(
 	}
 
 	let killed = false;
-	let lastSnapshot: string | undefined;
+	let lastSnapshot: string | null | undefined;
 	let lastChangeTime = Date.now();
 	let timer: ReturnType<typeof setInterval> | null = null;
 
