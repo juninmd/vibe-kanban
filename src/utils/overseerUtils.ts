@@ -134,7 +134,7 @@ export interface OverseerHandle {
 	wasKilled(): boolean;
 }
 
-export async function getGitSnapshot(cwd: string): Promise<string> {
+export async function getGitSnapshot(cwd: string): Promise<string | null> {
 	try {
 		const { stdout } = await execFileAsync("git", ["status", "--porcelain"], {
 			cwd,
@@ -142,7 +142,7 @@ export async function getGitSnapshot(cwd: string): Promise<string> {
 		});
 		return stdout;
 	} catch {
-		return "";
+		return null;
 	}
 }
 
