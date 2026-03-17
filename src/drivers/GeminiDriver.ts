@@ -6,7 +6,7 @@ import * as path from "path";
 import { getProjectContext, extractAndWriteFiles } from "../utils/fileUtils.js";
 import { isCommandAvailable, getGlobalCommandPath } from "../utils/commandUtils.js";
 import { spawnWithPty, stripAnsi } from "../utils/ptyUtils.js";
-import { createErrorLoopDetector, createSessionTimeout, createStallDetector, STUCK_MESSAGE, TIMEOUT_MESSAGE, STALL_MESSAGE } from "../utils/overseerUtils.js";
+import { createErrorLoopDetector, createSessionTimeout, createStallDetector, STUCK_MESSAGE, TIMEOUT_MESSAGE, STALL_MESSAGE, ERROR_LOOP_MESSAGE, startOverseer } from "../utils/overseerUtils.js";
 import { logDebugBlock, logDebugCommand } from "./debugLogging.js";
 
 // Gemini-specific: these prefixes appear on every failed tool call and API error
@@ -129,6 +129,7 @@ content
          const sessionTimeout = createSessionTimeout(proc, 5 * 60); // 5 minutes timeout
          const errorLoopDetector = createErrorLoopDetector(proc, GEMINI_ERROR_PATTERN);
          const stallDetector = createStallDetector(proc, 120);
+         const overseer = startOverseer(proc, basePath, { enabled: true, check_interval: 30, stuck_threshold: 300 });
 
          proc.stdout?.on("data", (chunk: Buffer) => {
             const raw = chunk.toString();
@@ -168,6 +169,7 @@ content
          proc.on("close", (code) => {
             sessionTimeout.stop();
             stallDetector.stop();
+            overseer.stop();
             this.runningTasks.delete(task.id);
             try {
                fs.rmSync(tmpDir, { recursive: true, force: true });
@@ -177,9 +179,13 @@ content
                ctx.onLog(task.id, TIMEOUT_MESSAGE);
                ctx.onBugFound(task.id, TIMEOUT_MESSAGE);
                return;
-            } else if (errorLoopDetector.wasKilled()) {
+            } else if (overseer.wasKilled()) {
                ctx.onLog(task.id, STUCK_MESSAGE);
                ctx.onBugFound(task.id, STUCK_MESSAGE);
+               return;
+            } else if (errorLoopDetector.wasKilled()) {
+               ctx.onLog(task.id, ERROR_LOOP_MESSAGE);
+               ctx.onBugFound(task.id, ERROR_LOOP_MESSAGE);
                return;
             } else if (stallDetector.wasStalled()) {
                ctx.onLog(task.id, STALL_MESSAGE);
