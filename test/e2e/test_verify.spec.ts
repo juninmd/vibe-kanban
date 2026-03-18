@@ -13,7 +13,7 @@ test('capture 3D kanban screenshot', async ({ page }) => {
   await page.waitForTimeout(500);
   await page.selectOption('#agentTool', { index: 1 });
   await page.waitForTimeout(500);
-  await page.selectOption('#agentModel', { index: 1 });
+  await page.selectOption('#agentModel', { index: 0 });
   await page.click('#agentSubmitBtn');
 
   // Wait for 3D scene to render the new agent
