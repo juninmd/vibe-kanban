@@ -69,6 +69,10 @@ export function getBodyMaterials(role: string, modelName?: string, badgeColorFal
         ctx.fillRect(0, 0, 256, 256);
 
         if (modelName) {
+            // Need to rotate 180 and mirror because face index 4 of BoxGeometry might have different UV mapping.
+            // Oh actually, maybe the UV mapping of front face (index 4) maps differently.
+            // Wait, standard BoxGeometry maps the entire 256x256 texture. If the text is not visible, maybe it's drawn on the BACK of the box!
+            // Let's draw it everywhere (on the entire texture) or use a different BoxGeometry face.
             const rectWidth = 180;
             const rectHeight = 60;
             const rectY = 98; // Center on chest
@@ -83,12 +87,12 @@ export function getBodyMaterials(role: string, modelName?: string, badgeColorFal
             ctx.textBaseline = "middle";
 
             let fontSize = 26;
-            ctx.font = `bold ${fontSize}px 'Share Tech Mono', monospace`;
+            ctx.font = `bold ${fontSize}px sans-serif`;
 
             // Handle long text by wrapping to next line
             if (ctx.measureText(modelName).width > rectWidth - 10) {
                 fontSize = 18;
-                ctx.font = `bold ${fontSize}px 'Share Tech Mono', monospace`;
+                ctx.font = `bold ${fontSize}px sans-serif`;
 
                 // naive split
                 const mid = Math.floor(modelName.length / 2);
@@ -110,13 +114,15 @@ export function getBodyMaterials(role: string, modelName?: string, badgeColorFal
     const mat = new THREE.MeshStandardMaterial({ color: primaryColor });
     const frontMat = new THREE.MeshStandardMaterial({ map: frontTex });
 
+    // BoxGeometry mapping:
+    // 0: Right, 1: Left, 2: Top, 3: Bottom, 4: Front, 5: Back
     return [
-        mat, // Right
-        mat, // Left
-        mat, // Top
-        mat, // Bottom
+        mat,      // Right
+        mat,      // Left
+        mat,      // Top
+        mat,      // Bottom
         frontMat, // Front
-        mat  // Back
+        frontMat  // Back
     ];
 }
 
