@@ -1721,6 +1721,7 @@ function createAgentMesh(agent: Agent, index: number) {
     // Body (wider and thicker to fit the chest label better)
     const bodyGeo = new THREE.BoxGeometry(0.6, 0.7, 0.3);
     const bodyMats = getBodyMaterials(agent.role, agent.model, badgeColor);
+
     const body = new THREE.Mesh(bodyGeo, bodyMats);
     body.position.y = 0.85; // Raised slightly due to height increase
     group.add(body);
@@ -1839,8 +1840,18 @@ function updateAgents3D() {
       // Logic for celebrating happens inside tick() loop, just skip overriding it here.
     } else if (agent.status === "working") {
       if (item.phase === "idle" || item.phase === "walking_from_desk") {
-        item.phase = "walking_to_desk";
-        item.target.copy(deskPos);
+        item.phase = "walking_to_board";
+        const boardTarget = new THREE.Vector3(-4 + idx * 1.5, 0, -3.0);
+        item.target.copy(boardTarget);
+      } else if (item.phase === "walking_to_board") {
+        const boardTarget = new THREE.Vector3(-4 + idx * 1.5, 0, -3.0);
+        item.target.copy(boardTarget);
+        if (item.group.position.distanceTo(item.target) < 0.5) {
+          item.phase = "walking_to_desk";
+          item.target.copy(deskPos);
+        } else {
+          playAction(item, "Walking");
+        }
       } else if (item.phase === "walking_to_desk") {
         item.target.copy(deskPos);
         if (item.group.position.distanceTo(item.target) < 0.5) {
