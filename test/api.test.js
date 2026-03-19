@@ -233,4 +233,34 @@ describe('Vibe Kanban API', async () => {
     const text = await res.text();
     assert.ok(text.includes('Vibe Kanban'), 'Should contain title');
   });
+
+  test('GET /api/tooling/landscape returns tooling and vcs insights', async () => {
+    const res = await fetch(`${API_URL}/api/tooling/landscape`);
+    assert.equal(res.status, 200);
+    const data = await res.json();
+
+    assert.equal(typeof data.detectedAt, 'string');
+    assert.ok(Array.isArray(data.tools));
+    assert.ok(Array.isArray(data.vcsProviders));
+    assert.ok(Array.isArray(data.businessRecommendations));
+  });
+
+  test('POST /api/demands/intake enriches remote demand with business requirements', async () => {
+    const res = await fetch(`${API_URL}/api/demands/intake`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: 'Orquestrar entregas remotas em SaaS',
+        description: 'Fluxo para segurança e multi-tenant',
+        repoUrl: 'https://github.com/acme/vibe-kanban'
+      })
+    });
+
+    assert.equal(res.status, 200);
+    const data = await res.json();
+    assert.equal(data.demand.provider, 'github');
+    assert.ok(Array.isArray(data.businessRequirements));
+    assert.ok(data.businessRequirements.length >= 3);
+    assert.ok(data.acceptanceCriteria.some((item) => item.includes('PR/MR')));
+  });
 });

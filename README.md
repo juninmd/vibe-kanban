@@ -73,4 +73,28 @@ This project adheres to the **Antigravity** engineering standards:
 
 ---
 
-> Visualize the workflow, feel the vibe.
+> Regra: este projeto não deve introduzir drivers fictícios (MockDriver, stubs, fakes etc.). Se a CLI/API não estiver instalada ou configurada, o comportamento esperado é falhar de forma explícita ou pular os testes, nunca simular a ferramenta.
+
+## Gestão de demandas remotas (SaaS)
+
+Novos endpoints para acelerar operação como plataforma SaaS:
+
+- `GET /api/tooling/landscape`: inventário automático de CLIs/APIs detectadas, modelos disponíveis e status de integração GitHub/GitLab.
+- `POST /api/demands/intake`: enriquece uma demanda com plano de execução remoto, requisitos de negócio e critérios de aceite para PR/MR.
+
+Exemplo rápido:
+
+```bash
+curl -X POST http://localhost:5174/api/demands/intake \
+  -H 'Content-Type: application/json' \
+  -d '{"title":"Escalar operação multi-tenant","description":"Entregas com foco em segurança","repoUrl":"https://gitlab.com/acme/platform"}'
+```
+
+## Próximos passos sugeridos
+
+1. [x] Persistência em banco (SQLite).
+2. [x] Limpeza de tarefas concluídas.
+3. [x] Execução real de agentes via CLIs/SDKs (sem drivers de simulação).
+4. WebSocket para atualizações em tempo real multiusuário (atualmente usa SSE).
+5. Simulação de movimento no espaço 3D com animação por pathfinding (atualmente interpolação simples).
+6. Integração com backlog externo (GitHub/Jira/Linear).

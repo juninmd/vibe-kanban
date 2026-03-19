@@ -18,6 +18,8 @@ import { isCommandAvailable } from "./utils/commandUtils.js";
 import { buildProviderChain, isEligibleForProviderFallback } from "./drivers/providerFallback.js";
 import { getAvailableTools } from "./providers.js";
 import { isEligibleForFallback } from "./utils/fallbackUtils.js";
+import { getToolingLandscape } from "./utils/toolingLandscape.js";
+import { enrichDemand } from "./utils/demandIntake.js";
 import { prepareWorktree, cleanupWorktree } from "./utils/worktreeUtils.js";
 import "dotenv/config";
 
@@ -697,6 +699,28 @@ const server = createServer(async (req, res) => {
     }
 
     return jsonResponse(res, 200, { models });
+  }
+
+  // GET /api/tooling/landscape
+  if (url === "/api/tooling/landscape" && method === "GET") {
+    return jsonResponse(res, 200, getToolingLandscape());
+  }
+
+  // POST /api/demands/intake
+  if (url === "/api/demands/intake" && method === "POST") {
+    const body = await parseBody(req);
+    if (!body?.title || typeof body.title !== "string") {
+      return jsonResponse(res, 400, { error: "title is required" });
+    }
+
+    const intake = enrichDemand({
+      title: body.title,
+      description: typeof body.description === "string" ? body.description : undefined,
+      repoUrl: typeof body.repoUrl === "string" ? body.repoUrl : undefined
+    });
+
+    addEvent(`[DemandIntake] Nova demanda enriquecida: ${body.title}`);
+    return jsonResponse(res, 200, intake);
   }
 
   // POST /api/agents (Create dynamic agent)
