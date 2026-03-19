@@ -4,6 +4,29 @@ import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 
+/** Grace period (ms) between SIGTERM and SIGKILL escalation. */
+const SIGKILL_GRACE_MS = 10_000;
+
+/**
+ * Sends SIGTERM to a process and escalates to SIGKILL if it doesn't exit
+ * within the grace period.
+ */
+export function killWithEscalation(proc: ChildProcess): void {
+	if (proc.kill) {
+		proc.kill("SIGTERM");
+		const escalation = setTimeout(() => {
+			try {
+				proc.kill("SIGKILL");
+			} catch {
+				// Process may already be dead
+			}
+		}, SIGKILL_GRACE_MS);
+		if (escalation && typeof escalation === "object" && "unref" in escalation) {
+			escalation.unref();
+		}
+	}
+}
+
 export const STUCK_MESSAGE = "\n[lisa-overseer] Provider killed: no git changes detected within the stuck threshold. Eligible for fallback.\n";
 export const TIMEOUT_MESSAGE = "\n[lisa-timeout] Provider killed: exceeded session_timeout. Eligible for fallback.\n";
 export const STALL_MESSAGE = "\n[lisa-stall] Provider killed: output stalled. Eligible for fallback.\n";
@@ -36,7 +59,7 @@ export function createErrorLoopDetector(
 				if (pattern.test(trimmed)) {
 					if (++consecutive >= threshold) {
 						killed = true;
-						if (proc.kill) proc.kill("SIGTERM");
+						killWithEscalation(proc);
 						return;
 					}
 				} else {
@@ -73,7 +96,7 @@ export function createStallDetector(
 		timer = setTimeout(() => {
 			stalled = true;
 			try {
-				if (proc.kill) proc.kill("SIGTERM");
+				killWithEscalation(proc);
 			} catch (e) {}
 		}, timeoutSeconds * 1000);
 	};
@@ -110,7 +133,7 @@ export function createSessionTimeout(
 	let timedOut = false;
 	const timer = setTimeout(() => {
 		timedOut = true;
-		if (proc.kill) proc.kill("SIGTERM");
+		killWithEscalation(proc);
 	}, timeoutSeconds * 1000);
 
 	return {
@@ -194,7 +217,7 @@ export function startOverseer(
 					clearInterval(timer);
 					timer = null;
 				}
-				if (proc.kill) proc.kill("SIGTERM");
+				killWithEscalation(proc);
 			}
 		} catch {
 			// Ignore monitoring errors — do not interrupt the provider
