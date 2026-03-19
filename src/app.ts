@@ -975,6 +975,8 @@ els.fullscreenBtn.addEventListener("click", () => {
     els.view3d.classList.remove("active");
   } else {
     els.fullscreenBtn.textContent = "Tela Cheia Kanban";
+    els.view3d.classList.add("active");
+    els.view2d.classList.remove("active");
   }
 });
 
@@ -1692,6 +1694,8 @@ function playAction(item: any, name: string, duration = 0.5) {
 function createAgentMesh(agent: Agent, index: number) {
   const group = new THREE.Group();
   group.userData.agentId = agent.id;
+  group.userData.model = agent.model;
+  group.userData.role = agent.role;
 
   const roleColors: Record<string, string> = {
     "Product Manager": "#111111", // Black turtleneck
@@ -1807,8 +1811,37 @@ function updateAgents3D() {
     }
   }
 
-  // Check if we need to create meshes for new agents
+  // Check if we need to create meshes for new agents or update existing ones
   agents.forEach((agent, idx) => {
+    const existing = agentMeshes.get(agent.id);
+    if (existing) {
+      if (existing.group.userData.model !== agent.model || existing.group.userData.role !== agent.role) {
+        if (existing.laser) {
+          scene.remove(existing.laser);
+          existing.laser.geometry.dispose();
+          (existing.laser.material as THREE.Material).dispose();
+        }
+        scene.remove(existing.group);
+        existing.group.traverse((child: any) => {
+          if (child.isMesh) {
+            if (child.geometry) child.geometry.dispose();
+            if (child.material) {
+              if (Array.isArray(child.material)) {
+                child.material.forEach((m: any) => {
+                  if (m.map) m.map.dispose();
+                  m.dispose();
+                });
+              } else {
+                if (child.material.map) child.material.map.dispose();
+                child.material.dispose();
+              }
+            }
+          }
+        });
+        agentMeshes.delete(agent.id);
+      }
+    }
+
     if (!agentMeshes.has(agent.id)) {
       const meshData = createAgentMesh(agent, idx);
       agentMeshes.set(agent.id, {
