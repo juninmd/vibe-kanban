@@ -11,10 +11,22 @@ test('capture 3D kanban screenshot', async ({ page }) => {
   await page.fill('#agentRole', 'Novas Funcionalidades');
   await page.selectOption('#agentCategory', 'feature');
   await page.waitForTimeout(500);
-  await page.selectOption('#agentTool', { label: 'Mock Tool' });
+
+  await page.locator('#agentTool').selectOption('mock');
   await page.locator('#agentTool').dispatchEvent('change');
-  await page.waitForSelector("#agentModel option[value]:not([value=''])", { timeout: 10000 });
-  await page.selectOption('#agentModel', { index: 0 });
+
+  const modelSelect = page.locator('#agentModel');
+  await expect(modelSelect).not.toHaveText('Selecione a ferramenta primeiro', { timeout: 10000 });
+  await expect(modelSelect).not.toHaveText('Carregando modelos...', { timeout: 10000 });
+
+  const modelOptions = await modelSelect.locator('option').all();
+  if (modelOptions.length > 0) {
+     const value = await modelOptions[0].getAttribute('value');
+     if (value) {
+        await modelSelect.selectOption(value);
+     }
+  }
+
   await page.click('#agentSubmitBtn');
 
   // Wait for 3D scene to render the new agent
