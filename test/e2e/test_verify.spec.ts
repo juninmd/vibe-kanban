@@ -13,10 +13,7 @@ test('capture 3D kanban screenshot', async ({ page }) => {
   await page.waitForTimeout(500);
   await page.selectOption('#agentTool', { label: 'Mock Tool' });
   await page.locator('#agentTool').dispatchEvent('change');
-  // It should change to "Carregando modelos..." then to actual models.
-  // Wait until it is NOT "Selecione a ferramenta primeiro"
-  await expect(page.locator('#agentModel')).not.toHaveText('Selecione a ferramenta primeiro', { timeout: 10000 });
-  await expect(page.locator('#agentModel')).not.toHaveText('Carregando modelos...', { timeout: 10000 });
+  await page.waitForSelector("#agentModel option[value]:not([value=''])", { timeout: 10000 });
   await page.selectOption('#agentModel', { index: 0 });
   await page.click('#agentSubmitBtn');
 
