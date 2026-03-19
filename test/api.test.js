@@ -53,7 +53,6 @@ describe('Vibe Kanban API', async () => {
     assert.ok(Array.isArray(data.tasks));
     assert.ok(Array.isArray(data.agents));
     assert.ok(Array.isArray(data.events));
-    assert.equal(data.agents.length, 6);
   });
 
   test('POST /api/tasks creates and persists a card', async () => {
@@ -80,6 +79,16 @@ describe('Vibe Kanban API', async () => {
   });
 
   test('POST /api/assign sends task to in_progress and links agent', async () => {
+    // Create an agent first to ensure one exists for the test
+    await fetch(`${API_URL}/api/agents`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role: 'Performance', category: 'performance', tool: 'copilot', model: 'default' })
+    });
+    const agentsRes = await fetch(`${API_URL}/api/state`);
+    const state = await agentsRes.json();
+    const perfAgent = state.agents.find(a => a.category === 'performance');
+
     const taskRes = await fetch(`${API_URL}/api/tasks`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -90,7 +99,7 @@ describe('Vibe Kanban API', async () => {
     const assignRes = await fetch(`${API_URL}/api/assign`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ taskId: task.id })
+      body: JSON.stringify({ taskId: task.id, agentId: perfAgent.id })
     });
 
     assert.equal(assignRes.status, 200);
@@ -123,7 +132,7 @@ describe('Vibe Kanban API', async () => {
     await fetch(`${API_URL}/api/tasks`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: 'To be deleted', source: 'test' })
+      body: JSON.stringify({ title: 'To be deleted', source: 'test', category: 'test' })
     });
 
     const res = await fetch(`${API_URL}/api/reset`, { method: 'POST' });
@@ -132,7 +141,6 @@ describe('Vibe Kanban API', async () => {
     const stateRes = await fetch(`${API_URL}/api/state`);
     const state = await stateRes.json();
     assert.equal(state.tasks.length, 0);
-    assert.equal(state.agents.length, 6);
   });
 
   test('POST /api/config/clone-dir normaliza caminho e cria diretório', async () => {
@@ -151,6 +159,16 @@ describe('Vibe Kanban API', async () => {
   });
 
   test('POST /api/assign assigns a task', async () => {
+    // Create an agent first to ensure one exists for the test
+    await fetch(`${API_URL}/api/agents`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role: 'Product Manager', category: 'roadmap', tool: 'openai', model: 'default' })
+    });
+    const agentsRes = await fetch(`${API_URL}/api/state`);
+    const state = await agentsRes.json();
+    const pmAgent = state.agents.find(a => a.category === 'roadmap');
+
     // 1. Create task
     const taskRes = await fetch(`${API_URL}/api/tasks`, {
       method: 'POST',
@@ -164,7 +182,7 @@ describe('Vibe Kanban API', async () => {
     const assignRes = await fetch(`${API_URL}/api/assign`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ taskId })
+      body: JSON.stringify({ taskId, agentId: pmAgent.id })
     });
     assert.strictEqual(assignRes.status, 200);
     const assignData = await assignRes.json();

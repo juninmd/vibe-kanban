@@ -2,6 +2,7 @@ import { Task, Agent, LLMDriver, DriverContext } from "../types.js";
 import * as fs from "fs";
 import * as path from "path";
 import { getProjectContext, extractAndWriteFiles } from "../utils/fileUtils.js";
+import { logDebugBlock } from "./debugLogging.js";
 
 export class OpenAIDriver implements LLMDriver {
    name: string = "OpenAI API";
@@ -47,6 +48,12 @@ print("Hello World")
 Do not output hypothetical logs. Output the actual file content needed to solve the task.`;
 
       ctx.onLog(task.id, `Starting OpenAI Agent with model ${agent.model || "gpt-4o"}...`);
+      logDebugBlock(
+         ctx,
+         task.id,
+         "OPENAI MESSAGES",
+         `SYSTEM:\nYou are a helpful coding assistant.\n\nUSER:\n${prompt}`,
+      );
 
       try {
           const res = await fetch("https://api.openai.com/v1/chat/completions", {

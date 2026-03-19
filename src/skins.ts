@@ -40,17 +40,9 @@ export function getHeadMaterials(role: string): THREE.Material[] {
 
         // Eyes (Minecraft style - 2x2 pixels equivalent)
         ctx.fillStyle = '#000000';
-        if (role === 'Product Manager') {
-            // Glasses
-            ctx.fillStyle = '#333';
-            ctx.fillRect(8, 32, 20, 8);
-            ctx.fillRect(36, 32, 20, 8);
-            ctx.fillRect(28, 34, 8, 2);
-        } else {
-            // Simple eyes
-            ctx.fillRect(16, 36, 8, 8);
-            ctx.fillRect(40, 36, 8, 8);
-        }
+        // Simple eyes
+        ctx.fillRect(16, 36, 8, 8);
+        ctx.fillRect(40, 36, 8, 8);
     });
 
     const hairMat = new THREE.MeshStandardMaterial({ color: hairColor });
@@ -68,24 +60,26 @@ export function getHeadMaterials(role: string): THREE.Material[] {
     ];
 }
 
-export function getBodyMaterials(role: string, modelName?: string, badgeColor?: string): THREE.Material[] {
-    const primaryColor = roleColors[role] || "#1e293b";
+export function getBodyMaterials(role: string, modelName?: string, badgeColorFallback: string = "#555555"): THREE.Material[] {
+    const primaryColor = "#1e293b";
 
     const frontTex = createTexture(256, 256, (ctx) => {
         // Shirt base
         ctx.fillStyle = primaryColor;
         ctx.fillRect(0, 0, 256, 256);
 
-        if (modelName && badgeColor) {
-            // Simple colored chest rectangle matching screenshot
-            ctx.fillStyle = badgeColor;
-
+        if (modelName) {
+            // Need to rotate 180 and mirror because face index 4 of BoxGeometry might have different UV mapping.
+            // Oh actually, maybe the UV mapping of front face (index 4) maps differently.
+            // Wait, standard BoxGeometry maps the entire 256x256 texture. If the text is not visible, maybe it's drawn on the BACK of the box!
+            // Let's draw it everywhere (on the entire texture) or use a different BoxGeometry face.
             const rectWidth = 180;
             const rectHeight = 60;
-            const rectX = (256 - rectWidth) / 2;
             const rectY = 98; // Center on chest
 
-            ctx.fillRect(rectX, rectY, rectWidth, rectHeight);
+            // Badge Background
+            ctx.fillStyle = roleColors[role] || badgeColorFallback;
+            ctx.fillRect(128 - rectWidth / 2, rectY, rectWidth, rectHeight);
 
             // Text on chest
             ctx.fillStyle = "#ffffff";
@@ -93,12 +87,12 @@ export function getBodyMaterials(role: string, modelName?: string, badgeColor?: 
             ctx.textBaseline = "middle";
 
             let fontSize = 26;
-            ctx.font = `bold ${fontSize}px 'Share Tech Mono', monospace`;
+            ctx.font = `bold ${fontSize}px sans-serif`;
 
             // Handle long text by wrapping to next line
             if (ctx.measureText(modelName).width > rectWidth - 10) {
                 fontSize = 18;
-                ctx.font = `bold ${fontSize}px 'Share Tech Mono', monospace`;
+                ctx.font = `bold ${fontSize}px sans-serif`;
 
                 // naive split
                 const mid = Math.floor(modelName.length / 2);
@@ -120,17 +114,19 @@ export function getBodyMaterials(role: string, modelName?: string, badgeColor?: 
     const mat = new THREE.MeshStandardMaterial({ color: primaryColor });
     const frontMat = new THREE.MeshStandardMaterial({ map: frontTex });
 
+    // BoxGeometry mapping:
+    // 0: Right, 1: Left, 2: Top, 3: Bottom, 4: Front, 5: Back
     return [
-        mat, // Right
-        mat, // Left
-        mat, // Top
-        mat, // Bottom
+        mat,      // Right
+        mat,      // Left
+        mat,      // Top
+        mat,      // Bottom
         frontMat, // Front
-        mat  // Back
+        frontMat  // Back
     ];
 }
 
-export function getLimbMaterial(role: string): THREE.Material {
-    const color = role === 'Product Manager' ? '#3b82f6' : '#1f2937'; // Jeans vs Dark Pants
+export function getLimbMaterial(_role?: string): THREE.Material {
+    const color = '#1f2937'; // Dark Pants for everyone to match dark body
     return new THREE.MeshStandardMaterial({ color });
 }

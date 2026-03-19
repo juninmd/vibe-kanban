@@ -14,6 +14,7 @@ export interface Task {
   createdAt: number;
   updatedAt: number;
   workDir?: string;
+  baseRepoDir?: string;
 }
 
 export interface Agent {
@@ -21,7 +22,7 @@ export interface Agent {
   role: string;
   model: string;
   category: string;
-  status: "idle" | "working";
+    status: "idle" | "working" | "error";
   assignedTask: number | null;
   tool?: string;
   terminalId?: string;

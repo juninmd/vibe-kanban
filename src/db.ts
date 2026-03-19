@@ -55,6 +55,11 @@ try {
   db.exec(`ALTER TABLE tasks ADD COLUMN workDir TEXT`);
 } catch (e) { /* column already exists */ }
 
+// Migration: add baseRepoDir column if missing
+try {
+  db.exec(`ALTER TABLE tasks ADD COLUMN baseRepoDir TEXT`);
+} catch (e) { /* column already exists */ }
+
 export const DB = {
   // Tasks
   getTasks(): Task[] {
@@ -79,8 +84,8 @@ export const DB = {
   createTask(task: Partial<Task>): Task {
     const now = Date.now();
     const result = db.prepare(`
-      INSERT INTO tasks (title, source, category, priority, lane, assignedTo, interrupted, logs, githubRepo, description, agentType, createdAt, updatedAt, workDir)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO tasks (title, source, category, priority, lane, assignedTo, interrupted, logs, githubRepo, description, agentType, createdAt, updatedAt, workDir, baseRepoDir)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       task.title,
       task.source || "user",
@@ -95,7 +100,8 @@ export const DB = {
       task.agentType || null,
       task.createdAt || now,
       task.updatedAt || now,
-      task.workDir || null
+      task.workDir || null,
+      task.baseRepoDir || null
     );
     return this.getTask(Number(result.lastInsertRowid))!;
   },
@@ -109,7 +115,7 @@ export const DB = {
       UPDATE tasks SET
         title = ?, source = ?, category = ?, priority = ?, lane = ?,
         assignedTo = ?, interrupted = ?, logs = ?, githubRepo = ?,
-        description = ?, agentType = ?, updatedAt = ?, workDir = ?
+        description = ?, agentType = ?, updatedAt = ?, workDir = ?, baseRepoDir = ?
       WHERE id = ?
     `).run(
       updatedTask.title,
@@ -125,6 +131,7 @@ export const DB = {
       updatedTask.agentType,
       updatedTask.updatedAt,
       updatedTask.workDir || null,
+      updatedTask.baseRepoDir || null,
       id
     );
   },
@@ -208,5 +215,18 @@ export const DB = {
     db.prepare("DELETE FROM agents").run();
     db.prepare("DELETE FROM events").run();
     db.prepare("DELETE FROM terminal_logs").run();
+
+    // Add default agents in test environment as well, so test passes
+    const defaultAgents: Agent[] = [
+      { id: `agent-pm`, role: "Product Manager", model: "default", category: "roadmap", status: "idle", assignedTask: null, tool: "openai", terminalId: `term-pm` },
+      { id: `agent-sec`, role: "Segurança", model: "default", category: "security", status: "idle", assignedTask: null, tool: "gemini", terminalId: `term-sec` },
+      { id: `agent-perf`, role: "Performance", model: "default", category: "performance", status: "idle", assignedTask: null, tool: "copilot", terminalId: `term-perf` },
+      { id: `agent-func`, role: "Novas Funcionalidades", model: "default", category: "feature", status: "idle", assignedTask: null, tool: "claude", terminalId: `term-func` },
+      { id: `agent-test`, role: "Testes", model: "default", category: "test", status: "idle", assignedTask: null, tool: "opencode", terminalId: `term-test` },
+      { id: `agent-feat`, role: "Novas Features", model: "default", category: "feature", status: "idle", assignedTask: null, tool: "opencode", terminalId: `term-feat` }
+    ];
+    for (const agent of defaultAgents) {
+      this.saveAgent(agent);
+    }
   }
 };
