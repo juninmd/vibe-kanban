@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 
-function createTexture(width: number, height: number, drawFn: (ctx: CanvasRenderingContext2D) => void, linearFilter: boolean = false): THREE.CanvasTexture {
+function createTexture(width: number, height: number, drawFn: (ctx: CanvasRenderingContext2D) => void, filter: 'nearest' | 'linear' = 'nearest'): THREE.CanvasTexture {
     const canvas = document.createElement('canvas');
     canvas.width = width;
     canvas.height = height;
@@ -8,12 +8,12 @@ function createTexture(width: number, height: number, drawFn: (ctx: CanvasRender
     drawFn(ctx);
     const tex = new THREE.CanvasTexture(canvas);
     tex.colorSpace = THREE.SRGBColorSpace;
-    if (!linearFilter) {
-        tex.magFilter = THREE.NearestFilter;
-        tex.minFilter = THREE.NearestFilter;
-    } else {
+    if (filter === 'linear') {
         tex.magFilter = THREE.LinearFilter;
         tex.minFilter = THREE.LinearMipmapLinearFilter;
+    } else {
+        tex.magFilter = THREE.NearestFilter;
+        tex.minFilter = THREE.NearestFilter;
     }
     return tex;
 }
@@ -114,7 +114,7 @@ export function getBodyMaterials(role: string, modelName?: string, badgeColorFal
                 ctx.fillText(modelName, 128, rectY + rectHeight / 2 + 2);
             }
         }
-    }, true);
+    }, 'linear');
 
     const mat = new THREE.MeshStandardMaterial({ color: primaryColor });
     const frontMat = new THREE.MeshStandardMaterial({ map: frontTex });
