@@ -9,6 +9,7 @@ def run():
             print("Navigating to page...")
             page.goto(os.environ.get("VERIFICATION_URL", "http://localhost:5174"))
             page.goto(os.environ.get("VERIFICATION_URL", "http://localhost:5174"))
+            page.goto(os.environ.get("VERIFICATION_URL", "http://localhost:5174"))
 
             # Wait for some content to load
             print("Waiting for network idle...")
