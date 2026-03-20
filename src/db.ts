@@ -53,7 +53,9 @@ db.exec(`
 // Migration: add workDir column if missing
 try {
   db.exec(`ALTER TABLE tasks ADD COLUMN workDir TEXT`);
-} catch (e) { /* column already exists */ }
+} catch (e) {
+  /* column already exists */
+}
 
 export const DB = {
   // Tasks
@@ -62,7 +64,7 @@ export const DB = {
     return rows.map((row: any) => ({
       ...row,
       interrupted: !!row.interrupted,
-      logs: JSON.parse(row.logs)
+      logs: JSON.parse(row.logs),
     }));
   },
 
@@ -72,31 +74,35 @@ export const DB = {
     return {
       ...row,
       interrupted: !!row.interrupted,
-      logs: JSON.parse(row.logs)
+      logs: JSON.parse(row.logs),
     };
   },
 
   createTask(task: Partial<Task>): Task {
     const now = Date.now();
-    const result = db.prepare(`
+    const result = db
+      .prepare(
+        `
       INSERT INTO tasks (title, source, category, priority, lane, assignedTo, interrupted, logs, githubRepo, description, agentType, createdAt, updatedAt, workDir)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      task.title,
-      task.source || "user",
-      task.category || "misc",
-      task.priority || "media",
-      task.lane || "backlog",
-      task.assignedTo || null,
-      task.interrupted ? 1 : 0,
-      JSON.stringify(task.logs || []),
-      task.githubRepo || null,
-      task.description || null,
-      task.agentType || null,
-      task.createdAt || now,
-      task.updatedAt || now,
-      task.workDir || null
-    );
+    `,
+      )
+      .run(
+        task.title,
+        task.source || "user",
+        task.category || "misc",
+        task.priority || "media",
+        task.lane || "backlog",
+        task.assignedTo || null,
+        task.interrupted ? 1 : 0,
+        JSON.stringify(task.logs || []),
+        task.githubRepo || null,
+        task.description || null,
+        task.agentType || null,
+        task.createdAt || now,
+        task.updatedAt || now,
+        task.workDir || null,
+      );
     return this.getTask(Number(result.lastInsertRowid))!;
   },
 
@@ -105,13 +111,15 @@ export const DB = {
     if (!task) return;
 
     const updatedTask = { ...task, ...updates, updatedAt: Date.now() };
-    db.prepare(`
+    db.prepare(
+      `
       UPDATE tasks SET
         title = ?, source = ?, category = ?, priority = ?, lane = ?,
         assignedTo = ?, interrupted = ?, logs = ?, githubRepo = ?,
         description = ?, agentType = ?, updatedAt = ?, workDir = ?
       WHERE id = ?
-    `).run(
+    `,
+    ).run(
       updatedTask.title,
       updatedTask.source,
       updatedTask.category,
@@ -125,7 +133,7 @@ export const DB = {
       updatedTask.agentType,
       updatedTask.updatedAt,
       updatedTask.workDir || null,
-      id
+      id,
     );
   },
 
@@ -139,10 +147,12 @@ export const DB = {
   },
 
   saveAgent(agent: Agent): void {
-    db.prepare(`
+    db.prepare(
+      `
       INSERT OR REPLACE INTO agents (id, role, model, category, status, assignedTask, tool, terminalId)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
+    `,
+    ).run(
       agent.id,
       agent.role,
       agent.model,
@@ -150,7 +160,7 @@ export const DB = {
       agent.status,
       agent.assignedTask,
       agent.tool,
-      agent.terminalId
+      agent.terminalId,
     );
   },
 
@@ -164,7 +174,9 @@ export const DB = {
 
   // Events
   getEvents(limit = 50): EventLog[] {
-    return db.prepare("SELECT timestamp, text FROM events ORDER BY id DESC LIMIT ?").all(limit) as EventLog[];
+    return db
+      .prepare("SELECT timestamp, text FROM events ORDER BY id DESC LIMIT ?")
+      .all(limit) as EventLog[];
   },
 
   addEvent(timestamp: string, text: string): void {
@@ -179,20 +191,30 @@ export const DB = {
   // Terminal Logs
   addTerminalLog(agentId: string, taskId: number | null, type: string, content: string): void {
     db.prepare(
-      "INSERT INTO terminal_logs (agentId, taskId, type, content, timestamp) VALUES (?, ?, ?, ?, ?)"
+      "INSERT INTO terminal_logs (agentId, taskId, type, content, timestamp) VALUES (?, ?, ?, ?, ?)",
     ).run(agentId, taskId, type, content, Date.now());
   },
 
-  getTerminalLogs(agentId: string, limit = 200): { type: string; content: string; timestamp: number; taskId: number | null }[] {
-    return db.prepare(
-      "SELECT type, content, timestamp, taskId FROM terminal_logs WHERE agentId = ? ORDER BY id DESC LIMIT ?"
-    ).all(agentId, limit) as any[];
+  getTerminalLogs(
+    agentId: string,
+    limit = 200,
+  ): { type: string; content: string; timestamp: number; taskId: number | null }[] {
+    return db
+      .prepare(
+        "SELECT type, content, timestamp, taskId FROM terminal_logs WHERE agentId = ? ORDER BY id DESC LIMIT ?",
+      )
+      .all(agentId, limit) as any[];
   },
 
-  getTaskTerminalLogs(taskId: number, limit = 500): { type: string; content: string; timestamp: number; agentId: string }[] {
-    return db.prepare(
-      "SELECT type, content, timestamp, agentId FROM terminal_logs WHERE taskId = ? ORDER BY id ASC LIMIT ?"
-    ).all(taskId, limit) as any[];
+  getTaskTerminalLogs(
+    taskId: number,
+    limit = 500,
+  ): { type: string; content: string; timestamp: number; agentId: string }[] {
+    return db
+      .prepare(
+        "SELECT type, content, timestamp, agentId FROM terminal_logs WHERE taskId = ? ORDER BY id ASC LIMIT ?",
+      )
+      .all(taskId, limit) as any[];
   },
 
   clearTerminalLogs(agentId: string): void {
@@ -208,5 +230,5 @@ export const DB = {
     db.prepare("DELETE FROM agents").run();
     db.prepare("DELETE FROM events").run();
     db.prepare("DELETE FROM terminal_logs").run();
-  }
+  },
 };

@@ -3,56 +3,56 @@ import { spawn } from "child_process";
 import { isCommandAvailable } from "../utils/commandUtils.js";
 
 export class CopilotDriver implements LLMDriver {
-   name: string = "Copilot CLI";
-   private runningTasks = new Map<number, any>();
+  name: string = "Copilot CLI";
+  private runningTasks = new Map<number, any>();
 
-   async executeTask(task: Task, agent: Agent, ctx: DriverContext): Promise<void> {
-      if (!isCommandAvailable("gh")) {
-         throw new Error("GitHub CLI ('gh') not found. Please install it: https://cli.github.com/");
+  async executeTask(task: Task, agent: Agent, ctx: DriverContext): Promise<void> {
+    if (!isCommandAvailable("gh")) {
+      throw new Error("GitHub CLI ('gh') not found. Please install it: https://cli.github.com/");
+    }
+
+    const cmd = "gh";
+    const promptContext = `[Role: ${agent.role}] ${task.title}`;
+    const args = ["copilot", "suggest", promptContext, "--target", "nodejs"];
+    ctx.onLog(task.id, `Running: ${cmd} ${args.join(" ")}`);
+
+    const child = spawn(cmd, args, { shell: true });
+
+    child.stdout.on("data", (data) => {
+      ctx.onLog(task.id, data.toString());
+    });
+
+    child.stderr.on("data", (data) => {
+      const msg = data.toString();
+      ctx.onBugFound(task.id, msg);
+    });
+
+    child.on("error", (error: any) => {
+      ctx.onBugFound(task.id, error.message);
+    });
+
+    child.on("close", (code) => {
+      if (code === 0) {
+        ctx.onComplete(task.id);
       }
+    });
 
-      const cmd = "gh";
-      const promptContext = `[Role: ${agent.role}] ${task.title}`;
-      const args = ["copilot", "suggest", promptContext, "--target", "nodejs"];
-      ctx.onLog(task.id, `Running: ${cmd} ${args.join(" ")}`);
+    this.runningTasks.set(task.id, child);
+    return Promise.resolve();
+  }
 
-      const child = spawn(cmd, args, { shell: true });
+  async interruptTask(task: Task): Promise<void> {
+    const child = this.runningTasks.get(task.id);
+    if (child) {
+      try {
+        if (child.kill) child.kill();
+      } catch (e) {}
+      this.runningTasks.delete(task.id);
+    }
+    return Promise.resolve();
+  }
 
-      child.stdout.on("data", (data) => {
-         ctx.onLog(task.id, data.toString());
-      });
-
-      child.stderr.on("data", (data) => {
-         const msg = data.toString();
-         ctx.onBugFound(task.id, msg);
-      });
-
-      child.on("error", (error: any) => {
-         ctx.onBugFound(task.id, error.message);
-      });
-
-      child.on("close", (code) => {
-         if (code === 0) {
-            ctx.onComplete(task.id);
-         }
-      });
-
-      this.runningTasks.set(task.id, child);
-      return Promise.resolve();
-   }
-
-   async interruptTask(task: Task): Promise<void> {
-      const child = this.runningTasks.get(task.id);
-      if (child) {
-         try {
-            if (child.kill) child.kill();
-         } catch (e) {}
-         this.runningTasks.delete(task.id);
-      }
-      return Promise.resolve();
-   }
-
-   getLogs(taskId: number): string[] {
-      return [];
-   }
+  getLogs(taskId: number): string[] {
+    return [];
+  }
 }

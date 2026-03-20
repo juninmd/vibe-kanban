@@ -13,7 +13,10 @@ export function isCommandAvailable(command: string): boolean {
 
 export function getCommandVersion(command: string): string | null {
   try {
-    const output = execSync(`${command} --version`, { encoding: "utf-8", stdio: ["pipe", "pipe", "ignore"] });
+    const output = execSync(`${command} --version`, {
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "ignore"],
+    });
     return output.trim() || null;
   } catch {
     return null;

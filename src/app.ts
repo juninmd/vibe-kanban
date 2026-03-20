@@ -148,18 +148,25 @@ function playTone(freq: number, type: OscillatorType, dur: number, vol: number) 
     gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + dur);
     osc.start(audioCtx.currentTime);
     osc.stop(audioCtx.currentTime + dur);
-  } catch (e) { }
+  } catch (e) {}
 }
 
-function playSuccessSound() { playTone(880, "sine", 0.3, 0.2); playTone(1100, "sine", 0.4, 0.1); }
-function playErrorSound() { playTone(220, "sawtooth", 0.4, 0.3); }
-function playClickSound() { playTone(1200, "triangle", 0.05, 0.05); }
+function playSuccessSound() {
+  playTone(880, "sine", 0.3, 0.2);
+  playTone(1100, "sine", 0.4, 0.1);
+}
+function playErrorSound() {
+  playTone(220, "sawtooth", 0.4, 0.3);
+}
+function playClickSound() {
+  playTone(1200, "triangle", 0.05, 0.05);
+}
 
 // --- Dashboard Logic ---
 function updateDashboard() {
-  const pending = tasks.filter(t => t.lane !== "done").length;
-  const done = tasks.filter(t => t.lane === "done").length;
-  const activeAgents = agents.filter(a => a.status === "working").length;
+  const pending = tasks.filter((t) => t.lane !== "done").length;
+  const done = tasks.filter((t) => t.lane === "done").length;
+  const activeAgents = agents.filter((a) => a.status === "working").length;
 
   if (els.statPending) els.statPending.textContent = pending.toString();
   if (els.statDone) els.statDone.textContent = done.toString();
@@ -237,12 +244,13 @@ async function updateTaskAgentModels() {
 
   let tool = driver; // Fallback to global driver
   if (agentId) {
-    const agent = agents.find(a => a.id === agentId);
+    const agent = agents.find((a) => a.id === agentId);
     if (agent && agent.tool) tool = agent.tool;
   }
 
   if (!tool) {
-    els.agentModelDropdown.innerHTML = '<option value="">Selecione um agente ou ferramenta</option>';
+    els.agentModelDropdown.innerHTML =
+      '<option value="">Selecione um agente ou ferramenta</option>';
     return;
   }
 
@@ -250,7 +258,9 @@ async function updateTaskAgentModels() {
     const res = await fetch(`${API_URL}/api/models?tool=${tool}`);
     const data = await res.json();
     if (data.models && data.models.length > 0) {
-      els.agentModelDropdown.innerHTML = data.models.map((m: string) => `<option value="${m}">${m}</option>`).join("");
+      els.agentModelDropdown.innerHTML = data.models
+        .map((m: string) => `<option value="${m}">${m}</option>`)
+        .join("");
     } else {
       els.agentModelDropdown.innerHTML = '<option value="">Nenhum modelo encontrado</option>';
     }
@@ -284,7 +294,17 @@ async function apiCall(endpoint: string, method: string, body: any) {
   }
 }
 
-function createTask(taskParams: { title: string; source: string; category: string; priority: string; githubRepo?: string; description?: string; agentType?: string; assignedTo?: string; model?: string; }) {
+function createTask(taskParams: {
+  title: string;
+  source: string;
+  category: string;
+  priority: string;
+  githubRepo?: string;
+  description?: string;
+  agentType?: string;
+  assignedTo?: string;
+  model?: string;
+}) {
   apiCall("/api/tasks", "POST", taskParams);
   playSuccessSound();
   showToast(`Tarefa criada: ${taskParams.title}`, "success");
@@ -348,8 +368,8 @@ function renderKanban() {
         openTaskDetailsModal(task);
         playClickSound();
       };
-      
-      const assigned = task.assignedTo ? agentsById.get(task.assignedTo) ?? "-" : "-";
+
+      const assigned = task.assignedTo ? (agentsById.get(task.assignedTo) ?? "-") : "-";
 
       // Logs preview
       const lastLog = task.logs && task.logs.length > 0 ? task.logs[task.logs.length - 1] : "";
@@ -398,7 +418,8 @@ function renderKanban() {
 
 function renderAgents() {
   if (agents.length === 0) {
-    els.agentsList.innerHTML = '<div class="agent-empty">Nenhum agente configurado.<br>Clique em "Novo Agente" para adicionar.</div>';
+    els.agentsList.innerHTML =
+      '<div class="agent-empty">Nenhum agente configurado.<br>Clique em "Novo Agente" para adicionar.</div>';
   } else {
     els.agentsList.innerHTML = "";
     agents.forEach((a) => {
@@ -484,8 +505,8 @@ class TerminalInstance {
         blue: "#0284c7",
         magenta: "#a855f7",
         cyan: "#06b6d4",
-        white: "#f8fafc"
-      }
+        white: "#f8fafc",
+      },
     });
 
     this.fitAddon = new FitAddon.FitAddon();
@@ -499,7 +520,7 @@ class TerminalInstance {
       fetch(`/api/terminals/${encodeURIComponent(agentId)}/send`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ data })
+        body: JSON.stringify({ data }),
       });
     });
 
@@ -561,7 +582,7 @@ class TerminalUIManager {
   async openTerminal(agentId: string) {
     let inst = this.instances.get(agentId);
     if (!inst) {
-      const agent = agents.find(a => a.id === agentId);
+      const agent = agents.find((a) => a.id === agentId);
       if (!agent) return;
 
       inst = new TerminalInstance(agentId, agent.role);
@@ -580,7 +601,7 @@ class TerminalUIManager {
   }
 
   setActive(agentId: string) {
-    this.instances.forEach(inst => inst.hide());
+    this.instances.forEach((inst) => inst.hide());
     const target = this.instances.get(agentId);
     if (target) {
       target.focus();
@@ -603,7 +624,7 @@ class TerminalUIManager {
   }
 
   cleanupDeadAgents(activeAgents: Agent[]) {
-    const activeIds = new Set(activeAgents.map(a => a.id));
+    const activeIds = new Set(activeAgents.map((a) => a.id));
     this.instances.forEach((inst, id) => {
       if (!activeIds.has(id)) {
         inst.dispose();
@@ -624,10 +645,12 @@ async function openTaskDetailsModal(task: Task) {
   els.taskDetailsDescription.textContent = task.description || "Sem descrição.";
   els.taskDetailsStatus.textContent = laneLabels[task.lane] || task.lane;
   els.taskDetailsStatus.className = `tag lane-${task.lane}`;
-  
+
   const agentsById = new Map(agents.map((agent) => [agent.id, agent.role]));
-  els.taskDetailsAgent.textContent = task.assignedTo ? agentsById.get(task.assignedTo) || task.assignedTo : "Ninguém designado";
-  
+  els.taskDetailsAgent.textContent = task.assignedTo
+    ? agentsById.get(task.assignedTo) || task.assignedTo
+    : "Ninguém designado";
+
   els.taskDetailsMeta.innerHTML = `
     <span class="tag">${task.category}</span>
     <span class="tag priority-${task.priority}">${task.priority}</span>
@@ -653,15 +676,20 @@ async function openTaskDetailsModal(task: Task) {
     const res = await fetch(`/api/tasks/${task.id}/terminal`);
     const data = await res.json();
     if (data.logs && data.logs.length > 0) {
-      els.taskHistoryContent.innerHTML = data.logs.map((log: any) => {
-        const time = new Date(log.timestamp).toLocaleTimeString();
-        return `<div class="log-entry">
+      els.taskHistoryContent.innerHTML = data.logs
+        .map((log: any) => {
+          const time = new Date(log.timestamp).toLocaleTimeString();
+          return `<div class="log-entry">
           <span class="log-time">[${time}]</span>
           <span class="log-${log.type}">> ${log.content}</span>
         </div>`;
-      }).join("");
+        })
+        .join("");
       // Scroll to bottom
-      setTimeout(() => els.taskHistoryContent.scrollTop = els.taskHistoryContent.scrollHeight, 50);
+      setTimeout(
+        () => (els.taskHistoryContent.scrollTop = els.taskHistoryContent.scrollHeight),
+        50,
+      );
     } else {
       els.taskHistoryContent.innerHTML = "Nenhum histórico disponível para esta tarefa.";
     }
@@ -696,18 +724,34 @@ async function openAgentEditModal(agent: Agent) {
     const res = await fetch(`${API_URL}/api/tools`);
     const data = await res.json();
     if (data.tools && data.tools.length > 0) {
-      els.agentTool.innerHTML = '<option value="">Selecione a ferramenta</option>' + data.tools.map((t: any) => `<option value="${t.id}"${t.id === agent.tool ? ' selected' : ''}>${t.name}</option>`).join("");
+      els.agentTool.innerHTML =
+        '<option value="">Selecione a ferramenta</option>' +
+        data.tools
+          .map(
+            (t: any) =>
+              `<option value="${t.id}"${t.id === agent.tool ? " selected" : ""}>${t.name}</option>`,
+          )
+          .join("");
     }
-  } catch (e) { console.error(e); }
+  } catch (e) {
+    console.error(e);
+  }
   // Load models for the tool
   if (agent.tool) {
     try {
       const res = await fetch(`${API_URL}/api/models?tool=${agent.tool}`);
       const data = await res.json();
       if (data.models && data.models.length > 0) {
-        els.agentModelDropdown.innerHTML = data.models.map((m: string) => `<option value="${m}"${m === agent.model ? ' selected' : ''}>${m}</option>`).join("");
+        els.agentModelDropdown.innerHTML = data.models
+          .map(
+            (m: string) =>
+              `<option value="${m}"${m === agent.model ? " selected" : ""}>${m}</option>`,
+          )
+          .join("");
       }
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+    }
   } else {
     els.agentModelDropdown.innerHTML = `<option value="${agent.model}" selected>${agent.model}</option>`;
   }
@@ -746,7 +790,11 @@ function render() {
 
 els.driverSelect?.addEventListener("change", async () => {
   const driver = els.driverSelect.value;
-  await fetch("/api/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ driver }) });
+  await fetch("/api/config", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ driver }),
+  });
   updateTaskAgentModels();
 });
 
@@ -764,7 +812,7 @@ els.form.addEventListener("submit", (e) => {
     description: els.description?.value.trim(),
     agentType: els.agentType?.value.trim(),
     assignedTo: els.agentAssign?.value || undefined,
-    model: els.agentModel?.value
+    model: els.agentModel?.value,
   });
   els.title.value = "";
   if (els.description) els.description.value = "";
@@ -783,9 +831,14 @@ els.seedTasksBtn.addEventListener("click", () => {
     ["Planejar sprint de IA colaborativa", "product_manager", "roadmap", "alta"],
     ["Auditar permissões do backend", "product_manager", "security", "alta"],
     ["Otimizar render do quadro 3D", "usuario", "performance", "media"],
-    ["Criar painel de métricas de agente", "usuario", "feature", "media"]
+    ["Criar painel de métricas de agente", "usuario", "feature", "media"],
   ].forEach(([title, source, category, priority]) =>
-    createTask({ title: title as string, source: source as string, category: category as string, priority: priority as string }),
+    createTask({
+      title: title as string,
+      source: source as string,
+      category: category as string,
+      priority: priority as string,
+    }),
   );
 });
 
@@ -815,7 +868,9 @@ els.createAgentBtn.addEventListener("click", async () => {
     const res = await fetch(`${API_URL}/api/tools`);
     const data = await res.json();
     if (data.tools && data.tools.length > 0) {
-      els.agentTool.innerHTML = '<option value="">Selecione a ferramenta</option>' + data.tools.map((t: any) => `<option value="${t.id}">${t.name}</option>`).join("");
+      els.agentTool.innerHTML =
+        '<option value="">Selecione a ferramenta</option>' +
+        data.tools.map((t: any) => `<option value="${t.id}">${t.name}</option>`).join("");
     } else {
       els.agentTool.innerHTML = '<option value="">Nenhuma ferramenta CLI encontrada</option>';
     }
@@ -837,11 +892,15 @@ els.agentTool.addEventListener("change", async (e: Event) => {
     const res = await fetch(`${API_URL}/api/models?tool=${tool}`);
     const data = await res.json();
     if (data.models && data.models.length > 0) {
-      els.agentModelDropdown.innerHTML = data.models.map((m: string) => `<option value="${m}">${m}</option>`).join("");
+      els.agentModelDropdown.innerHTML = data.models
+        .map((m: string) => `<option value="${m}">${m}</option>`)
+        .join("");
     } else {
       els.agentModelDropdown.innerHTML = '<option value="">Nenhum modelo encontrado</option>';
     }
-  } catch (e) { console.error(e); }
+  } catch (e) {
+    console.error(e);
+  }
 });
 
 els.agentForm.addEventListener("submit", async (e) => {
@@ -854,7 +913,12 @@ els.agentForm.addEventListener("submit", async (e) => {
 
   if (editId) {
     // Edit mode
-    await apiCall(`/api/agents/${encodeURIComponent(editId)}`, "PUT", { role, category, tool, model });
+    await apiCall(`/api/agents/${encodeURIComponent(editId)}`, "PUT", {
+      role,
+      category,
+      tool,
+      model,
+    });
     showToast(`Agente "${role}" atualizado`, "success");
   } else {
     // Create mode
@@ -873,7 +937,9 @@ els.settingsBtn.addEventListener("click", async () => {
     const res = await fetch(`${API_URL}/api/config/clone-dir`);
     const data = await res.json();
     els.configCloneDir.value = data.cloneDir || "";
-  } catch (e) { console.error(e); }
+  } catch (e) {
+    console.error(e);
+  }
 });
 
 els.cancelSettingsBtn.addEventListener("click", () => els.settingsModal.close());
@@ -933,7 +999,7 @@ grid.position.y = 0;
 scene.add(grid);
 
 function updateLighting() {
-  const workingCount = agents.filter(a => a.status === "working").length;
+  const workingCount = agents.filter((a) => a.status === "working").length;
   // Target intensity: brighter when busy
   const targetDir = workingCount > 0 ? 1.4 : 1.0;
   const targetAmb = workingCount > 0 ? 1.8 : 1.5;
@@ -954,82 +1020,103 @@ const loader = new GLTFLoader();
 let usingFallbackAvatars = true;
 
 // Preload the gltf, but do not override the fallback flag.
-loader.load("/models/RobotExpressive.glb", (gltf) => {
-  robotModel = gltf.scene;
-  robotAnimations = gltf.animations;
+loader.load(
+  "/models/RobotExpressive.glb",
+  (gltf) => {
+    robotModel = gltf.scene;
+    robotAnimations = gltf.animations;
 
-  robotModel.traverse((child: any) => {
-    if (child.isMesh) {
-      child.castShadow = true;
-      child.receiveShadow = true;
-    }
-  });
-  console.log("Robot animations loaded:", robotAnimations.map(a => a.name));
-  // Keep using fallback avatars
-  // usingFallbackAvatars = false;
-  rebuildAgentMeshes();
-}, undefined, (error) => {
-  console.error("Falha ao carregar modelo 3D do robô. Usando avatar fallback.", error);
-  usingFallbackAvatars = true;
-  rebuildAgentMeshes();
-});
+    robotModel.traverse((child: any) => {
+      if (child.isMesh) {
+        child.castShadow = true;
+        child.receiveShadow = true;
+      }
+    });
+    console.log(
+      "Robot animations loaded:",
+      robotAnimations.map((a) => a.name),
+    );
+    // Keep using fallback avatars
+    // usingFallbackAvatars = false;
+    rebuildAgentMeshes();
+  },
+  undefined,
+  (error) => {
+    console.error("Falha ao carregar modelo 3D do robô. Usando avatar fallback.", error);
+    usingFallbackAvatars = true;
+    rebuildAgentMeshes();
+  },
+);
 
 let computers: THREE.Group[] = [];
 
 // Desk generation
 function spawnComputers() {
   const loader = new GLTFLoader();
-  loader.load("/models/old_computer.glb", (gltf) => {
-    officeData.padPositions.forEach((pos) => {
-      const group = new THREE.Group();
-      group.position.set(pos.x, 0, pos.z - 1.2);
+  loader.load(
+    "/models/old_computer.glb",
+    (gltf) => {
+      officeData.padPositions.forEach((pos) => {
+        const group = new THREE.Group();
+        group.position.set(pos.x, 0, pos.z - 1.2);
 
-      const computer = gltf.scene.clone();
-      computer.scale.set(0.6, 0.6, 0.6);
-      computer.rotation.y = Math.PI;
-      group.add(computer);
+        const computer = gltf.scene.clone();
+        computer.scale.set(0.6, 0.6, 0.6);
+        computer.rotation.y = Math.PI;
+        group.add(computer);
 
-      // Oval rug
-      const rugGeo = new THREE.CylinderGeometry(2, 2, 0.01, 32);
-      const rugMat = new THREE.MeshStandardMaterial({ color: "#64748b" });
-      const rug = new THREE.Mesh(rugGeo, rugMat);
-      rug.scale.set(1, 1, 0.6);
-      rug.position.set(0, 0.01, 0);
-      group.add(rug);
+        // Oval rug
+        const rugGeo = new THREE.CylinderGeometry(2, 2, 0.01, 32);
+        const rugMat = new THREE.MeshStandardMaterial({ color: "#64748b" });
+        const rug = new THREE.Mesh(rugGeo, rugMat);
+        rug.scale.set(1, 1, 0.6);
+        rug.position.set(0, 0.01, 0);
+        group.add(rug);
 
-      scene.add(group);
-      computers.push(group);
-    });
-  }, undefined, (error) => {
-    console.error("Falha ao carregar modelo old_computer.glb, usando fallback", error);
-    officeData.padPositions.forEach((pos) => {
-      const deskGroup = new THREE.Group();
-      deskGroup.position.set(pos.x, 0, pos.z - 1.2);
+        scene.add(group);
+        computers.push(group);
+      });
+    },
+    undefined,
+    (error) => {
+      console.error("Falha ao carregar modelo old_computer.glb, usando fallback", error);
+      officeData.padPositions.forEach((pos) => {
+        const deskGroup = new THREE.Group();
+        deskGroup.position.set(pos.x, 0, pos.z - 1.2);
 
-      // Oval rug
-      const rugGeo = new THREE.CylinderGeometry(2, 2, 0.01, 32);
-      const rugMat = new THREE.MeshStandardMaterial({ color: "#8b9cb0" });
-      const rug = new THREE.Mesh(rugGeo, rugMat);
-      rug.scale.set(1.2, 1, 0.8);
-      rug.position.set(0, 0.01, 0.5); // Shifted a bit forward
-      deskGroup.add(rug);
+        // Oval rug
+        const rugGeo = new THREE.CylinderGeometry(2, 2, 0.01, 32);
+        const rugMat = new THREE.MeshStandardMaterial({ color: "#8b9cb0" });
+        const rug = new THREE.Mesh(rugGeo, rugMat);
+        rug.scale.set(1.2, 1, 0.8);
+        rug.position.set(0, 0.01, 0.5); // Shifted a bit forward
+        deskGroup.add(rug);
 
-      const deskGeo = new THREE.BoxGeometry(2.0, 1.0, 1.2);
-      const deskMat = new THREE.MeshStandardMaterial({ color: "#0f172a", roughness: 0.8, metalness: 0.1 }); // Darker desk
-      const desk = new THREE.Mesh(deskGeo, deskMat);
-      desk.position.set(0, 0.5, 0);
-      deskGroup.add(desk);
+        const deskGeo = new THREE.BoxGeometry(2.0, 1.0, 1.2);
+        const deskMat = new THREE.MeshStandardMaterial({
+          color: "#0f172a",
+          roughness: 0.8,
+          metalness: 0.1,
+        }); // Darker desk
+        const desk = new THREE.Mesh(deskGeo, deskMat);
+        desk.position.set(0, 0.5, 0);
+        deskGroup.add(desk);
 
-      const monGeo = new THREE.BoxGeometry(0.9, 0.6, 0.05);
-      const monMat = new THREE.MeshStandardMaterial({ color: "#0284c7", emissive: "#0284c7", emissiveIntensity: 0.3 }); // Cyan blue monitor
-      const monitor = new THREE.Mesh(monGeo, monMat);
-      monitor.position.set(0, 1.3, 0);
-      deskGroup.add(monitor);
+        const monGeo = new THREE.BoxGeometry(0.9, 0.6, 0.05);
+        const monMat = new THREE.MeshStandardMaterial({
+          color: "#0284c7",
+          emissive: "#0284c7",
+          emissiveIntensity: 0.3,
+        }); // Cyan blue monitor
+        const monitor = new THREE.Mesh(monGeo, monMat);
+        monitor.position.set(0, 1.3, 0);
+        deskGroup.add(monitor);
 
-      scene.add(deskGroup);
-      computers.push(deskGroup);
-    });
-  });
+        scene.add(deskGroup);
+        computers.push(deskGroup);
+      });
+    },
+  );
 }
 
 // Confetti System
@@ -1038,7 +1125,7 @@ function spawnConfetti() {
   const count = 150;
   const positions = new Float32Array(count * 3);
   const colors = new Float32Array(count * 3);
-  const velocities: { x: number, y: number, z: number }[] = [];
+  const velocities: { x: number; y: number; z: number }[] = [];
 
   for (let i = 0; i < count; i++) {
     positions[i * 3] = 0; // x (center)
@@ -1052,13 +1139,13 @@ function spawnConfetti() {
 
     velocities.push({
       x: (Math.random() - 0.5) * 0.3,
-      y: (Math.random() * 0.3) + 0.1,
-      z: (Math.random() - 0.5) * 0.3
+      y: Math.random() * 0.3 + 0.1,
+      z: (Math.random() - 0.5) * 0.3,
     });
   }
 
-  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
 
   const material = new THREE.PointsMaterial({ size: 0.15, vertexColors: true, transparent: true });
   const points = new THREE.Points(geometry, material);
@@ -1094,11 +1181,17 @@ controls.enableDamping = true;
 controls.dampingFactor = 0.05;
 controls.maxPolarAngle = Math.PI / 2 - 0.1;
 
-const kanbanMesh = new THREE.Mesh(new THREE.BoxGeometry(12, 6, 0.2), new THREE.MeshStandardMaterial({ color: "#ffffff" }));
+const kanbanMesh = new THREE.Mesh(
+  new THREE.BoxGeometry(12, 6, 0.2),
+  new THREE.MeshStandardMaterial({ color: "#ffffff" }),
+);
 kanbanMesh.position.set(0, 3, -4.2);
 // Add column separators
 for (let i = -1; i <= 1; i++) {
-  const line = new THREE.Mesh(new THREE.BoxGeometry(0.075, 5.7, 0.05), new THREE.MeshStandardMaterial({ color: "#e2e8f0" }));
+  const line = new THREE.Mesh(
+    new THREE.BoxGeometry(0.075, 5.7, 0.05),
+    new THREE.MeshStandardMaterial({ color: "#e2e8f0" }),
+  );
   line.position.set(i * 3, 0, 0.11);
   kanbanMesh.add(line);
 }
@@ -1122,7 +1215,7 @@ function createTaskTexture(task: Task) {
     performance: "#f97316",
     feature: "#3b82f6",
     test: "#22c55e",
-    bug: "#06b6d4"
+    bug: "#06b6d4",
   };
 
   ctx.fillStyle = categoryColors[task.category] || "#64748b";
@@ -1162,7 +1255,7 @@ function updateKanban3D() {
   const visibleTaskIds = new Set<number>();
   const laneCounts: Record<string, number> = { backlog: 0, in_progress: 0, review: 0, done: 0 };
 
-  tasks.forEach(task => {
+  tasks.forEach((task) => {
     const lane = getLaneSafe(task.lane);
     const count = laneCounts[lane] || 0;
     const { x, y } = getTaskCardPosition(lane, count);
@@ -1171,7 +1264,7 @@ function updateKanban3D() {
       visibleTaskIds.add(task.id);
 
       let mesh = taskMeshes.get(task.id);
-      const signature = `${task.title}-${task.category}-${task.priority}-${task.assignedTo || ''}`;
+      const signature = `${task.title}-${task.category}-${task.priority}-${task.assignedTo || ""}`;
 
       if (!mesh) {
         // Create
@@ -1181,7 +1274,7 @@ function updateKanban3D() {
           map: texture,
           emissive: 0x222222,
           emissiveMap: texture,
-          emissiveIntensity: 0.4
+          emissiveIntensity: 0.4,
         });
         mesh = new THREE.Mesh(geometry, material);
         mesh.userData = { taskId: task.id, signature };
@@ -1211,26 +1304,38 @@ function updateKanban3D() {
     if (!visibleTaskIds.has(id)) {
       kanbanGroup.remove(mesh);
       if (mesh.geometry) mesh.geometry.dispose();
-      if ((mesh.material as THREE.MeshStandardMaterial).map) (mesh.material as THREE.MeshStandardMaterial).map!.dispose();
-      if ((mesh.material as THREE.MeshStandardMaterial).dispose) (mesh.material as THREE.MeshStandardMaterial).dispose();
+      if ((mesh.material as THREE.MeshStandardMaterial).map)
+        (mesh.material as THREE.MeshStandardMaterial).map!.dispose();
+      if ((mesh.material as THREE.MeshStandardMaterial).dispose)
+        (mesh.material as THREE.MeshStandardMaterial).dispose();
       taskMeshes.delete(id);
     }
   }
 }
 
-const agentMeshes = new Map<string, {
-  group: any;
-  label?: any;
-  target: any;
-  phase: "idle" | "walking_to_board" | "at_board" | "walking_to_desk" | "working" | "walking_from_desk" | "celebrating";
-  phaseTimer: number;
-  color: THREE.Color;
-  mixer?: THREE.AnimationMixer;
-  anims?: Record<string, THREE.AnimationAction>;
-  currentAction?: THREE.AnimationAction | null;
-  laser?: THREE.Line;
-  statusSprite?: THREE.Sprite;
-}>();
+const agentMeshes = new Map<
+  string,
+  {
+    group: any;
+    label?: any;
+    target: any;
+    phase:
+      | "idle"
+      | "walking_to_board"
+      | "at_board"
+      | "walking_to_desk"
+      | "working"
+      | "walking_from_desk"
+      | "celebrating";
+    phaseTimer: number;
+    color: THREE.Color;
+    mixer?: THREE.AnimationMixer;
+    anims?: Record<string, THREE.AnimationAction>;
+    currentAction?: THREE.AnimationAction | null;
+    laser?: THREE.Line;
+    statusSprite?: THREE.Sprite;
+  }
+>();
 
 function clearAgentMeshes() {
   agentMeshes.forEach((item) => {
@@ -1251,7 +1356,7 @@ function rebuildAgentMeshes() {
     agentMeshes.set(agent.id, {
       ...meshData,
       phase: "idle",
-      phaseTimer: 0
+      phaseTimer: 0,
     });
     playAction(agentMeshes.get(agent.id), "Idle", 0);
   });
@@ -1279,7 +1384,7 @@ function createStatusTexture(type: string) {
     const emojiMap: Record<string, string> = {
       working: "🔨",
       celebrating: "🎉",
-      walking: "🚶"
+      walking: "🚶",
     };
     ctx.font = "64px Inter, sans-serif";
     ctx.textAlign = "center";
@@ -1295,7 +1400,7 @@ const statusTextures = {
   idle: createStatusTexture("idle"),
   working: createStatusTexture("working"),
   celebrating: createStatusTexture("celebrating"),
-  walking: createStatusTexture("walking")
+  walking: createStatusTexture("walking"),
 };
 
 function createAlertIcon(type: "bug" | "perf") {
@@ -1331,7 +1436,7 @@ function createAlertIcon(type: "bug" | "perf") {
 }
 
 function updateVisualAlerts() {
-  tasks.forEach(task => {
+  tasks.forEach((task) => {
     const isBug = (task.category === "bug" || task.category === "test") && task.lane !== "done";
     const isPerf = task.category === "performance" && task.lane !== "done";
 
@@ -1344,7 +1449,7 @@ function updateVisualAlerts() {
 
   // Remove fixed alerts
   for (const [taskId, sprite] of visualAlerts.entries()) {
-    const task = tasks.find(t => t.id === taskId);
+    const task = tasks.find((t) => t.id === taskId);
     if (!task || task.lane === "done") {
       scene.remove(sprite);
       if (sprite.material.map) sprite.material.map.dispose();
@@ -1352,7 +1457,7 @@ function updateVisualAlerts() {
       visualAlerts.delete(taskId);
     } else {
       // Position alert above the card on the board
-      const cardMesh = kanbanGroup.children.find(c => c.userData.taskId === taskId);
+      const cardMesh = kanbanGroup.children.find((c) => c.userData.taskId === taskId);
       if (cardMesh) {
         const worldPos = new THREE.Vector3();
         cardMesh.getWorldPosition(worldPos);
@@ -1384,11 +1489,11 @@ function createAgentMesh(agent: Agent, index: number) {
 
   const roleColors: Record<string, string> = {
     "Product Manager": "#111111", // Black turtleneck
-    "Segurança": "#1e3a8a",       // Navy Blue
-    "Performance": "#475569",     // Slate
+    Segurança: "#1e3a8a", // Navy Blue
+    Performance: "#475569", // Slate
     "Novas Funcionalidades": "#0284c7", // Blue
-    "Testes": "#15803d",          // Dark Green
-    "Novas Features": "#0f172a"   // Navy
+    Testes: "#15803d", // Dark Green
+    "Novas Features": "#0f172a", // Navy
   };
   const color = new THREE.Color(roleColors[agent.role] || "#888888");
 
@@ -1422,7 +1527,7 @@ function createAgentMesh(agent: Agent, index: number) {
 
     mixer = new THREE.AnimationMixer(clonedRobot);
     anims = {};
-    robotAnimations.forEach(clip => {
+    robotAnimations.forEach((clip) => {
       anims![clip.name] = mixer!.clipAction(clip);
     });
   } else {
@@ -1489,19 +1594,40 @@ function createAgentMesh(agent: Agent, index: number) {
 
   let label: THREE.Sprite | undefined = undefined; // We removed the floating label, setting to undefined for TS interface
 
-  const statusMat = new THREE.SpriteMaterial({ map: createStatusTexture("idle"), transparent: true, depthTest: false });
+  const statusMat = new THREE.SpriteMaterial({
+    map: createStatusTexture("idle"),
+    transparent: true,
+    depthTest: false,
+  });
   const statusSprite = new THREE.Sprite(statusMat);
   statusSprite.scale.set(0.6, 0.6, 1);
   statusSprite.position.set(0, 2.2, 0); // Above head
   group.add(statusSprite);
 
-  const laserMat = new THREE.LineBasicMaterial({ color: 0x00f0ff, transparent: true, opacity: 0.6 });
-  const laserGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, 0)]);
+  const laserMat = new THREE.LineBasicMaterial({
+    color: 0x00f0ff,
+    transparent: true,
+    opacity: 0.6,
+  });
+  const laserGeo = new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(0, 0, 0),
+    new THREE.Vector3(0, 0, 0),
+  ]);
   const laser = new THREE.Line(laserGeo, laserMat);
   laser.visible = false;
   scene.add(laser);
 
-  return { group, label, target: group.position.clone(), color, mixer, anims, currentAction: null, laser, statusSprite };
+  return {
+    group,
+    label,
+    target: group.position.clone(),
+    color,
+    mixer,
+    anims,
+    currentAction: null,
+    laser,
+    statusSprite,
+  };
 }
 
 function updateAgents3D() {
@@ -1524,7 +1650,7 @@ function updateAgents3D() {
       agentMeshes.set(agent.id, {
         ...meshData,
         phase: "idle",
-        phaseTimer: 0
+        phaseTimer: 0,
       });
       playAction(agentMeshes.get(agent.id), "Idle", 0);
     }
@@ -1638,7 +1764,11 @@ function tick() {
       const time = Date.now() * 0.005;
       const { leftArm, rightArm, leftLeg, rightLeg } = item.group.userData;
 
-      if (item.phase === "walking_to_desk" || item.phase === "walking_from_desk" || item.phase === "walking_to_board") {
+      if (
+        item.phase === "walking_to_desk" ||
+        item.phase === "walking_from_desk" ||
+        item.phase === "walking_to_board"
+      ) {
         leftArm.rotation.x = Math.sin(time) * 0.5;
         rightArm.rotation.x = -Math.sin(time) * 0.5;
         leftLeg.rotation.x = -Math.sin(time) * 0.5;
@@ -1668,7 +1798,9 @@ function tick() {
 
     if (item.phase === "working" && agentData?.assignedTask && item.laser) {
       const taskObj = tasks.find((t) => t.id === agentData.assignedTask);
-      const cardMesh = kanbanGroup.children.find((c) => c.userData.taskId === agentData.assignedTask);
+      const cardMesh = kanbanGroup.children.find(
+        (c) => c.userData.taskId === agentData.assignedTask,
+      );
 
       if (cardMesh && taskObj) {
         // Laser
@@ -1681,7 +1813,12 @@ function tick() {
         item.laser.visible = true;
 
         // Change laser color based on task category
-        const laserColor = (taskObj.category === "test" || taskObj.category === "bug") ? 0xef4444 : (taskObj.category === "performance" ? 0xeab308 : 0x00f0ff);
+        const laserColor =
+          taskObj.category === "test" || taskObj.category === "bug"
+            ? 0xef4444
+            : taskObj.category === "performance"
+              ? 0xeab308
+              : 0x00f0ff;
         (item.laser.material as THREE.LineBasicMaterial).color.setHex(laserColor);
 
         // Terminal DOM
@@ -1702,12 +1839,14 @@ function tick() {
         termEl.style.top = `${py}px`;
         termEl.style.display = "block";
 
-        const lastLog = taskObj.logs && taskObj.logs.length > 0 ? taskObj.logs[taskObj.logs.length - 1] : "Buscando contexto...";
+        const lastLog =
+          taskObj.logs && taskObj.logs.length > 0
+            ? taskObj.logs[taskObj.logs.length - 1]
+            : "Buscando contexto...";
         const newHTML = `<strong>> ${taskObj.title.substring(0, 15)}...</strong><br/><span class="term-log">${lastLog}</span>`;
         if (termEl.innerHTML !== newHTML) {
           termEl.innerHTML = newHTML;
         }
-
       } else {
         item.laser.visible = false;
         if (termEl) termEl.style.display = "none";
@@ -1718,7 +1857,12 @@ function tick() {
     }
 
     // Spawn trail if moving
-    if (item.phase !== "idle" && item.phase !== "working" && item.phase !== "at_board" && item.phase !== "celebrating") {
+    if (
+      item.phase !== "idle" &&
+      item.phase !== "working" &&
+      item.phase !== "at_board" &&
+      item.phase !== "celebrating"
+    ) {
       if (Math.random() < 0.4) {
         spawnTrail(item.group.position, item.color);
       }
@@ -1730,10 +1874,10 @@ function tick() {
   updateTrails();
 
   // Keep constant corporate lighting, no pulse
-  const activeCount = agents.filter(a => a.status === "working").length;
+  const activeCount = agents.filter((a) => a.status === "working").length;
   if (activeCount > 0) {
-    dir.intensity = 1.2 + (activeCount * 0.05);
-    ambientLight.intensity = 1.5 + (activeCount * 0.05);
+    dir.intensity = 1.2 + activeCount * 0.05;
+    ambientLight.intensity = 1.5 + activeCount * 0.05;
   } else {
     dir.intensity = 1.0;
     ambientLight.intensity = 1.5;
@@ -1828,7 +1972,7 @@ function onPointerDown(event: PointerEvent) {
   if (intersectsTasks.length > 0) {
     const object = intersectsTasks[0].object;
     const taskId = object.userData.taskId;
-    const task = tasks.find(t => t.id === taskId);
+    const task = tasks.find((t) => t.id === taskId);
 
     if (task) {
       openTaskDetailsModal(task);
@@ -1851,11 +1995,11 @@ function onPointerDown(event: PointerEvent) {
     }
 
     if (foundGroupId) {
-      const agent = agents.find(a => a.id === foundGroupId);
+      const agent = agents.find((a) => a.id === foundGroupId);
       if (agent) {
         let text = `Agente: ${agent.role}\nModelo: ${agent.model}\nStatus: ${agent.status}`;
         if (agent.assignedTask) {
-          const task = tasks.find(t => t.id === agent.assignedTask);
+          const task = tasks.find((t) => t.id === agent.assignedTask);
           if (task) {
             text += `\nTrabalhando na Task #${task.id}: ${task.title}`;
           } else {
@@ -1871,7 +2015,7 @@ function onPointerDown(event: PointerEvent) {
   }
 }
 
-window.addEventListener('pointerdown', onPointerDown);
+window.addEventListener("pointerdown", onPointerDown);
 
 // --- Keyboard Shortcuts ---
 window.addEventListener("keydown", (e) => {
@@ -1899,8 +2043,12 @@ async function loadAvailableTools() {
     const res = await fetch(`${API_URL}/api/tools`);
     const data = await res.json();
     if (data.tools && data.tools.length > 0) {
-      els.driverSelect.innerHTML = data.tools.map((t: any) => `<option value="${t.id}">${t.name}</option>`).join("");
-      const agentTypeOptions = '<option value="">Automático / Opcional</option>' + data.tools.map((t: any) => `<option value="${t.id}">${t.name}</option>`).join("");
+      els.driverSelect.innerHTML = data.tools
+        .map((t: any) => `<option value="${t.id}">${t.name}</option>`)
+        .join("");
+      const agentTypeOptions =
+        '<option value="">Automático / Opcional</option>' +
+        data.tools.map((t: any) => `<option value="${t.id}">${t.name}</option>`).join("");
       els.agentType.innerHTML = agentTypeOptions;
     }
   } catch (e) {

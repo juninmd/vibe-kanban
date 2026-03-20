@@ -1,96 +1,92 @@
 import { TerminalSession, TerminalSessionOptions, TerminalSessionInfo } from "./TerminalSession.js";
 
 export interface TerminalManagerCallbacks {
-    onOutput: (agentId: string, data: string) => void;
-    onExit: (agentId: string, exitCode: number, signal?: number) => void;
+  onOutput: (agentId: string, data: string) => void;
+  onExit: (agentId: string, exitCode: number, signal?: number) => void;
 }
 
 export class TerminalManager {
-    private sessions = new Map<string, TerminalSession>();
-    private callbacks: TerminalManagerCallbacks;
+  private sessions = new Map<string, TerminalSession>();
+  private callbacks: TerminalManagerCallbacks;
 
-    constructor(callbacks: TerminalManagerCallbacks) {
-        this.callbacks = callbacks;
+  constructor(callbacks: TerminalManagerCallbacks) {
+    this.callbacks = callbacks;
+  }
+
+  async create(options: TerminalSessionOptions): Promise<TerminalSessionInfo> {
+    // Kill existing session for this agent if any
+    if (this.sessions.has(options.agentId)) {
+      await this.kill(options.agentId);
     }
 
-    async create(options: TerminalSessionOptions): Promise<TerminalSessionInfo> {
-        // Kill existing session for this agent if any
-        if (this.sessions.has(options.agentId)) {
-            await this.kill(options.agentId);
-        }
+    const session = new TerminalSession(options);
 
-        const session = new TerminalSession(options);
+    session.on("data", (data: string) => {
+      this.callbacks.onOutput(options.agentId, data);
+    });
 
-        session.on("data", (data: string) => {
-            this.callbacks.onOutput(options.agentId, data);
-        });
+    session.on("exit", (exitCode: number, signal?: number) => {
+      this.callbacks.onExit(options.agentId, exitCode, signal);
+      this.sessions.delete(options.agentId);
+    });
 
-        session.on("exit", (exitCode: number, signal?: number) => {
-            this.callbacks.onExit(options.agentId, exitCode, signal);
-            this.sessions.delete(options.agentId);
-        });
+    this.sessions.set(options.agentId, session);
 
-        this.sessions.set(options.agentId, session);
+    const info = await session.spawn(options.cols ?? 120, options.rows ?? 30, options.env);
 
-        const info = await session.spawn(
-            options.cols ?? 120,
-            options.rows ?? 30,
-            options.env
-        );
+    return info;
+  }
 
-        return info;
+  get(agentId: string): TerminalSession | undefined {
+    return this.sessions.get(agentId);
+  }
+
+  write(agentId: string, data: string): void {
+    const session = this.sessions.get(agentId);
+    if (!session) {
+      throw new Error(`No active terminal for agent ${agentId}`);
     }
+    session.write(data);
+  }
 
-    get(agentId: string): TerminalSession | undefined {
-        return this.sessions.get(agentId);
-    }
+  resize(agentId: string, cols: number, rows: number): void {
+    const session = this.sessions.get(agentId);
+    if (!session) return;
+    session.resize(cols, rows);
+  }
 
-    write(agentId: string, data: string): void {
-        const session = this.sessions.get(agentId);
-        if (!session) {
-            throw new Error(`No active terminal for agent ${agentId}`);
-        }
-        session.write(data);
-    }
+  async kill(agentId: string): Promise<void> {
+    const session = this.sessions.get(agentId);
+    if (!session) return;
+    session.kill();
+    this.sessions.delete(agentId);
+  }
 
-    resize(agentId: string, cols: number, rows: number): void {
-        const session = this.sessions.get(agentId);
-        if (!session) return;
-        session.resize(cols, rows);
+  listActive(): TerminalSessionInfo[] {
+    const result: TerminalSessionInfo[] = [];
+    for (const session of this.sessions.values()) {
+      if (session.alive) {
+        result.push(session.info());
+      }
     }
+    return result;
+  }
 
-    async kill(agentId: string): Promise<void> {
-        const session = this.sessions.get(agentId);
-        if (!session) return;
-        session.kill();
-        this.sessions.delete(agentId);
-    }
+  getBuffer(agentId: string): string {
+    const session = this.sessions.get(agentId);
+    if (!session) return "";
+    return session.getBuffer();
+  }
 
-    listActive(): TerminalSessionInfo[] {
-        const result: TerminalSessionInfo[] = [];
-        for (const session of this.sessions.values()) {
-            if (session.alive) {
-                result.push(session.info());
-            }
-        }
-        return result;
-    }
+  isAlive(agentId: string): boolean {
+    const session = this.sessions.get(agentId);
+    return session?.alive ?? false;
+  }
 
-    getBuffer(agentId: string): string {
-        const session = this.sessions.get(agentId);
-        if (!session) return "";
-        return session.getBuffer();
+  async killAll(): Promise<void> {
+    const ids = [...this.sessions.keys()];
+    for (const id of ids) {
+      await this.kill(id);
     }
-
-    isAlive(agentId: string): boolean {
-        const session = this.sessions.get(agentId);
-        return session?.alive ?? false;
-    }
-
-    async killAll(): Promise<void> {
-        const ids = [...this.sessions.keys()];
-        for (const id of ids) {
-            await this.kill(id);
-        }
-    }
+  }
 }

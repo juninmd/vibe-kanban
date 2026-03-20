@@ -28,7 +28,6 @@ const TOOL_CHECKS: Record<string, () => boolean> = {
   openai: () => Boolean(process.env.OPENAI_API_KEY),
 };
 
-
 export function isEligibleForProviderFallback(message: string): boolean {
   return ELIGIBLE_ERROR_PATTERNS.some((pattern) => pattern.test(message));
 }
@@ -39,8 +38,9 @@ export function buildProviderChain(agent: Agent, drivers: Record<string, LLMDriv
     .map((value) => value.trim())
     .filter(Boolean);
 
-  const chain = [...new Set([agent.tool, ...custom].filter(Boolean))]
-.filter((tool) => Boolean(tool) && Object.prototype.hasOwnProperty.call(drivers, tool))
+  const validTools = [agent.tool, ...custom].filter((t): t is string => Boolean(t));
+  const chain = [...new Set(validTools)]
+    .filter((tool) => Boolean(tool) && Object.prototype.hasOwnProperty.call(drivers, tool))
     .filter((tool) => (TOOL_CHECKS[tool] ? TOOL_CHECKS[tool]() : true));
 
   return chain;

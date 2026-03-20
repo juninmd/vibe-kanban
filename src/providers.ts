@@ -20,10 +20,12 @@ const providerFactories: ToolProvider[] = [
   {
     id: "claude",
     name: "Claude (API)",
-    isAvailable: () => !isCommandAvailable("claude") && Boolean(process.env.ANTHROPIC_API_KEY)
-  }
+    isAvailable: () => !isCommandAvailable("claude") && Boolean(process.env.ANTHROPIC_API_KEY),
+  },
 ];
 
 export function getAvailableTools(providers: ToolProvider[] = providerFactories): ToolDescriptor[] {
-  return providers.filter((provider) => provider.isAvailable()).map(({ id, name }) => ({ id, name }));
+  return providers
+    .filter((provider) => provider.isAvailable())
+    .map(({ id, name }) => ({ id, name }));
 }

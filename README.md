@@ -1,5 +1,8 @@
 # Vibe Kanban — MVP inicial
 
+[![CI/CD Pipeline](https://github.com/juninmd/vibe-kanban/actions/workflows/ci.yml/badge.svg)](https://github.com/juninmd/vibe-kanban/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/juninmd/vibe-kanban/branch/main/graph/badge.svg)](https://codecov.io/gh/juninmd/vibe-kanban)
+
 Protótipo inicial de uma sala de orquestração com:
 
 - **Visão 3D** com agentes (bonecos) e cenário básico (kanban + computadores).
@@ -31,6 +34,30 @@ O projeto utiliza um backend em Node.js para gerenciar o estado dos agentes e a 
 > Dica: para máxima compatibilidade entre Linux/macOS/Windows, prefira caminhos relativos no app (ex.: `./clones`).
 
 4. Acesse a aplicação em `http://localhost:5174`.
+
+## Pipeline de CI/CD Local
+
+Você pode rodar as mesmas verificações executadas na pipeline de CI localmente:
+
+1. Executar Linter:
+   ```bash
+   pnpm run lint
+   ```
+
+2. Executar Formatação de Código:
+   ```bash
+   pnpm run format
+   ```
+
+3. Rodar Testes com Cobertura:
+   ```bash
+   pnpm run test:cov
+   ```
+
+4. Build do Projeto:
+   ```bash
+   pnpm run build
+   ```
 
 
 ## Rodando com kind (Kubernetes local)
