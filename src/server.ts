@@ -229,6 +229,7 @@ async function startTask(task: Task, agent: Agent) {
       fs.mkdirSync(finalWorkDir, { recursive: true });
     }
   }
+  }
 
   // 3. Update task with final directory info
   updateTask(task.id, {
