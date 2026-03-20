@@ -477,7 +477,7 @@ class TerminalInstance {
         background: "#ffffff",
         foreground: "#1e293b",
         cursor: "#0f172a",
-        black: "#1e293b",
+        black: "#334155",
         red: "#ef4444",
         green: "#15803d",
         yellow: "#eab308",
