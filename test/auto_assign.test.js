@@ -236,7 +236,7 @@ describe('Auto Assign Task Tests', async () => {
     await fetch(`${API_URL}/api/orchestrator/config`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ enabled: false })
+      body: JSON.stringify({ enabled: true })
     });
 
     await fetch(`${API_URL}/api/agents`, {
