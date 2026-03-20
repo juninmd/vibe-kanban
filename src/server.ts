@@ -209,6 +209,7 @@ async function startTask(task: Task, agent: Agent) {
 
   // 2. Perform slow async Git worktree setup
   // 2. Perform slow async Git worktree setup
+  // 2. Perform slow async Git worktree setup
   if (task.githubRepo) {
     try {
       const branchName = `feature/task-${task.id}`;
