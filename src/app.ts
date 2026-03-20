@@ -491,8 +491,8 @@ function createSkinTexture(color: string, text: string) {
   const canvas = document.createElement("canvas");
   canvas.width = 512;
   canvas.height = 256;
-  const ctx = canvas.getContext("2d")!;
-
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Failed to get 2D context for skin texture.");
   // Background
   ctx.fillStyle = color;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
