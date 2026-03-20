@@ -1,3 +1,4 @@
+import os
 from playwright.sync_api import sync_playwright
 
 def run():
@@ -6,7 +7,7 @@ def run():
         page = browser.new_page()
         try:
             print("Navigating to page...")
-            page.goto("http://localhost:5174")
+            page.goto(os.environ.get("VERIFICATION_URL", "http://localhost:5174"))
 
             # Wait for some content to load
             print("Waiting for network idle...")
