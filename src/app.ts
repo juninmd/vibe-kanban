@@ -1337,14 +1337,16 @@ function createAgentMesh(agent: Agent, index: number) {
   }
 
   // Determine badge color based on tool/model
-  let badgeColor = "#555555";
   const tool = agent.tool || "unknown";
-
-  if (tool.includes("openai")) badgeColor = "#10a37f";
-  else if (tool.includes("gemini")) badgeColor = "#4285f4";
-  else if (tool.includes("copilot")) badgeColor = "#6f42c1";
-  else if (tool.includes("opencode")) badgeColor = "#f97316";
-  else if (tool.includes("claude")) badgeColor = "#d97757";
+  const toolColorMap: Record<string, string> = {
+    openai: "#10a37f",
+    gemini: "#4285f4",
+    copilot: "#6f42c1",
+    opencode: "#f97316",
+    claude: "#d97757",
+  };
+  const toolKey = Object.keys(toolColorMap).find(key => tool.includes(key));
+  const badgeColor = toolKey ? toolColorMap[toolKey] : "#555555";
 
   const labelCanvas = makeLabelCanvas(`${agent.model}`, badgeColor);
   const labelTex = new THREE.CanvasTexture(labelCanvas);
