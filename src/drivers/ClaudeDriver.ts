@@ -3,7 +3,7 @@ import { spawn } from "child_process";
 
 export class ClaudeDriver implements LLMDriver {
   name: string = "Claude Code";
-  private runningTasks = new Map<number, any>();
+  private runningTasks = new Map<number, import("child_process").ChildProcess | NodeJS.Timeout>();
 
   async executeTask(task: Task, agent: Agent, ctx: DriverContext): Promise<void> {
     const cmd = "claude";
