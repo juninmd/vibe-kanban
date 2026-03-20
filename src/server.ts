@@ -409,6 +409,8 @@ const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? dri
 
 function autoAssign() {
   const backlogTasks = DB.getTasks().filter(t => t.lane === "backlog");
+  const priorityOrder: Record<string, number> = { "alta": 3, "media": 2, "baixa": 1 };
+  backlogTasks.sort((a, b) => (priorityOrder[b.priority] || 0) - (priorityOrder[a.priority] || 0));
   if (backlogTasks.length === 0) return;
   const agents = DB.getAgents();
   const agentsById = new Map(agents.map(agent => [agent.id, agent]));
