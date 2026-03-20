@@ -238,6 +238,7 @@ async function startTask(task: Task, agent: Agent) {
   }
   }
   }
+  }
 
   // 3. Update task with final directory info
   updateTask(task.id, {
