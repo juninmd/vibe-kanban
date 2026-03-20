@@ -7,7 +7,7 @@
     "watch": "tsc -w",
     "start": "node dist/server.js",
     "pretest": "pnpm build",
-    "test": "node --test test/unit/*.test.js && node --test test/api.test.js && node --test test/orchestration.test.js && node --test test/opencode_integration.test.js && node --test test/worktree_utils.test.js",
+    "test": "node --test test/unit/*.test.js && node --test test/api.test.js && node --test test/orchestration.test.js && node --test test/auto_assign.test.js && node --test test/opencode_integration.test.js && node --test test/worktree_utils.test.js",
     "test:e2e": "playwright test",
     "test:all": "pnpm test && pnpm test:e2e",
     "kind:up": "./scripts/kind-up.sh",

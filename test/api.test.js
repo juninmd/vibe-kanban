@@ -245,6 +245,32 @@ describe('Vibe Kanban API', async () => {
     assert.ok(Array.isArray(data.businessRecommendations));
   });
 
+  test('POST /api/orchestrator/run triggers manual assignment', async () => {
+    await fetch(`${API_URL}/api/reset`, { method: 'POST' });
+
+    const createRes = await fetch(`${API_URL}/api/tasks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: 'Trigger Test Task', source: 'test', category: 'roadmap' })
+    });
+    const { task } = await createRes.json();
+    assert.equal(task.lane, 'backlog');
+
+    const triggerRes = await fetch(`${API_URL}/api/orchestrator/run`, {
+      method: 'POST'
+    });
+
+    assert.equal(triggerRes.status, 200);
+    const triggerData = await triggerRes.json();
+    assert.equal(triggerData.ok, true);
+
+    const stateRes = await fetch(`${API_URL}/api/state`);
+    const state = await stateRes.json();
+    assert.ok(Array.isArray(state.tasks));
+    assert.ok(Array.isArray(state.agents));
+    assert.ok(state.agents.length > 0, 'At least one agent should exist');
+  });
+
   test('POST /api/demands/intake enriches remote demand with business requirements', async () => {
     const res = await fetch(`${API_URL}/api/demands/intake`, {
       method: 'POST',

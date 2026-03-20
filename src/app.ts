@@ -1807,16 +1807,74 @@ function updateAgents3D() {
     }
   }
 
-  // Check if we need to create meshes for new agents
+  // Check if we need to create meshes for new agents or recreate for changed role/model
   agents.forEach((agent, idx) => {
-    if (!agentMeshes.has(agent.id)) {
+    const signature = `${agent.role}-${agent.model}`;
+    const existing = agentMeshes.get(agent.id);
+
+    if (!existing || existing.group.userData.signature !== signature) {
+      if (existing) {
+        // Dispose old mesh
+        if (existing.laser) {
+          scene.remove(existing.laser);
+          existing.laser.geometry.dispose();
+          (existing.laser.material as THREE.Material).dispose();
+        }
+
+        // Deep dispose of group children
+        existing.group.traverse((child: any) => {
+          if (child.isMesh) {
+            child.geometry.dispose();
+            if (Array.isArray(child.material)) {
+              child.material.forEach((mat: any) => {
+                if (mat.map) mat.map.dispose();
+                mat.dispose();
+              });
+            } else {
+              if (child.material.map) child.material.map.dispose();
+              child.material.dispose();
+            }
+          } else if (child.isSprite) {
+             if (child.material.map) child.material.map.dispose();
+             child.material.dispose();
+          }
+        });
+        scene.remove(existing.group);
+      }
+
+      let oldPos, oldRot;
+      if (existing) {
+        oldPos = existing.group.position.clone();
+        oldRot = existing.group.rotation.clone();
+      }
+
       const meshData = createAgentMesh(agent, idx);
+      meshData.group.userData.signature = signature;
+
+      if (oldPos) meshData.group.position.copy(oldPos);
+      if (oldRot) meshData.group.rotation.copy(oldRot);
+
+      const newPhase = existing ? existing.phase : "idle";
+
       agentMeshes.set(agent.id, {
         ...meshData,
-        phase: "idle",
-        phaseTimer: 0
+        phase: newPhase,
+        phaseTimer: existing ? existing.phaseTimer : 0,
+        target: existing ? existing.target : meshData.target
       });
-      playAction(agentMeshes.get(agent.id), "Idle", 0);
+
+      const actionMap: Record<string, string> = {
+        "idle": "Idle",
+        "working": "Sitting",
+        "celebrating": "ThumbsUp"
+      };
+
+      let actionToPlay = actionMap[newPhase] || "Walking";
+      if (newPhase === "working" && (!meshData.anims || !meshData.anims["Sitting"])) {
+         actionToPlay = "Idle";
+      }
+
+      playAction(agentMeshes.get(agent.id), actionToPlay, 0);
     }
   });
 
