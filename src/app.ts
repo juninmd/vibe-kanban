@@ -249,10 +249,19 @@ async function updateTaskAgentModels() {
   try {
     const res = await fetch(`${API_URL}/api/models?tool=${tool}`);
     const data = await res.json();
+    els.agentModelDropdown.innerHTML = "";
     if (data.models && data.models.length > 0) {
-      els.agentModelDropdown.innerHTML = data.models.map((m: string) => `<option value="${m}">${m}</option>`).join("");
+      data.models.forEach((m: string) => {
+        const option = document.createElement("option");
+        option.value = m;
+        option.textContent = m;
+        els.agentModelDropdown.appendChild(option);
+      });
     } else {
-      els.agentModelDropdown.innerHTML = '<option value="">Nenhum modelo encontrado</option>';
+      const defaultOption = document.createElement("option");
+      defaultOption.value = "";
+      defaultOption.textContent = "Nenhum modelo encontrado";
+      els.agentModelDropdown.appendChild(defaultOption);
     }
   } catch (e) {
     console.error("Erro ao carregar modelos para a tarefa:", e);
@@ -836,10 +845,19 @@ els.agentTool.addEventListener("change", async (e: Event) => {
   try {
     const res = await fetch(`${API_URL}/api/models?tool=${tool}`);
     const data = await res.json();
+    els.agentModelDropdown.innerHTML = "";
     if (data.models && data.models.length > 0) {
-      els.agentModelDropdown.innerHTML = data.models.map((m: string) => `<option value="${m}">${m}</option>`).join("");
+      data.models.forEach((m: string) => {
+        const option = document.createElement("option");
+        option.value = m;
+        option.textContent = m;
+        els.agentModelDropdown.appendChild(option);
+      });
     } else {
-      els.agentModelDropdown.innerHTML = '<option value="">Nenhum modelo encontrado</option>';
+      const defaultOption = document.createElement("option");
+      defaultOption.value = "";
+      defaultOption.textContent = "Nenhum modelo encontrado";
+      els.agentModelDropdown.appendChild(defaultOption);
     }
   } catch (e) { console.error(e); }
 });
@@ -1819,7 +1837,11 @@ function onPointerDown(event: PointerEvent) {
 
   // Create an array of all agent groups for hit testing
   const agentGroupsObjects: THREE.Object3D[] = [];
-  agentMeshes.forEach((val) => agentGroupsObjects.push(val.group));
+  agentMeshes.forEach((val) => {
+    if (val.group) {
+      agentGroupsObjects.push(val.group);
+    }
+  });
   const intersectsAgents = raycaster.intersectObjects(agentGroupsObjects, true);
 
   // Hide tooltip by default

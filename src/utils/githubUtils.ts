@@ -19,10 +19,11 @@ export async function createPullRequest(
             const { stdout } = await execFileAsync("git", args, { cwd: taskDir });
             return stdout.trim();
         } catch (e: any) {
-            const safeMsg = e.message.replace(new RegExp(githubToken, 'g'), '***');
+            const escapeRegExp = (string: string) => string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const safeMsg = e.message.split(githubToken).join('***');
             const sanitizedError = new Error(safeMsg);
             if (e.stack) {
-                (sanitizedError as any).stack = e.stack.replace(new RegExp(githubToken, 'g'), '***');
+                (sanitizedError as any).stack = e.stack.split(githubToken).join('***');
             }
             throw sanitizedError;
         }
@@ -94,7 +95,7 @@ export async function createPullRequest(
     if (!response.ok) {
         const errorData = await response.json();
         // If PR already exists, it might return a 422
-        if (response.status === 422 && errorData.errors && errorData.errors.some((e: any) => e.message.includes("A pull request already exists"))) {
+        if (response.status === 422 && errorData.errors && errorData.errors.some((errItem: any) => errItem.message && errItem.message.includes("A pull request already exists"))) {
             return `Pull Request já existe para a branch ${branchName}.`;
         }
         throw new Error(`Falha ao criar PR na API do GitHub: ${response.status} ${response.statusText} - ${JSON.stringify(errorData)}`);

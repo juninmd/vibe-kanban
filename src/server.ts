@@ -16,6 +16,7 @@ import { Memory } from "./memory.js";
 import { createPullRequest } from "./utils/githubUtils.js";
 import { isCommandAvailable } from "./utils/commandUtils.js";
 import { buildProviderChain, isEligibleForProviderFallback } from "./drivers/providerFallback.js";
+import { getAvailableTools } from "./providers.js";
 import "dotenv/config";
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 5174;

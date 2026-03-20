@@ -13,13 +13,16 @@ export function getProjectContext(dir: string, maxChars: number = 20000): string
     const walk = (currentDir: string, relativePath: string) => {
         if (charCount >= maxChars) return;
 
-        let items: string[] = [];
-        try { items = fs.readdirSync(currentDir); } catch (e) { return; }
+        let itemsList: string[] = [];
+        try { itemsList = fs.readdirSync(currentDir); } catch (e) { return; }
 
-        for (const item of items) {
+        for (const item of itemsList) {
             if (item === "node_modules" || item === ".git" || item === "dist" || item === ".DS_Store") continue;
 
-            const fullPath = path.join(currentDir, item);
+            // Sanitize path to prevent directory traversal
+            const fullPath = path.resolve(currentDir, path.basename(item));
+            if (!fullPath.startsWith(path.resolve(currentDir))) continue;
+
             const relPath = path.join(relativePath, item);
             let stat;
             try { stat = fs.statSync(fullPath); } catch (e) { continue; }
