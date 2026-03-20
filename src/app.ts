@@ -61,7 +61,7 @@ const els = {
 };
 
 // Confetti State
-const confettiParticles: any[] = [];
+const confettiParticles: { mesh: THREE.Points; velocities: { x: number; y: number; z: number; }[]; age: number; }[] = [];
 
 async function fetchState() {
   try {
@@ -342,7 +342,7 @@ function updateConfetti() {
      }
      p.mesh.geometry.attributes.position.needsUpdate = true;
 
-     if(p.age > 200) {
+     if(p.age > CONFETTI_MAX_AGE) {
         scene.remove(p.mesh);
         p.mesh.geometry.dispose();
         confettiParticles.splice(i, 1);
