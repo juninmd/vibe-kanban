@@ -137,7 +137,7 @@ function autoAssign() {
 }
 
 // Start Auto-Pilot loop (every 3 seconds)
-setInterval(autoAssign, 3000);
+setInterval(autoAssign, AUTO_ASSIGN_INTERVAL_MS);
 
 // --- Server ---
 const server = createServer(async (req, res) => {
