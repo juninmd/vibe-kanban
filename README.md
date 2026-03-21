@@ -1,3 +1,5 @@
+![CI/CD Pipeline](https://github.com/juninmd/vibe-kanban/actions/workflows/ci.yml/badge.svg)
+
 # Vibe Kanban — MVP inicial
 
 Protótipo inicial de uma sala de orquestração com:
@@ -14,11 +16,13 @@ Protótipo inicial de uma sala de orquestração com:
 O projeto utiliza um backend em Node.js para gerenciar o estado dos agentes e a fila de tarefas.
 
 1. Instale as dependências (com `pnpm`):
+
    ```bash
    pnpm install
    ```
 
 2. Compile o código TypeScript:
+
    ```bash
    pnpm build
    ```
@@ -32,20 +36,22 @@ O projeto utiliza um backend em Node.js para gerenciar o estado dos agentes e a 
 
 4. Acesse a aplicação em `http://localhost:5174`.
 
-
 ## Rodando com kind (Kubernetes local)
 
 Pré-requisitos:
+
 - `kind`
 - `kubectl`
 - `docker`
 
 1. Suba o cluster local, build da imagem e deploy:
+
    ```bash
    ./scripts/kind-up.sh
    ```
 
 2. Faça o port-forward para acessar no navegador:
+
    ```bash
    kubectl -n vibe-kanban port-forward svc/vibe-kanban 5174:5174
    ```
@@ -53,6 +59,7 @@ Pré-requisitos:
 3. Abra `http://localhost:5174`.
 
 4. Para ver logs da aplicação:
+
    ```bash
    kubectl -n vibe-kanban logs -f deploy/vibe-kanban
    ```
@@ -75,6 +82,7 @@ Pré-requisitos:
 ## Drivers LLM (sem stubs/mocks)
 
 O projeto suporta a execução de comandos via drivers **sempre usando integrações reais** (CLIs ou APIs oficiais), nunca stubs ou mocks:
+
 - **OpenCodeDriver**: Executa `opencode` via CLI e materializa arquivos a partir do output.
 - **CopilotDriver**: Executa `gh copilot` via CLI para obter sugestões de código reais.
 - **GeminiDriver**: Usa a Gemini CLI (`gemini`) para operar diretamente sobre o workspace/clones.

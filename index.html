@@ -1,298 +1,310 @@
 <!doctype html>
 <html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vibe Kanban 3D</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🤖</text></svg>"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
+    <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-web-links@0.9.0/lib/xterm-addon-web-links.js"></script>
+  </head>
 
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Vibe Kanban 3D</title>
-  <link rel="icon"
-    href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🤖</text></svg>">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css" />
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
-  <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-web-links@0.9.0/lib/xterm-addon-web-links.js"></script>
-</head>
+  <body>
+    <div class="scanlines"></div>
+    <div id="toast-container" class="toast-container"></div>
+    <header class="topbar">
+      <h1>Vibe Kanban • Time de Agentes</h1>
+      <div class="topbar-actions">
+        <select id="driverSelect" style="margin-right: 10px">
+          <option value="">Carregando...</option>
+        </select>
+        <button id="createAgentBtn">Novo Agente</button>
+        <button id="settingsBtn">Configurações</button>
+        <button id="toggleViewBtn">Alternar 2D / 3D</button>
+        <button id="seedTasksBtn">Gerar tarefas exemplo</button>
+        <button id="clearDoneBtn" style="border-color: #5ea6ff; color: #5ea6ff; margin-right: 5px">
+          Limpar Concluídos
+        </button>
+        <button id="resetDataBtn" style="border-color: #ff6f6f; color: #ff6f6f">Resetar Dados</button>
+      </div>
+    </header>
 
-<body>
-  <div class="scanlines"></div>
-  <div id="toast-container" class="toast-container"></div>
-  <header class="topbar">
-    <h1>Vibe Kanban • Time de Agentes</h1>
-    <div class="topbar-actions">
-      <select id="driverSelect" style="margin-right: 10px;">
-        <option value="">Carregando...</option>
-      </select>
-      <button id="createAgentBtn">Novo Agente</button>
-      <button id="settingsBtn">Configurações</button>
-      <button id="toggleViewBtn">Alternar 2D / 3D</button>
-      <button id="seedTasksBtn">Gerar tarefas exemplo</button>
-      <button id="clearDoneBtn" style="border-color: #5ea6ff; color: #5ea6ff; margin-right: 5px;">Limpar
-        Concluídos</button>
-      <button id="resetDataBtn" style="border-color: #ff6f6f; color: #ff6f6f;">Resetar Dados</button>
-    </div>
-  </header>
-
-  <main class="layout">
-    <aside class="sidebar">
-      <section id="dashboardStats" class="dashboard-stats">
-        <h2>📊 Dashboard</h2>
-        <div class="stat-grid">
-          <div class="stat-item">
-            <span class="stat-label">Pendentes</span>
-            <span class="stat-value" id="statPending">0</span>
+    <main class="layout">
+      <aside class="sidebar">
+        <section id="dashboardStats" class="dashboard-stats">
+          <h2>📊 Dashboard</h2>
+          <div class="stat-grid">
+            <div class="stat-item">
+              <span class="stat-label">Pendentes</span>
+              <span class="stat-value" id="statPending">0</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">Concluídas</span>
+              <span class="stat-value" id="statDone">0</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">Agentes</span>
+              <span class="stat-value" id="statAgents">0</span>
+            </div>
           </div>
-          <div class="stat-item">
-            <span class="stat-label">Concluídas</span>
-            <span class="stat-value" id="statDone">0</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-label">Agentes</span>
-            <span class="stat-value" id="statAgents">0</span>
+        </section>
+
+        <section>
+          <h2>Criar tarefa</h2>
+          <form id="taskForm">
+            <label>
+              Fonte
+              <select id="taskSource">
+                <option value="product_manager">Product Manager</option>
+                <option value="usuario">Usuário</option>
+              </select>
+            </label>
+            <label>
+              Título
+              <input id="taskTitle" required placeholder="Ex: implementar autenticação" />
+            </label>
+            <label>
+              Categoria
+              <select id="taskCategory">
+                <option value="roadmap">Roadmap</option>
+                <option value="security">Segurança</option>
+                <option value="performance">Performance</option>
+                <option value="feature">Feature Builder</option>
+                <option value="test">QA / Testes</option>
+                <option value="bug">Correções / Bugs</option>
+              </select>
+            </label>
+            <label>
+              Prioridade
+              <select id="taskPriority">
+                <option value="alta">Alta</option>
+                <option value="media" selected>Média</option>
+                <option value="baixa">Baixa</option>
+              </select>
+            </label>
+            <label>
+              Diretório de Trabalho
+              <select id="taskWorkMode">
+                <option value="auto">Automático (clones/task-id)</option>
+                <option value="local">Diretório Local Existente</option>
+                <option value="github">Repositório GitHub</option>
+                <option value="new">Novo Projeto</option>
+              </select>
+            </label>
+            <label id="taskWorkDirLabel" style="display: none">
+              Caminho do Diretório
+              <input id="taskWorkDir" placeholder="ex: D:\Projects\meu-app" />
+            </label>
+            <label id="taskGithubRepoLabel">
+              Repositório (Github)
+              <input id="taskGithubRepo" placeholder="ex: empresa/projeto" />
+            </label>
+            <label id="taskNewProjectLabel" style="display: none">
+              Nome do Novo Projeto
+              <input id="taskNewProject" placeholder="ex: meu-novo-app" />
+            </label>
+            <label>
+              Descrição
+              <textarea id="taskDescription" placeholder="Detalhes do card..." rows="3"></textarea>
+            </label>
+            <label>
+              Tipo de Agente (CLI/Integração)
+              <select id="taskAgentType">
+                <option value="">Automático / Opcional</option>
+              </select>
+            </label>
+            <label>
+              Designar Agente Voluntário (Opcional)
+              <select id="taskAgentAssign">
+                <option value="">- Automático Direcionado -</option>
+              </select>
+            </label>
+            <label>
+              Modelo Lógico
+              <select id="taskAgentModel">
+                <option value="">Selecione um agente ou ferramenta</option>
+              </select>
+            </label>
+            <button type="submit">Adicionar card</button>
+          </form>
+        </section>
+
+        <section>
+          <h2>Agentes</h2>
+          <div id="agentsList" class="agents-list"></div>
+        </section>
+
+        <section>
+          <h2>Eventos</h2>
+          <ul id="eventLog" class="event-log"></ul>
+        </section>
+      </aside>
+
+      <section class="workspace">
+        <div id="view3d" class="view view-3d active">
+          <canvas id="sceneCanvas"></canvas>
+          <p class="hint">Visão 3D da sala (inspiração: hubzz demo)</p>
+        </div>
+
+        <div id="view2d" class="view view-2d">
+          <div class="kanban" id="kanbanBoard"></div>
+        </div>
+
+        <div id="terminalsLayer" class="terminals-layer">
+          <div class="terminals-container" id="terminalsContainer">
+            <div class="terminals-header">
+              <div class="terminals-tabs" id="terminalsTabs">
+                <!-- Tabs per agent terminal -->
+              </div>
+              <div class="terminals-actions">
+                <button id="closeAllTerminalsBtn">Minimizar Tudo</button>
+              </div>
+            </div>
+            <div class="terminals-content" id="terminalsContent">
+              <!-- Terminal instances -->
+            </div>
           </div>
         </div>
+        <div id="agentTooltip" class="agent-tooltip" style="display: none"></div>
       </section>
+    </main>
 
-      <section>
-        <h2>Criar tarefa</h2>
-        <form id="taskForm">
-          <label>
-            Fonte
-            <select id="taskSource">
-              <option value="product_manager">Product Manager</option>
-              <option value="usuario">Usuário</option>
-            </select>
-          </label>
-          <label>
-            Título
-            <input id="taskTitle" required placeholder="Ex: implementar autenticação" />
-          </label>
-          <label>
-            Categoria
-            <select id="taskCategory">
+    <!-- Modal Novo Agente -->
+    <dialog id="agentModal" class="modal">
+      <div class="modal-content">
+        <h2 id="agentModalTitle">Criar Novo Agente</h2>
+        <form id="agentForm" class="modal-form">
+          <input type="hidden" id="agentEditId" value="" />
+          <label>Nome / Role <input id="agentRole" required placeholder="Ex: Desenvolvedor React" /></label>
+          <label
+            >Categoria
+            <select id="agentCategory">
               <option value="roadmap">Roadmap</option>
               <option value="security">Segurança</option>
               <option value="performance">Performance</option>
               <option value="feature">Feature Builder</option>
               <option value="test">QA / Testes</option>
               <option value="bug">Correções / Bugs</option>
+              <option value="misc">Geral</option>
             </select>
           </label>
-          <label>
-            Prioridade
-            <select id="taskPriority">
-              <option value="alta">Alta</option>
-              <option value="media" selected>Média</option>
-              <option value="baixa">Baixa</option>
+          <label
+            >Ferramenta (CLI)
+            <select id="agentTool" required>
+              <option value="">Carregando...</option>
             </select>
           </label>
-          <label>
-            Diretório de Trabalho
-            <select id="taskWorkMode">
-              <option value="auto">Automático (clones/task-id)</option>
-              <option value="local">Diretório Local Existente</option>
-              <option value="github">Repositório GitHub</option>
-              <option value="new">Novo Projeto</option>
+          <label
+            >Modelo
+            <select id="agentModel" required>
+              <option value="">Selecione a ferramenta primeiro</option>
             </select>
           </label>
-          <label id="taskWorkDirLabel" style="display:none">
-            Caminho do Diretório
-            <input id="taskWorkDir" placeholder="ex: D:\Projects\meu-app" />
-          </label>
-          <label id="taskGithubRepoLabel">
-            Repositório (Github)
-            <input id="taskGithubRepo" placeholder="ex: empresa/projeto" />
-          </label>
-          <label id="taskNewProjectLabel" style="display:none">
-            Nome do Novo Projeto
-            <input id="taskNewProject" placeholder="ex: meu-novo-app" />
-          </label>
-          <label>
-            Descrição
-            <textarea id="taskDescription" placeholder="Detalhes do card..." rows="3"></textarea>
-          </label>
-          <label>
-            Tipo de Agente (CLI/Integração)
-            <select id="taskAgentType">
-              <option value="">Automático / Opcional</option>
-            </select>
-          </label>
-          <label>
-            Designar Agente Voluntário (Opcional)
-            <select id="taskAgentAssign">
-              <option value="">- Automático Direcionado -</option>
-            </select>
-          </label>
-          <label>
-            Modelo Lógico
-            <select id="taskAgentModel">
-              <option value="">Selecione um agente ou ferramenta</option>
-            </select>
-          </label>
-          <button type="submit">Adicionar card</button>
+          <div class="modal-actions">
+            <button type="button" id="cancelAgentBtn">Cancelar</button>
+            <button type="submit" class="primary-btn" id="agentSubmitBtn">Criar Agente</button>
+          </div>
         </form>
-      </section>
-
-      <section>
-        <h2>Agentes</h2>
-        <div id="agentsList" class="agents-list"></div>
-      </section>
-
-      <section>
-        <h2>Eventos</h2>
-        <ul id="eventLog" class="event-log"></ul>
-      </section>
-    </aside>
-
-    <section class="workspace">
-      <div id="view3d" class="view view-3d active">
-        <canvas id="sceneCanvas"></canvas>
-        <p class="hint">Visão 3D da sala (inspiração: hubzz demo)</p>
       </div>
+    </dialog>
 
-      <div id="view2d" class="view view-2d">
-        <div class="kanban" id="kanbanBoard"></div>
+    <!-- Modal Configurações -->
+    <dialog id="settingsModal" class="modal">
+      <div class="modal-content">
+        <h2>Configurações do Kanban</h2>
+        <form id="settingsForm" class="modal-form">
+          <label
+            >Diretório padrão para Clones
+            <input id="configCloneDir" required placeholder="./clones ou /home/usuario/clones" />
+          </label>
+          <p class="field-hint">
+            Use caminhos compatíveis com Linux/macOS/Windows. Ex.: <code>./clones</code> ou
+            <code>/var/tmp/vibe-clones</code>.
+          </p>
+
+          <hr style="border: 0; border-top: 1px solid var(--border); margin: 1rem 0" />
+
+          <h3>Variáveis de Ambiente (API Keys)</h3>
+          <label
+            >OpenAI API Key
+            <input id="envOpenAI" type="password" placeholder="sk-..." />
+          </label>
+          <label
+            >Gemini API Key
+            <input id="envGemini" type="password" placeholder="AIza..." />
+          </label>
+          <label
+            >Anthropic API Key
+            <input id="envAnthropic" type="password" placeholder="sk-ant-..." />
+          </label>
+          <label
+            >Github Username
+            <input id="envGithubUser" type="text" placeholder="Nome de usuário..." />
+          </label>
+          <label
+            >Github Token
+            <input id="envGithub" type="password" placeholder="ghp_..." />
+          </label>
+
+          <div class="modal-actions">
+            <button type="button" id="cancelSettingsBtn">Cancelar</button>
+            <button type="submit" class="primary-btn">Salvar Configurações</button>
+          </div>
+        </form>
       </div>
+    </dialog>
 
-      <div id="terminalsLayer" class="terminals-layer">
-        <div class="terminals-container" id="terminalsContainer">
-          <div class="terminals-header">
-            <div class="terminals-tabs" id="terminalsTabs">
-              <!-- Tabs per agent terminal -->
+    <!-- Removido o terminalModal antigo em favor do terminalsLayer interativo -->
+
+    <!-- Modal Detalhes da Tarefa -->
+    <dialog id="taskDetailsModal" class="modal">
+      <div class="modal-content modal-large">
+        <div class="modal-header">
+          <h2 id="taskDetailsTitle">Tarefa #0: Título</h2>
+          <div class="modal-header-actions">
+            <button id="taskOpenFolderBtn" class="secondary-btn" style="display: none">📂 Abrir Pasta</button>
+            <button id="closeTaskDetailsBtn" class="close-btn">×</button>
+          </div>
+        </div>
+        <div class="task-details-grid">
+          <div class="task-info-pane">
+            <div class="detail-group">
+              <span class="detail-label">Descrição</span>
+              <p id="taskDetailsDescription" class="detail-value">Sem descrição.</p>
             </div>
-            <div class="terminals-actions">
-              <button id="closeAllTerminalsBtn">Minimizar Tudo</button>
+            <div class="detail-group">
+              <span class="detail-label">Status</span>
+              <span id="taskDetailsStatus" class="tag">Backlog</span>
+            </div>
+            <div class="detail-group">
+              <span class="detail-label">Agente Responsável</span>
+              <span id="taskDetailsAgent" class="detail-value">-</span>
+            </div>
+            <div class="detail-group">
+              <span class="detail-label">Prioridade / Categoria</span>
+              <div id="taskDetailsMeta"></div>
             </div>
           </div>
-          <div class="terminals-content" id="terminalsContent">
-            <!-- Terminal instances -->
+          <div class="task-history-pane">
+            <span class="detail-label">Histórico de Conversa / Logs</span>
+            <div id="taskHistoryContent" class="terminal-mini">
+              <!-- Logs will be loaded here -->
+            </div>
           </div>
         </div>
       </div>
-      <div id="agentTooltip" class="agent-tooltip" style="display: none;"></div>
-    </section>
-  </main>
+    </dialog>
 
-  <!-- Modal Novo Agente -->
-  <dialog id="agentModal" class="modal">
-    <div class="modal-content">
-      <h2 id="agentModalTitle">Criar Novo Agente</h2>
-      <form id="agentForm" class="modal-form">
-        <input type="hidden" id="agentEditId" value="" />
-        <label>Nome / Role <input id="agentRole" required placeholder="Ex: Desenvolvedor React" /></label>
-        <label>Categoria
-          <select id="agentCategory">
-            <option value="roadmap">Roadmap</option>
-            <option value="security">Segurança</option>
-            <option value="performance">Performance</option>
-            <option value="feature">Feature Builder</option>
-            <option value="test">QA / Testes</option>
-            <option value="bug">Correções / Bugs</option>
-            <option value="misc">Geral</option>
-          </select>
-        </label>
-        <label>Ferramenta (CLI)
-          <select id="agentTool" required>
-            <option value="">Carregando...</option>
-          </select>
-        </label>
-        <label>Modelo
-          <select id="agentModel" required>
-            <option value="">Selecione a ferramenta primeiro</option>
-          </select>
-        </label>
-        <div class="modal-actions">
-          <button type="button" id="cancelAgentBtn">Cancelar</button>
-          <button type="submit" class="primary-btn" id="agentSubmitBtn">Criar Agente</button>
-        </div>
-      </form>
-    </div>
-  </dialog>
-
-  <!-- Modal Configurações -->
-  <dialog id="settingsModal" class="modal">
-    <div class="modal-content">
-      <h2>Configurações do Kanban</h2>
-      <form id="settingsForm" class="modal-form">
-        <label>Diretório padrão para Clones
-          <input id="configCloneDir" required placeholder="./clones ou /home/usuario/clones" />
-        </label>
-        <p class="field-hint">Use caminhos compatíveis com Linux/macOS/Windows. Ex.: <code>./clones</code> ou
-          <code>/var/tmp/vibe-clones</code>.
-        </p>
-
-        <hr style="border: 0; border-top: 1px solid var(--border); margin: 1rem 0;">
-
-        <h3>Variáveis de Ambiente (API Keys)</h3>
-        <label>OpenAI API Key
-          <input id="envOpenAI" type="password" placeholder="sk-..." />
-        </label>
-        <label>Gemini API Key
-          <input id="envGemini" type="password" placeholder="AIza..." />
-        </label>
-        <label>Anthropic API Key
-          <input id="envAnthropic" type="password" placeholder="sk-ant-..." />
-        </label>
-        <label>Github Username
-          <input id="envGithubUser" type="text" placeholder="Nome de usuário..." />
-        </label>
-        <label>Github Token
-          <input id="envGithub" type="password" placeholder="ghp_..." />
-        </label>
-
-        <div class="modal-actions">
-          <button type="button" id="cancelSettingsBtn">Cancelar</button>
-          <button type="submit" class="primary-btn">Salvar Configurações</button>
-        </div>
-      </form>
-    </div>
-  </dialog>
-
-  <!-- Removido o terminalModal antigo em favor do terminalsLayer interativo -->
-
-  <!-- Modal Detalhes da Tarefa -->
-  <dialog id="taskDetailsModal" class="modal">
-    <div class="modal-content modal-large">
-      <div class="modal-header">
-        <h2 id="taskDetailsTitle">Tarefa #0: Título</h2>
-        <div class="modal-header-actions">
-          <button id="taskOpenFolderBtn" class="secondary-btn" style="display:none">📂 Abrir Pasta</button>
-          <button id="closeTaskDetailsBtn" class="close-btn">×</button>
-        </div>
-      </div>
-      <div class="task-details-grid">
-        <div class="task-info-pane">
-          <div class="detail-group">
-            <span class="detail-label">Descrição</span>
-            <p id="taskDetailsDescription" class="detail-value">Sem descrição.</p>
-          </div>
-          <div class="detail-group">
-            <span class="detail-label">Status</span>
-            <span id="taskDetailsStatus" class="tag">Backlog</span>
-          </div>
-          <div class="detail-group">
-            <span class="detail-label">Agente Responsável</span>
-            <span id="taskDetailsAgent" class="detail-value">-</span>
-          </div>
-          <div class="detail-group">
-            <span class="detail-label">Prioridade / Categoria</span>
-            <div id="taskDetailsMeta"></div>
-          </div>
-        </div>
-        <div class="task-history-pane">
-          <span class="detail-label">Histórico de Conversa / Logs</span>
-          <div id="taskHistoryContent" class="terminal-mini">
-            <!-- Logs will be loaded here -->
-          </div>
-        </div>
-      </div>
-    </div>
-  </dialog>
-
-  <script type="importmap">
+    <script type="importmap">
       {
         "imports": {
           "three": "https://unpkg.com/three@0.162.0/build/three.module.js",
@@ -300,7 +312,6 @@
         }
       }
     </script>
-  <script type="module" src="dist/app.js"></script>
-</body>
-
+    <script type="module" src="dist/app.js"></script>
+  </body>
 </html>

@@ -6,12 +6,12 @@ export default defineConfig({
   fullyParallel: true,
   use: {
     baseURL: 'http://127.0.0.1:4174',
-    trace: 'on-first-retry'
+    trace: 'on-first-retry',
   },
   webServer: {
     command: 'PORT=4174 node dist/server.js',
     url: 'http://127.0.0.1:4174/api/state',
     reuseExistingServer: true,
-    timeout: 60_000
-  }
+    timeout: 60_000,
+  },
 });

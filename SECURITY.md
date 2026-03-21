@@ -14,6 +14,7 @@ We will try to review and resolve the issue as quickly as possible.
 ## Security Practices
 
 We follow security best practices, including:
+
 - **Secrets Management**: Secrets and API keys are not committed to the repository. They are managed using environment variables.
 - **Dependency Updates**: We use automated dependency updates (Dependabot) to keep our dependencies secure and up-to-date.
 - **Dependency Scanning**: We regularly run `npm audit` or `pnpm audit` to check for known vulnerabilities in our dependencies.

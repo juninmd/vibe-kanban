@@ -11,15 +11,27 @@
     "test:all": "pnpm test && pnpm test:e2e",
     "kind:up": "./scripts/kind-up.sh",
     "kind:down": "./scripts/kind-down.sh",
-    "cli": "node dist/cli/vibe.js"
+    "cli": "node dist/cli/vibe.js",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "test:cov": "c8 --check-coverage --lines 70 pnpm test"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.55.0",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^20.12.7",
     "@types/node-fetch": "^2.6.11",
     "@types/three": "^0.160.0",
+    "@typescript-eslint/eslint-plugin": "^8.57.1",
+    "@typescript-eslint/parser": "^8.57.1",
+    "c8": "^11.0.0",
     "commander": "^12.1.0",
+    "eslint": "^10.1.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.5",
+    "globals": "^17.4.0",
+    "prettier": "^3.8.1",
     "three": "^0.160.0",
     "tsx": "^4.7.1",
     "typescript": "^5.3.3"
@@ -27,9 +39,9 @@
   "dependencies": {
     "better-sqlite3": "^12.6.2",
     "dotenv": "^17.3.1",
+    "execa": "^9.6.0",
     "node-fetch": "^2.7.0",
     "node-pty": "^1.1.0",
-    "playwright": "^1.58.2",
-    "execa": "^9.6.0"
+    "playwright": "^1.58.2"
   }
 }

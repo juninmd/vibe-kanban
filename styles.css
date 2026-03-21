@@ -117,7 +117,7 @@ textarea:focus {
   border-color: var(--accent);
   background: #f8fafc;
   outline: none;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   color: var(--text);
 }
 
@@ -127,7 +127,6 @@ button {
   position: relative;
   overflow: hidden;
 }
-
 
 button#seedTasksBtn {
   background: #f1f5f9;
@@ -289,7 +288,9 @@ label {
   display: grid;
   gap: 0.5rem;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  transition: transform 0.2s, box-shadow 0.2s;
+  transition:
+    transform 0.2s,
+    box-shadow 0.2s;
   position: relative;
   overflow: hidden;
 }
@@ -402,7 +403,6 @@ label {
 }
 
 @keyframes pulse-working {
-
   0%,
   100% {
     opacity: 1;
@@ -488,7 +488,7 @@ label {
 }
 
 .event-log li::before {
-  content: "> ";
+  content: '> ';
   color: var(--accent);
 }
 
@@ -515,7 +515,6 @@ label {
 .priority-baixa::before {
   background: #22c55e;
 }
-
 
 .agent-tooltip {
   position: absolute;
@@ -967,9 +966,16 @@ label {
   margin-right: 8px;
 }
 
-.log-system { color: #eab308; font-weight: bold; }
-.log-stdout { color: #0284c7; }
-.log-stderr { color: #ef4444; }
+.log-system {
+  color: #eab308;
+  font-weight: bold;
+}
+.log-stdout {
+  color: #0284c7;
+}
+.log-stderr {
+  color: #ef4444;
+}
 
 .close-btn {
   background: transparent;
