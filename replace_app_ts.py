@@ -1,110 +1,27 @@
-import codecs
+import re
 
-content = codecs.open('src/app.ts', 'r', 'utf-8').read()
+with open('src/app.ts', 'r') as f:
+    content = f.read()
 
-# 1. HTMLSelectElement
-content = content.replace(
-    '  agentType: document.getElementById("taskAgentType") as HTMLInputElement,',
-    '  agentType: document.getElementById("taskAgentType") as HTMLSelectElement,'
-)
+secure_random_fn = """
+function secureRandom(): number {
+  return crypto.getRandomValues(new Uint32Array(1))[0] / (0xffffffff + 1);
+}
 
-# 2. updateTaskAgentModels
-old_update = """async function updateTaskAgentModels() {
-  const agentId = els.agentAssign.value;
-  const driver = els.driverSelect.value;
+"""
 
-  let tool = driver; // Fallback to global driver
-  if (agentId) {
-    const agent = agents.find(a => a.id === agentId);
-    if (agent && agent.tool) tool = agent.tool;
-  }
+if "function secureRandom()" not in content:
+    content = secure_random_fn + content
 
-  if (!tool) {
-    els.agentModelDropdown.innerHTML = '<option value="">Selecione um agente ou ferramenta</option>';
-    return;
-  }
+content = content.replace("Math.random()", "secureRandom()")
 
-  try {
-    const res = await fetch(`${API_URL}/api/models?tool=${tool}`);
-    const data = await res.json();
-    if (data.models && data.models.length > 0) {
-      els.agentModelDropdown.innerHTML = data.models.map((m: string) => `<option value="${m}">${m}</option>`).join("");
-    } else {
-      els.agentModelDropdown.innerHTML = '<option value="">Nenhum modelo encontrado</option>';
-    }
-  } catch (e) {
-    console.error("Erro ao carregar modelos para a tarefa:", e);
-  }
-}"""
-new_update = """async function updateTaskAgentModels() {
-  const agentId = els.agentAssign.value;
-  const driver = els.driverSelect.value;
-  const agentType = els.agentType ? els.agentType.value : "";
+with open('src/app.ts', 'w') as f:
+    f.write(content)
 
-  let tool = agentType || driver; // Fallback to global driver
-  if (agentId) {
-    const agent = agents.find(a => a.id === agentId);
-    if (agent && agent.tool) tool = agent.tool;
-  }
+with open('src/server.ts', 'r') as f:
+    content_server = f.read()
 
-  if (!tool) {
-    els.agentModelDropdown.innerHTML = '<option value="">Selecione um agente ou ferramenta</option>';
-    return;
-  }
+content_server = content_server.replace("Math.random().toString(36).substr(2, 9)", "crypto.randomUUID().split('-')[0]")
 
-  els.agentModelDropdown.innerHTML = '<option value="">Carregando modelos...</option>';
-  try {
-    const res = await fetch(`${API_URL}/api/models?tool=${tool}`);
-    const data = await res.json();
-    if (data.models && data.models.length > 0) {
-      els.agentModelDropdown.innerHTML = data.models.map((m: string) => `<option value="${m}">${m}</option>`).join("");
-    } else {
-      els.agentModelDropdown.innerHTML = '<option value="">Nenhum modelo encontrado</option>';
-    }
-  } catch (e) {
-    console.error("Erro ao carregar modelos para a tarefa:", e);
-  }
-}"""
-content = content.replace(old_update, new_update)
-
-# 3. Add listener
-old_listeners = """els.agentAssign?.addEventListener("change", () => {
-  updateTaskAgentModels();
-});"""
-new_listeners = """els.agentAssign?.addEventListener("change", () => {
-  updateTaskAgentModels();
-});
-els.agentType?.addEventListener("change", () => {
-  updateTaskAgentModels();
-});"""
-content = content.replace(old_listeners, new_listeners)
-
-# 4. loadAvailableTools
-old_loadTools = """async function loadAvailableTools() {
-  try {
-    const res = await fetch(`${API_URL}/api/tools`);
-    const data = await res.json();
-    if (data.tools && data.tools.length > 0) {
-      els.driverSelect.innerHTML = data.tools.map((t: any) => `<option value="${t.id}">${t.name}</option>`).join("");
-    }
-  } catch (e) {
-    console.error("Erro ao carregar ferramentas:", e);
-  }
-}"""
-new_loadTools = """async function loadAvailableTools() {
-  try {
-    const res = await fetch(`${API_URL}/api/tools`);
-    const data = await res.json();
-    if (data.tools && data.tools.length > 0) {
-      els.driverSelect.innerHTML = data.tools.map((t: any) => `<option value="${t.id}">${t.name}</option>`).join("");
-      const agentTypeOptions = '<option value="">Automático / Opcional</option>' + data.tools.map((t: any) => `<option value="${t.id}">${t.name}</option>`).join("");
-      els.agentType.innerHTML = agentTypeOptions;
-    }
-  } catch (e) {
-    console.error("Erro ao carregar ferramentas:", e);
-  }
-}"""
-content = content.replace(old_loadTools, new_loadTools)
-
-codecs.open('src/app.ts', 'w', 'utf-8').write(content)
-print("Replaced content successfully.")
+with open('src/server.ts', 'w') as f:
+    f.write(content_server)

@@ -51,14 +51,14 @@ function initializeDefaultAgents() {
 
     defaults.forEach((def, idx) => {
       DB.saveAgent({
-        id: `agent-${Date.now()}-${idx}-${Math.random().toString(36).substr(2, 9)}`,
+        id: `agent-${Date.now()}-${idx}-${crypto.randomUUID().split('-')[0]}`,
         role: def.role,
         model: def.model,
         category: def.category,
         status: 'idle',
         assignedTask: null,
         tool: def.tool,
-        terminalId: `term-${Date.now()}-${idx}-${Math.random().toString(36).substr(2, 9)}`,
+        terminalId: `term-${Date.now()}-${idx}-${crypto.randomUUID().split('-')[0]}`,
       });
     });
     console.log('Initialized default agents.');

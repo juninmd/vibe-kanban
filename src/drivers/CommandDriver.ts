@@ -74,7 +74,7 @@ Do not output hypothetical logs. Output the actual file content needed to solve 
           });
         }
 
-        const cmd = `opencode run --prompt "${prompt.replace(/"/g, '\\"')}" --model "${agent.model || 'gpt-4o'}"\r`;
+        const cmd = `opencode run --prompt "${prompt.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}" --model "${agent.model || 'gpt-4o'}"\r`;
         this.terminalManager.write(agent.id, cmd);
 
         // For PTY, we don't have a simple "on close" for the command since the shell stays alive.
