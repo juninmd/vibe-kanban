@@ -115,10 +115,11 @@ Do not output hypothetical logs. Output the actual file content needed to solve 
     ctx.onLog(task.id, `Starting: ${command} ${args[0]} in ${taskDir}`);
 
     try {
-      const child = execa(command, args, { cwd: taskDir, reject: false });
+      // Use array of arguments instead of shell string to prevent injection
+      const child = execa(command, args, { cwd: taskDir, reject: false, shell: false });
       this.runningTasks.set(task.id, child);
 
-      child.stdout.on('data', (data) => {
+      child.stdout?.on('data', (data) => {
         const text = data.toString();
         fullOutput += text;
         const trimmed = text.trim();
@@ -128,7 +129,7 @@ Do not output hypothetical logs. Output the actual file content needed to solve 
         }
       });
 
-      child.stderr.on('data', (data) => {
+      child.stderr?.on('data', (data) => {
         const text = data.toString().trim();
         if (text) {
           this.appendLog(task.id, `[STDERR] ${text}`);

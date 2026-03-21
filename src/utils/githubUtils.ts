@@ -19,10 +19,14 @@ export async function createPullRequest(
       const { stdout } = await execFileAsync('git', args, { cwd: taskDir });
       return stdout.trim();
     } catch (e: any) {
-      const safeMsg = e.message.replace(new RegExp(githubToken, 'g'), '***');
+      // Escape github token to be used in regex properly to prevent ReDoS or related issues
+      const escapedToken = githubToken ? githubToken.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') : '';
+      const tokenRegex = escapedToken ? new RegExp(escapedToken, 'g') : /___NEVER_MATCH___/g;
+
+      const safeMsg = (e.message || '').replace(tokenRegex, '***');
       const sanitizedError = new Error(safeMsg);
       if (e.stack) {
-        (sanitizedError as any).stack = e.stack.replace(new RegExp(githubToken, 'g'), '***');
+        (sanitizedError as any).stack = e.stack.replace(tokenRegex, '***');
       }
       throw sanitizedError;
     }

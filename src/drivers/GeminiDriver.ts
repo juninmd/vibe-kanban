@@ -104,13 +104,14 @@ content
     ctx.onLog(task.id, `[SYSTEM] Modelo: ${agent.model}`);
 
     try {
+      // Execute without shell true to avoid injection
       const child = spawn(cmd, args, {
         cwd: basePath,
         env: env,
-        shell: true, // Use shell for better compatibility on Windows
+        shell: false,
       });
 
-      child.stdout.on('data', (data) => {
+      child.stdout?.on('data', (data) => {
         const text = data.toString();
         fullOutput += text;
         // Clean up output for the terminal view
@@ -121,7 +122,7 @@ content
         });
       });
 
-      child.stderr.on('data', (data) => {
+      child.stderr?.on('data', (data) => {
         const text = data.toString().trim();
         if (text) {
           // We log stderr but identify it
