@@ -584,7 +584,7 @@ const server = createServer(async (req, res) => {
 
   // GET /api/tools
   if (url === "/api/tools" && method === "GET") {
-    return jsonResponse(res, 200, { tools: getAvailableTools() });
+    return jsonResponse(res, 200, { tools: Object.keys(drivers) });
   }
 
   // GET /api/models?tool=xxx

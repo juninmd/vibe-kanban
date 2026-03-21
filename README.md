@@ -1,5 +1,7 @@
 # Vibe Kanban — MVP inicial
 
+[![CI/CD Pipeline](https://github.com/juninmd/vibe-kanban/actions/workflows/ci.yml/badge.svg)](https://github.com/juninmd/vibe-kanban/actions/workflows/ci.yml)
+
 Protótipo inicial de uma sala de orquestração com:
 
 - **Visão 3D** com agentes (bonecos) e cenário básico (kanban + computadores).
@@ -92,3 +94,34 @@ O projeto suporta a execução de comandos via drivers **sempre usando integraç
 4. WebSocket para atualizações em tempo real multiusuário (atualmente usa SSE).
 5. Simulação de movimento no espaço 3D com animação por pathfinding (atualmente interpolação simples).
 6. Integração com backlog externo (GitHub/Jira/Linear).
+
+## CI/CD Pipeline & Development
+
+### Local Setup
+Ensure you have Node.js 20+ and pnpm 8+ installed.
+```bash
+pnpm install
+```
+
+### Environment Variables
+Copy the example environment config and adjust as needed:
+```bash
+cp .env.example .env
+```
+
+### Linting and Formatting
+To ensure your code meets our quality standards:
+```bash
+pnpm run lint
+pnpm run lint:fix
+pnpm run format
+```
+
+### Running Tests
+Unit, integration and E2E tests can be run using:
+```bash
+pnpm run test:cov
+```
+This generates a code coverage report using `c8`.
+
+For more details on contributing, please read [CONTRIBUTING.md](./CONTRIBUTING.md).

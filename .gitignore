@@ -12,4 +12,5 @@ vibe_config.json
 vibe_kanban.db
 *.log
 vibe_kanban.db-journal
-vibe_kanban.db
+vibe_kanban.dbcoverage/
+.c8_output/
