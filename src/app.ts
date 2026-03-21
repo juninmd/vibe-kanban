@@ -1814,8 +1814,18 @@ function updateAgents3D() {
   // Check if we need to create meshes for new agents or update existing ones
   agents.forEach((agent, idx) => {
     const existing = agentMeshes.get(agent.id);
+    let oldState: any = null;
+
     if (existing) {
       if (existing.group.userData.model !== agent.model || existing.group.userData.role !== agent.role) {
+        oldState = {
+          position: existing.group.position.clone(),
+          rotation: existing.group.rotation.clone(),
+          phase: existing.phase,
+          phaseTimer: existing.phaseTimer,
+          target: existing.target.clone()
+        };
+
         if (existing.laser) {
           scene.remove(existing.laser);
           existing.laser.geometry.dispose();
@@ -1844,12 +1854,24 @@ function updateAgents3D() {
 
     if (!agentMeshes.has(agent.id)) {
       const meshData = createAgentMesh(agent, idx);
-      agentMeshes.set(agent.id, {
-        ...meshData,
-        phase: "idle",
-        phaseTimer: 0
-      });
-      playAction(agentMeshes.get(agent.id), "Idle", 0);
+      if (oldState) {
+        meshData.group.position.copy(oldState.position);
+        meshData.group.rotation.copy(oldState.rotation);
+        meshData.target.copy(oldState.target);
+        agentMeshes.set(agent.id, {
+          ...meshData,
+          phase: oldState.phase,
+          phaseTimer: oldState.phaseTimer
+        });
+        // Let the tick logic handle resuming the right animation based on phase
+      } else {
+        agentMeshes.set(agent.id, {
+          ...meshData,
+          phase: "idle",
+          phaseTimer: 0
+        });
+        playAction(agentMeshes.get(agent.id), "Idle", 0);
+      }
     }
   });
 
