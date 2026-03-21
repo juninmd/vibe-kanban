@@ -2,7 +2,15 @@ node_modules/
 dist/
 server.log
 frontend.log
+# Environment and secrets
 .env
+.env.local
+.env.*.local
+*.key
+*.pem
+*.p12
+secrets/
+config/secrets.yml
 .gemini/
 venv/
 verification/
