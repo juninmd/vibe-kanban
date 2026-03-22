@@ -1435,6 +1435,8 @@ function createAgentMesh(agent: Agent, index: number) {
   const badgeColor = toolKey ? toolColorMap[toolKey] : "#555555";
   const toolKey = Object.keys(toolColorMap).find(key => tool.includes(key));
   const badgeColor = toolKey ? toolColorMap[toolKey] : "#555555";
+  const toolKey = Object.keys(toolColorMap).find(key => tool.includes(key));
+  const badgeColor = toolKey ? toolColorMap[toolKey] : "#555555";
 
   const labelCanvas = makeLabelCanvas(`${agent.model}`, badgeColor);
   const labelTex = new THREE.CanvasTexture(labelCanvas);
