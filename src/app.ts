@@ -172,7 +172,7 @@ function updateDashboard() {
 const confettiParticles: any[] = [];
 
 let isOfficeCreated = false;
-export let officeData: { padPositions: THREE.Vector3[] } = { padPositions: [] };
+export const officeData: { padPositions: THREE.Vector3[] } = { padPositions: [] };
 
 function updateState(data: any) {
   pendingStateData = data;
@@ -442,9 +442,9 @@ function renderAgents() {
 }
 
 // --- Terminal UI Logic ---
-declare var Terminal: any;
-declare var FitAddon: any;
-declare var WebLinksAddon: any;
+declare let Terminal: any;
+declare let FitAddon: any;
+declare let WebLinksAddon: any;
 
 class TerminalInstance {
   term: any;
@@ -974,7 +974,7 @@ loader.load("/models/RobotExpressive.glb", (gltf) => {
   rebuildAgentMeshes();
 });
 
-let computers: THREE.Group[] = [];
+const computers: THREE.Group[] = [];
 
 // Desk generation
 function spawnComputers() {
@@ -1487,7 +1487,7 @@ function createAgentMesh(agent: Agent, index: number) {
   group.position.set(-5 + index * 2, 0, -0.5);
   scene.add(group);
 
-  let label: THREE.Sprite | undefined = undefined; // We removed the floating label, setting to undefined for TS interface
+  const label: THREE.Sprite | undefined = undefined; // We removed the floating label, setting to undefined for TS interface
 
   const statusMat = new THREE.SpriteMaterial({ map: createStatusTexture("idle"), transparent: true, depthTest: false });
   const statusSprite = new THREE.Sprite(statusMat);

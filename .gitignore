@@ -3,6 +3,8 @@ dist/
 server.log
 frontend.log
 
+coverage/
+
 # Environment and secrets
 .env
 .env.local
