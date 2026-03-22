@@ -1281,11 +1281,6 @@ const dir = new THREE.DirectionalLight("#ffffff", 1.0);
 dir.position.set(5, 8, 3);
 scene.add(dir);
 
-// Add subtle grid to the floor
-const grid = new THREE.GridHelper(40, 40, "#cbd5e1", "#e2e8f0");
-grid.position.y = 0;
-scene.add(grid);
-
 function updateLighting() {
   const workingCount = agents.filter(a => a.status === "working").length;
   // Target intensity: brighter when busy
