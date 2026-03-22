@@ -2,6 +2,7 @@ node_modules/
 dist/
 server.log
 frontend.log
+
 # Environment and secrets
 .env
 .env.local
@@ -11,6 +12,7 @@ frontend.log
 *.p12
 secrets/
 config/secrets.yml
+
 .gemini/
 venv/
 verification/
@@ -20,4 +22,3 @@ vibe_config.json
 vibe_kanban.db
 *.log
 vibe_kanban.db-journal
-vibe_kanban.db

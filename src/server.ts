@@ -505,10 +505,70 @@ if (!isCommandAvailable("gemini")) {
   addEvent("Aviso: Gemini CLI não encontrado. Driver padrão definido como Gemini, mas pode falhar sem a CLI instalada.");
 }
 
+// Simple in-memory rate limiter
+const rateLimitMap = new Map<string, { count: number, resetTime: number }>();
+const RATE_LIMIT_WINDOW_MS = 60000;
+const MAX_REQUESTS_PER_WINDOW = 200;
+
+// Cleanup expired rate limit entries to prevent memory leaks
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, record] of rateLimitMap.entries()) {
+    if (now > record.resetTime) {
+      rateLimitMap.delete(ip);
+    }
+  }
+}, RATE_LIMIT_WINDOW_MS);
+
+function checkRateLimit(ip: string): boolean {
+  const now = Date.now();
+  let record = rateLimitMap.get(ip);
+  if (!record) {
+    record = { count: 1, resetTime: now + RATE_LIMIT_WINDOW_MS };
+    rateLimitMap.set(ip, record);
+    return true;
+  }
+  if (now > record.resetTime) {
+    record.count = 1;
+    record.resetTime = now + RATE_LIMIT_WINDOW_MS;
+    return true;
+  }
+  if (record.count >= MAX_REQUESTS_PER_WINDOW) {
+    return false;
+  }
+  record.count++;
+  return true;
+}
+
 const server = createServer(async (req, res) => {
   const { method, url } = req as any;
 
   if (!url) return;
+
+  // Add CORS headers to all responses
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+
+  if (method === "OPTIONS") return jsonResponse(res, 200, { ok: true });
+
+  const ip = req.socket.remoteAddress || "unknown";
+  if (!checkRateLimit(ip)) {
+    return jsonResponse(res, 429, { error: "Too many requests" });
+  }
+
+  // Basic API Authentication
+  if (url.startsWith("/api")) {
+    const authHeader = req.headers.authorization;
+    const apiSecret = process.env.API_SECRET;
+
+    // If API_SECRET is set, enforce authentication
+    if (apiSecret) {
+      if (!authHeader || authHeader !== `Bearer ${apiSecret}`) {
+        return jsonResponse(res, 401, { error: "Unauthorized" });
+      }
+    }
+  }
 
   // Serve static files
   if (method === "GET" && !url.startsWith("/api")) {
@@ -564,8 +624,6 @@ const server = createServer(async (req, res) => {
     });
     return;
   }
-
-  if (method === "OPTIONS") return jsonResponse(res, 200, { ok: true });
 
   // GET /api/config/clone-dir
   if (url === "/api/config/clone-dir" && method === "GET") {
@@ -803,6 +861,17 @@ const server = createServer(async (req, res) => {
   // POST /api/tasks (Create task)
   if (url === "/api/tasks" && method === "POST") {
     const body = await parseBody(req);
+
+    // Input validation
+    if (!body.title || typeof body.title !== "string" || body.title.trim() === "") {
+      return jsonResponse(res, 400, { error: "Invalid or missing title" });
+    }
+    if (body.title.length > 500) {
+      return jsonResponse(res, 400, { error: "Title too long" });
+    }
+    if (body.description && typeof body.description !== "string") {
+      return jsonResponse(res, 400, { error: "Invalid description" });
+    }
     // Resolve workDir
     let workDir = body.workDir || null;
     if (workDir) {
@@ -833,6 +902,14 @@ const server = createServer(async (req, res) => {
   if (url === "/api/assign" && method === "POST") {
     const body = await parseBody(req);
     const { taskId, agentId } = body;
+
+    // Input validation
+    if (typeof taskId !== "number") {
+      return jsonResponse(res, 400, { error: "Invalid taskId" });
+    }
+    if (agentId && typeof agentId !== "string") {
+      return jsonResponse(res, 400, { error: "Invalid agentId" });
+    }
     const task = getTask(taskId);
     const agent = agentId ? getAgent(agentId) : DB.getAgents().find(a => a.category === task?.category && a.status === "idle");
 
