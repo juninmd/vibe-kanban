@@ -79,7 +79,7 @@ export function getBodyMaterials(role: string, modelName?: string, badgeColorFal
             ctx.save();
             ctx.translate(128, 128);
             ctx.rotate(Math.PI);
-            ctx.scale(-1, 1);
+            // ctx.scale(-1, 1);
             ctx.translate(-128, -128);
 
             const rectWidth = 180;
