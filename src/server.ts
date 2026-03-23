@@ -327,6 +327,9 @@ const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? dri
           const attempts = (fallbackAttempts.get(tid) || 0) + 1;
           fallbackAttempts.set(tid, attempts);
 
+          // Lisa's algorithm uses a sequence of model attempts, evaluating exhaustion globally across attempts
+          // Since vibe-kanban uses providerChain to try multiple tools, we consider complete exhaustion
+          // when we have tried all tools AND we've exceeded MAX_FALLBACK_ATTEMPTS total transcient errors
           const isCompleteProviderExhaustion = attempts > MAX_FALLBACK_ATTEMPTS && attemptIndex >= providerChain.length - 1;
 
           if (!isCompleteProviderExhaustion) {

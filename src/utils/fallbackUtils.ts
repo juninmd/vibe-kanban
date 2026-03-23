@@ -52,3 +52,22 @@ export function isEligibleForFallback(output: string, exitCode?: number): boolea
 
     return false;
 }
+
+export interface ModelAttempt {
+    provider: string;
+    model?: string;
+    success: boolean;
+    error?: string;
+    duration: number;
+}
+
+/**
+ * Returns true when every attempt in a fallback chain failed due to provider
+ * infrastructure issues (eligible errors or binary not found), meaning no
+ * provider was able to attempt the task itself. In this case the loop should
+ * stop rather than reverting the issue and retrying indefinitely.
+ */
+export function isCompleteProviderExhaustion(attempts: ModelAttempt[]): boolean {
+    if (attempts.length === 0) return false;
+    return attempts.every((a) => !a.success && a.error !== "Non-eligible error");
+}
