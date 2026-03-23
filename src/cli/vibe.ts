@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-import { Command } from "commander";
-import fetch from "node-fetch";
-import * as fs from "fs";
-import * as path from "path";
+import { Command } from 'commander';
+import fetch from 'node-fetch';
+import * as fs from 'fs';
+import * as path from 'path';
 
 type VibeCliConfig = {
   apiUrl: string;
@@ -10,22 +10,22 @@ type VibeCliConfig = {
 };
 
 function loadCliConfig(): VibeCliConfig {
-  const configPath = path.resolve(process.cwd(), "vibe_config.json");
+  const configPath = path.resolve(process.cwd(), 'vibe_config.json');
   if (!fs.existsSync(configPath)) {
     return {
-      apiUrl: process.env.VIBE_API_URL || "http://localhost:5174",
+      apiUrl: process.env.VIBE_API_URL || 'http://localhost:5174',
     };
   }
   try {
-    const raw = fs.readFileSync(configPath, "utf-8");
+    const raw = fs.readFileSync(configPath, 'utf-8');
     const json = JSON.parse(raw);
     const apiUrl: string =
-      json.apiUrl || process.env.VIBE_API_URL || "http://localhost:5174";
+      json.apiUrl || process.env.VIBE_API_URL || 'http://localhost:5174';
     const defaultRepoDir: string | undefined = json.defaultRepoDir;
     return { apiUrl, defaultRepoDir };
   } catch {
     return {
-      apiUrl: process.env.VIBE_API_URL || "http://localhost:5174",
+      apiUrl: process.env.VIBE_API_URL || 'http://localhost:5174',
     };
   }
 }
@@ -35,17 +35,17 @@ async function createTask(params: {
   title: string;
   description: string;
   category: string;
-  priority: "alta" | "media" | "baixa";
+  priority: 'alta' | 'media' | 'baixa';
   githubRepo?: string;
   agentType?: string;
   workDir?: string;
 }) {
   const res = await fetch(`${params.apiUrl}/api/tasks`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       title: params.title,
-      source: "cli",
+      source: 'cli',
       category: params.category,
       priority: params.priority,
       githubRepo: params.githubRepo,
@@ -87,7 +87,7 @@ async function waitForTask(apiUrl: string, taskId: number) {
       process.stdout.write(`> ${last}\n`);
     }
 
-    if (task.lane === "done") {
+    if (task.lane === 'done') {
       finished = true;
       process.stdout.write(`✅ Tarefa #${taskId} concluída.\n`);
       break;
@@ -102,41 +102,41 @@ async function main() {
   const cfg = loadCliConfig();
 
   program
-    .name("vibe")
-    .description("CLI para agentes do Vibe Kanban")
-    .version("0.1.0");
+    .name('vibe')
+    .description('CLI para agentes do Vibe Kanban')
+    .version('0.1.0');
 
   program
-    .command("plan")
+    .command('plan')
     .description(
-      "Criar uma tarefa de planejamento (modo somente leitura) para um repositório"
+      'Criar uma tarefa de planejamento (modo somente leitura) para um repositório',
     )
-    .requiredOption("-t, --title <title>", "Título ou objetivo da tarefa")
+    .requiredOption('-t, --title <title>', 'Título ou objetivo da tarefa')
     .requiredOption(
-      "-d, --description <description>",
-      "Descrição detalhada do que deve ser planejado"
+      '-d, --description <description>',
+      'Descrição detalhada do que deve ser planejado',
     )
     .option(
-      "-c, --category <category>",
-      "Categoria da tarefa (default: roadmap)",
-      "roadmap"
+      '-c, --category <category>',
+      'Categoria da tarefa (default: roadmap)',
+      'roadmap',
     )
     .option(
-      "-p, --priority <priority>",
-      "Prioridade (alta|media|baixa)",
-      "media"
+      '-p, --priority <priority>',
+      'Prioridade (alta|media|baixa)',
+      'media',
     )
-    .option("--repo-dir <path>", "Diretório local do repositório alvo")
-    .option("--github-repo <slug>", "Slug do repositório no GitHub (org/repo)")
+    .option('--repo-dir <path>', 'Diretório local do repositório alvo')
+    .option('--github-repo <slug>', 'Slug do repositório no GitHub (org/repo)')
     .option(
-      "--no-wait",
-      "Não aguardar conclusão da tarefa, apenas criar o card"
+      '--no-wait',
+      'Não aguardar conclusão da tarefa, apenas criar o card',
     )
     .action(async (opts) => {
       const priority =
-        opts.priority === "alta" || opts.priority === "baixa"
+        opts.priority === 'alta' || opts.priority === 'baixa'
           ? opts.priority
-          : "media";
+          : 'media';
 
       const workDir =
         opts.repoDir || cfg.defaultRepoDir
@@ -150,12 +150,12 @@ async function main() {
         category: opts.category,
         priority,
         githubRepo: opts.githubRepo,
-        agentType: "plan",
+        agentType: 'plan',
         workDir,
       });
 
       process.stdout.write(
-        `Tarefa de plano criada com ID #${taskId} no servidor ${cfg.apiUrl}\n`
+        `Tarefa de plano criada com ID #${taskId} no servidor ${cfg.apiUrl}\n`,
       );
 
       if (opts.wait) {
@@ -164,36 +164,36 @@ async function main() {
     });
 
   program
-    .command("build")
+    .command('build')
     .description(
-      "Criar uma tarefa de execução/implementação (modo build) para um repositório"
+      'Criar uma tarefa de execução/implementação (modo build) para um repositório',
     )
-    .requiredOption("-t, --title <title>", "Título ou objetivo da tarefa")
+    .requiredOption('-t, --title <title>', 'Título ou objetivo da tarefa')
     .requiredOption(
-      "-d, --description <description>",
-      "Descrição detalhada do que deve ser implementado"
+      '-d, --description <description>',
+      'Descrição detalhada do que deve ser implementado',
     )
     .option(
-      "-c, --category <category>",
-      "Categoria da tarefa (default: feature)",
-      "feature"
+      '-c, --category <category>',
+      'Categoria da tarefa (default: feature)',
+      'feature',
     )
     .option(
-      "-p, --priority <priority>",
-      "Prioridade (alta|media|baixa)",
-      "media"
+      '-p, --priority <priority>',
+      'Prioridade (alta|media|baixa)',
+      'media',
     )
-    .option("--repo-dir <path>", "Diretório local do repositório alvo")
-    .option("--github-repo <slug>", "Slug do repositório no GitHub (org/repo)")
+    .option('--repo-dir <path>', 'Diretório local do repositório alvo')
+    .option('--github-repo <slug>', 'Slug do repositório no GitHub (org/repo)')
     .option(
-      "--no-wait",
-      "Não aguardar conclusão da tarefa, apenas criar o card"
+      '--no-wait',
+      'Não aguardar conclusão da tarefa, apenas criar o card',
     )
     .action(async (opts) => {
       const priority =
-        opts.priority === "alta" || opts.priority === "baixa"
+        opts.priority === 'alta' || opts.priority === 'baixa'
           ? opts.priority
-          : "media";
+          : 'media';
 
       const workDir =
         opts.repoDir || cfg.defaultRepoDir
@@ -207,12 +207,12 @@ async function main() {
         category: opts.category,
         priority,
         githubRepo: opts.githubRepo,
-        agentType: "build",
+        agentType: 'build',
         workDir,
       });
 
       process.stdout.write(
-        `Tarefa de build criada com ID #${taskId} no servidor ${cfg.apiUrl}\n`
+        `Tarefa de build criada com ID #${taskId} no servidor ${cfg.apiUrl}\n`,
       );
 
       if (opts.wait) {
@@ -224,7 +224,6 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error("Erro na CLI Vibe:", err);
+  console.error('Erro na CLI Vibe:', err);
   process.exit(1);
 });
-

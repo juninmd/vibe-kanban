@@ -1,6 +1,6 @@
-import { DriverContext } from "../types.js";
+import { DriverContext } from '../types.js';
 
-export const DEBUG_LOGS_ENABLED = process.env.VIBE_DEBUG !== "0";
+export const DEBUG_LOGS_ENABLED = process.env.VIBE_DEBUG !== '0';
 
 export function logDebugBlock(
   ctx: DriverContext,
@@ -23,5 +23,5 @@ export function logDebugCommand(
 ): void {
   if (!DEBUG_LOGS_ENABLED) return;
   const parts = [command, ...args].filter(Boolean);
-  ctx.onLog(taskId, `[DEBUG][COMMAND] ${parts.join(" ")}`);
+  ctx.onLog(taskId, `[DEBUG][COMMAND] ${parts.join(' ')}`);
 }

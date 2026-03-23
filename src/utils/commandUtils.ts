@@ -1,42 +1,48 @@
-import { execSync } from "child_process";
-import * as path from "path";
-import * as fs from "fs";
-import * as os from "os";
+import { execSync } from 'child_process';
+import * as path from 'path';
+import * as fs from 'fs';
+import * as os from 'os';
 
 export interface OpenCodeResolution {
   command: string | null;
-  source: "env" | "config" | "global" | "missing";
+  source: 'env' | 'config' | 'global' | 'missing';
 }
 
 function readVibeConfig(cwd: string): Record<string, unknown> | null {
   try {
-    const configPath = path.join(cwd, "vibe_config.json");
+    const configPath = path.join(cwd, 'vibe_config.json');
     if (!fs.existsSync(configPath)) return null;
-    return JSON.parse(fs.readFileSync(configPath, "utf-8"));
+    return JSON.parse(fs.readFileSync(configPath, 'utf-8'));
   } catch {
     return null;
   }
 }
 
-function resolveConfiguredExecutable(candidate: string | undefined, cwd: string): string | null {
+function resolveConfiguredExecutable(
+  candidate: string | undefined,
+  cwd: string,
+): string | null {
   if (!candidate?.trim()) return null;
 
   const trimmed = candidate.trim();
-  const resolved = path.isAbsolute(trimmed) ? trimmed : path.resolve(cwd, trimmed);
+  const resolved = path.isAbsolute(trimmed)
+    ? trimmed
+    : path.resolve(cwd, trimmed);
   return fs.existsSync(resolved) ? resolved : null;
 }
 
 export function getGlobalCommandPath(command: string): string | null {
   try {
-    const isWindows = process.platform === "win32";
+    const isWindows = process.platform === 'win32';
     if (isWindows) {
       // Common pnpm global paths on Windows
-      const pnpmHome = process.env.PNPM_HOME || path.join(os.homedir(), "AppData/Local/pnpm");
+      const pnpmHome =
+        process.env.PNPM_HOME || path.join(os.homedir(), 'AppData/Local/pnpm');
       const possiblePaths = [
         path.join(pnpmHome, `${command}.cmd`),
         path.join(pnpmHome, `${command}.exe`),
         // fallback to common global store if home is not set right
-        path.join(os.homedir(), "AppData/Roaming/npm", `${command}.cmd`)
+        path.join(os.homedir(), 'AppData/Roaming/npm', `${command}.cmd`),
       ];
 
       for (const p of possiblePaths) {
@@ -46,38 +52,45 @@ export function getGlobalCommandPath(command: string): string | null {
 
     // Fallback to 'where' / 'which'
     const checkCmd = isWindows ? `where ${command}` : `which ${command}`;
-    const output = execSync(checkCmd, { encoding: "utf-8", stdio: ["pipe", "pipe", "ignore"] });
-    return output.split("\n")[0].trim() || null;
+    const output = execSync(checkCmd, {
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'ignore'],
+    });
+    return output.split('\n')[0].trim() || null;
   } catch {
     return null;
   }
 }
 
-export function resolveOpenCodeCommand(options: { cwd?: string; env?: NodeJS.ProcessEnv } = {}): OpenCodeResolution {
+export function resolveOpenCodeCommand(
+  options: { cwd?: string; env?: NodeJS.ProcessEnv } = {},
+): OpenCodeResolution {
   const cwd = options.cwd || process.cwd();
   const env = options.env || process.env;
 
   const envPath = resolveConfiguredExecutable(env.OPENCODE_PATH, cwd);
   if (envPath) {
-    return { command: envPath, source: "env" };
+    return { command: envPath, source: 'env' };
   }
 
   const config = readVibeConfig(cwd);
   const configPath = resolveConfiguredExecutable(
-    typeof config?.opencodePath === "string" ? config.opencodePath : undefined,
-    cwd
+    typeof config?.opencodePath === 'string' ? config.opencodePath : undefined,
+    cwd,
   );
   if (configPath) {
-    return { command: configPath, source: "config" };
+    return { command: configPath, source: 'config' };
   }
 
-  const globalPath = getGlobalCommandPath("opencode");
+  const globalPath = getGlobalCommandPath('opencode');
   return globalPath
-    ? { command: globalPath, source: "global" }
-    : { command: null, source: "missing" };
+    ? { command: globalPath, source: 'global' }
+    : { command: null, source: 'missing' };
 }
 
-export function resolveOpenCodeExecutable(options: { cwd?: string; env?: NodeJS.ProcessEnv } = {}): string | null {
+export function resolveOpenCodeExecutable(
+  options: { cwd?: string; env?: NodeJS.ProcessEnv } = {},
+): string | null {
   return resolveOpenCodeCommand(options).command;
 }
 
@@ -88,7 +101,10 @@ export function isCommandAvailable(command: string): boolean {
 export function getCommandVersion(command: string): string | null {
   try {
     const cmdPath = getGlobalCommandPath(command) || command;
-    const output = execSync(`"${cmdPath}" --version`, { encoding: "utf-8", stdio: ["pipe", "pipe", "ignore"] });
+    const output = execSync(`"${cmdPath}" --version`, {
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'ignore'],
+    });
     return output.trim() || null;
   } catch {
     return null;

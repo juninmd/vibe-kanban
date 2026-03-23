@@ -1,6 +1,7 @@
 # 📋 Vibe Kanban
 
 ![Status: Active](https://img.shields.io/badge/Status-Active-brightgreen.svg)
+[![CI/CD Pipeline](https://github.com/juninmd/vibe-kanban/actions/workflows/ci.yml/badge.svg)](https://github.com/juninmd/vibe-kanban/actions/workflows/ci.yml)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript)](https://www.typescriptlang.org/)
 [![Three.js](https://img.shields.io/badge/Three.js-0.160.0-black?logo=threedotjs)](https://threejs.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -38,6 +39,15 @@ pnpm start
 # Use the CLI
 node dist/cli/vibe.js --help
 ```
+
+### Build Artifacts
+To build the application artifacts for production:
+```bash
+pnpm run build
+```
+
+### Deployment
+Deployment is handled automatically via GitHub Actions on push to the `main` branch.
 
 ## OpenCode on Windows
 
