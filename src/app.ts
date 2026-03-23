@@ -1,19 +1,19 @@
-import * as THREE from "three";
-import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
-import * as SkeletonUtils from "three/addons/utils/SkeletonUtils.js";
-import { createOffice } from "./office.js";
-import { getLaneSafe, getTaskCardPosition, shouldRenderTaskIn3D } from "./kanbanMath.js";
-import { getHeadMaterials, getBodyMaterials, getLimbMaterial } from "./skins.js";
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
+import { createOffice } from './office.js';
+import { getLaneSafe, getTaskCardPosition, shouldRenderTaskIn3D } from './kanbanMath.js';
+import { getHeadMaterials, getBodyMaterials, getLimbMaterial } from './skins.js';
 
-const API_URL = "";
+const API_URL = '';
 
 type Agent = {
   id: string;
   role: string;
   model: string;
   category: string;
-  status: "idle" | "working";
+  status: 'idle' | 'working';
   assignedTask: number | null;
   tool?: string;
 };
@@ -40,12 +40,12 @@ type EventLog = {
   text: string;
 };
 
-const lanes = ["backlog", "in_progress", "review", "done"];
+const lanes = ['backlog', 'in_progress', 'review', 'done'];
 const laneLabels: Record<string, string> = {
-  backlog: "Backlog",
-  in_progress: "Em progresso",
-  review: "Review",
-  done: "Concluído",
+  backlog: 'Backlog',
+  in_progress: 'Em progresso',
+  review: 'Review',
+  done: 'Concluído',
 };
 
 let agents: Agent[] = [];
@@ -57,79 +57,79 @@ let stateUpdateQueued = false;
 let pendingStateData: any = null;
 
 const els = {
-  form: document.getElementById("taskForm") as HTMLFormElement,
-  source: document.getElementById("taskSource") as HTMLSelectElement,
-  title: document.getElementById("taskTitle") as HTMLInputElement,
-  category: document.getElementById("taskCategory") as HTMLSelectElement,
-  priority: document.getElementById("taskPriority") as HTMLSelectElement,
-  githubRepo: document.getElementById("taskGithubRepo") as HTMLInputElement,
-  description: document.getElementById("taskDescription") as HTMLTextAreaElement,
-  agentType: document.getElementById("taskAgentType") as HTMLSelectElement,
-  agentAssign: document.getElementById("taskAgentAssign") as HTMLSelectElement,
-  agentModel: document.getElementById("taskAgentModel") as HTMLSelectElement,
-  driverSelect: document.getElementById("driverSelect") as HTMLSelectElement,
-  kanban: document.getElementById("kanbanBoard") as HTMLElement,
-  agentsList: document.getElementById("agentsList") as HTMLElement,
-  eventLog: document.getElementById("eventLog") as HTMLElement,
-  view3d: document.getElementById("view3d") as HTMLElement,
-  view2d: document.getElementById("view2d") as HTMLElement,
-  toggleViewBtn: document.getElementById("toggleViewBtn") as HTMLButtonElement,
-  seedTasksBtn: document.getElementById("seedTasksBtn") as HTMLButtonElement,
-  resetDataBtn: document.getElementById("resetDataBtn") as HTMLButtonElement,
-  clearDoneBtn: document.getElementById("clearDoneBtn") as HTMLButtonElement,
-  createAgentBtn: document.getElementById("createAgentBtn") as HTMLButtonElement,
-  settingsBtn: document.getElementById("settingsBtn") as HTMLButtonElement,
-  agentModal: document.getElementById("agentModal") as HTMLDialogElement,
-  agentForm: document.getElementById("agentForm") as HTMLFormElement,
-  cancelAgentBtn: document.getElementById("cancelAgentBtn") as HTMLButtonElement,
-  agentTool: document.getElementById("agentTool") as HTMLSelectElement,
-  agentModelDropdown: document.getElementById("agentModel") as HTMLSelectElement,
-  settingsModal: document.getElementById("settingsModal") as HTMLDialogElement,
-  settingsForm: document.getElementById("settingsForm") as HTMLFormElement,
-  cancelSettingsBtn: document.getElementById("cancelSettingsBtn") as HTMLButtonElement,
-  configCloneDir: document.getElementById("configCloneDir") as HTMLInputElement,
-  envOpenAI: document.getElementById("envOpenAI") as HTMLInputElement,
-  envGemini: document.getElementById("envGemini") as HTMLInputElement,
-  envAnthropic: document.getElementById("envAnthropic") as HTMLInputElement,
-  envGithubUser: document.getElementById("envGithubUser") as HTMLInputElement,
-  envGithub: document.getElementById("envGithub") as HTMLInputElement,
+  form: document.getElementById('taskForm') as HTMLFormElement,
+  source: document.getElementById('taskSource') as HTMLSelectElement,
+  title: document.getElementById('taskTitle') as HTMLInputElement,
+  category: document.getElementById('taskCategory') as HTMLSelectElement,
+  priority: document.getElementById('taskPriority') as HTMLSelectElement,
+  githubRepo: document.getElementById('taskGithubRepo') as HTMLInputElement,
+  description: document.getElementById('taskDescription') as HTMLTextAreaElement,
+  agentType: document.getElementById('taskAgentType') as HTMLSelectElement,
+  agentAssign: document.getElementById('taskAgentAssign') as HTMLSelectElement,
+  agentModel: document.getElementById('taskAgentModel') as HTMLSelectElement,
+  driverSelect: document.getElementById('driverSelect') as HTMLSelectElement,
+  kanban: document.getElementById('kanbanBoard') as HTMLElement,
+  agentsList: document.getElementById('agentsList') as HTMLElement,
+  eventLog: document.getElementById('eventLog') as HTMLElement,
+  view3d: document.getElementById('view3d') as HTMLElement,
+  view2d: document.getElementById('view2d') as HTMLElement,
+  toggleViewBtn: document.getElementById('toggleViewBtn') as HTMLButtonElement,
+  seedTasksBtn: document.getElementById('seedTasksBtn') as HTMLButtonElement,
+  resetDataBtn: document.getElementById('resetDataBtn') as HTMLButtonElement,
+  clearDoneBtn: document.getElementById('clearDoneBtn') as HTMLButtonElement,
+  createAgentBtn: document.getElementById('createAgentBtn') as HTMLButtonElement,
+  settingsBtn: document.getElementById('settingsBtn') as HTMLButtonElement,
+  agentModal: document.getElementById('agentModal') as HTMLDialogElement,
+  agentForm: document.getElementById('agentForm') as HTMLFormElement,
+  cancelAgentBtn: document.getElementById('cancelAgentBtn') as HTMLButtonElement,
+  agentTool: document.getElementById('agentTool') as HTMLSelectElement,
+  agentModelDropdown: document.getElementById('agentModel') as HTMLSelectElement,
+  settingsModal: document.getElementById('settingsModal') as HTMLDialogElement,
+  settingsForm: document.getElementById('settingsForm') as HTMLFormElement,
+  cancelSettingsBtn: document.getElementById('cancelSettingsBtn') as HTMLButtonElement,
+  configCloneDir: document.getElementById('configCloneDir') as HTMLInputElement,
+  envOpenAI: document.getElementById('envOpenAI') as HTMLInputElement,
+  envGemini: document.getElementById('envGemini') as HTMLInputElement,
+  envAnthropic: document.getElementById('envAnthropic') as HTMLInputElement,
+  envGithubUser: document.getElementById('envGithubUser') as HTMLInputElement,
+  envGithub: document.getElementById('envGithub') as HTMLInputElement,
   // Stats
-  statPending: document.getElementById("statPending") as HTMLElement,
-  statDone: document.getElementById("statDone") as HTMLElement,
-  statAgents: document.getElementById("statAgents") as HTMLElement,
-  headerStats: document.getElementById("headerStats") as HTMLElement,
-  toastContainer: document.getElementById("toast-container") as HTMLElement,
-  agentEditId: document.getElementById("agentEditId") as HTMLInputElement,
-  agentRole: document.getElementById("agentRole") as HTMLInputElement,
-  agentCategory: document.getElementById("agentCategory") as HTMLSelectElement,
-  agentModalTitle: document.getElementById("agentModalTitle") as HTMLElement,
-  agentSubmitBtn: document.getElementById("agentSubmitBtn") as HTMLButtonElement,
+  statPending: document.getElementById('statPending') as HTMLElement,
+  statDone: document.getElementById('statDone') as HTMLElement,
+  statAgents: document.getElementById('statAgents') as HTMLElement,
+  headerStats: document.getElementById('headerStats') as HTMLElement,
+  toastContainer: document.getElementById('toast-container') as HTMLElement,
+  agentEditId: document.getElementById('agentEditId') as HTMLInputElement,
+  agentRole: document.getElementById('agentRole') as HTMLInputElement,
+  agentCategory: document.getElementById('agentCategory') as HTMLSelectElement,
+  agentModalTitle: document.getElementById('agentModalTitle') as HTMLElement,
+  agentSubmitBtn: document.getElementById('agentSubmitBtn') as HTMLButtonElement,
   // New Terminal UI
-  terminalsLayer: document.getElementById("terminalsLayer") as HTMLElement,
-  terminalsContainer: document.getElementById("terminalsContainer") as HTMLElement,
-  terminalsTabs: document.getElementById("terminalsTabs") as HTMLElement,
-  terminalsContent: document.getElementById("terminalsContent") as HTMLElement,
-  closeAllTerminalsBtn: document.getElementById("closeAllTerminalsBtn") as HTMLButtonElement,
+  terminalsLayer: document.getElementById('terminalsLayer') as HTMLElement,
+  terminalsContainer: document.getElementById('terminalsContainer') as HTMLElement,
+  terminalsTabs: document.getElementById('terminalsTabs') as HTMLElement,
+  terminalsContent: document.getElementById('terminalsContent') as HTMLElement,
+  closeAllTerminalsBtn: document.getElementById('closeAllTerminalsBtn') as HTMLButtonElement,
   // Task Details Modal
-  taskDetailsModal: document.getElementById("taskDetailsModal") as HTMLDialogElement,
-  taskDetailsTitle: document.getElementById("taskDetailsTitle") as HTMLElement,
-  taskDetailsDescription: document.getElementById("taskDetailsDescription") as HTMLElement,
-  taskDetailsStatus: document.getElementById("taskDetailsStatus") as HTMLElement,
-  taskDetailsAgent: document.getElementById("taskDetailsAgent") as HTMLElement,
-  taskDetailsMeta: document.getElementById("taskDetailsMeta") as HTMLElement,
-  taskHistoryContent: document.getElementById("taskHistoryContent") as HTMLElement,
-  taskOpenFolderBtn: document.getElementById("taskOpenFolderBtn") as HTMLButtonElement,
-  closeTaskDetailsBtn: document.getElementById("closeTaskDetailsBtn") as HTMLButtonElement,
+  taskDetailsModal: document.getElementById('taskDetailsModal') as HTMLDialogElement,
+  taskDetailsTitle: document.getElementById('taskDetailsTitle') as HTMLElement,
+  taskDetailsDescription: document.getElementById('taskDetailsDescription') as HTMLElement,
+  taskDetailsStatus: document.getElementById('taskDetailsStatus') as HTMLElement,
+  taskDetailsAgent: document.getElementById('taskDetailsAgent') as HTMLElement,
+  taskDetailsMeta: document.getElementById('taskDetailsMeta') as HTMLElement,
+  taskHistoryContent: document.getElementById('taskHistoryContent') as HTMLElement,
+  taskOpenFolderBtn: document.getElementById('taskOpenFolderBtn') as HTMLButtonElement,
+  closeTaskDetailsBtn: document.getElementById('closeTaskDetailsBtn') as HTMLButtonElement,
 };
 
 // --- Toast System ---
-function showToast(message: string, type: "success" | "error" | "info" = "info") {
-  const toast = document.createElement("div");
+function showToast(message: string, type: 'success' | 'error' | 'info' = 'info') {
+  const toast = document.createElement('div');
   toast.className = `toast ${type}`;
   toast.textContent = message;
   els.toastContainer?.appendChild(toast);
   setTimeout(() => {
-    toast.style.animation = "fadeOut 0.5s forwards";
+    toast.style.animation = 'fadeOut 0.5s forwards';
     setTimeout(() => toast.remove(), 500);
   }, 3000);
 }
@@ -148,18 +148,25 @@ function playTone(freq: number, type: OscillatorType, dur: number, vol: number) 
     gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + dur);
     osc.start(audioCtx.currentTime);
     osc.stop(audioCtx.currentTime + dur);
-  } catch (e) { }
+  } catch (e) {}
 }
 
-function playSuccessSound() { playTone(880, "sine", 0.3, 0.2); playTone(1100, "sine", 0.4, 0.1); }
-function playErrorSound() { playTone(220, "sawtooth", 0.4, 0.3); }
-function playClickSound() { playTone(1200, "triangle", 0.05, 0.05); }
+function playSuccessSound() {
+  playTone(880, 'sine', 0.3, 0.2);
+  playTone(1100, 'sine', 0.4, 0.1);
+}
+function playErrorSound() {
+  playTone(220, 'sawtooth', 0.4, 0.3);
+}
+function playClickSound() {
+  playTone(1200, 'triangle', 0.05, 0.05);
+}
 
 // --- Dashboard Logic ---
 function updateDashboard() {
-  const pending = tasks.filter(t => t.lane !== "done").length;
-  const done = tasks.filter(t => t.lane === "done").length;
-  const activeAgents = agents.filter(a => a.status === "working").length;
+  const pending = tasks.filter((t) => t.lane !== 'done').length;
+  const done = tasks.filter((t) => t.lane === 'done').length;
+  const activeAgents = agents.filter((a) => a.status === 'working').length;
 
   if (els.statPending) els.statPending.textContent = pending.toString();
   if (els.statDone) els.statDone.textContent = done.toString();
@@ -188,14 +195,14 @@ function updateState(data: any) {
     const nextTaskState = new Map<number, { lane: string; assignedTo: string | null }>();
     newTasks.forEach((t: Task) => {
       const old = previousTaskState.get(t.id);
-      if (old && old.lane !== "done" && t.lane === "done") {
+      if (old && old.lane !== 'done' && t.lane === 'done') {
         spawnConfetti();
         playSuccessSound();
         if (old.assignedTo) {
           // Find the mesh for the agent that finished this
           const item = agentMeshes.get(old.assignedTo);
           if (item) {
-            item.phase = "celebrating";
+            item.phase = 'celebrating';
             item.phaseTimer = 3.0; // seconds
           }
         }
@@ -237,12 +244,13 @@ async function updateTaskAgentModels() {
 
   let tool = driver; // Fallback to global driver
   if (agentId) {
-    const agent = agents.find(a => a.id === agentId);
+    const agent = agents.find((a) => a.id === agentId);
     if (agent && agent.tool) tool = agent.tool;
   }
 
   if (!tool) {
-    els.agentModelDropdown.innerHTML = '<option value="">Selecione um agente ou ferramenta</option>';
+    els.agentModelDropdown.innerHTML =
+      '<option value="">Selecione um agente ou ferramenta</option>';
     return;
   }
 
@@ -250,12 +258,14 @@ async function updateTaskAgentModels() {
     const res = await fetch(`${API_URL}/api/models?tool=${tool}`);
     const data = await res.json();
     if (data.models && data.models.length > 0) {
-      els.agentModelDropdown.innerHTML = data.models.map((m: string) => `<option value="${m}">${m}</option>`).join("");
+      els.agentModelDropdown.innerHTML = data.models
+        .map((m: string) => `<option value="${m}">${m}</option>`)
+        .join('');
     } else {
       els.agentModelDropdown.innerHTML = '<option value="">Nenhum modelo encontrado</option>';
     }
   } catch (e) {
-    console.error("Erro ao carregar modelos para a tarefa:", e);
+    console.error('Erro ao carregar modelos para a tarefa:', e);
   }
 }
 
@@ -266,7 +276,7 @@ async function fetchState() {
     const data = await res.json();
     updateState(data);
   } catch (e) {
-    console.error("Failed to fetch state:", e);
+    console.error('Failed to fetch state:', e);
   }
 }
 
@@ -274,7 +284,7 @@ async function apiCall(endpoint: string, method: string, body: any) {
   try {
     const res = await fetch(`${API_URL}${endpoint}`, {
       method,
-      headers: { "Content-Type": "application/json" },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
     // State update handled by SSE
@@ -284,47 +294,57 @@ async function apiCall(endpoint: string, method: string, body: any) {
   }
 }
 
-function createTask(taskParams: { title: string; source: string; category: string; priority: string; githubRepo?: string; description?: string; agentType?: string; assignedTo?: string; model?: string; }) {
-  apiCall("/api/tasks", "POST", taskParams);
+function createTask(taskParams: {
+  title: string;
+  source: string;
+  category: string;
+  priority: string;
+  githubRepo?: string;
+  description?: string;
+  agentType?: string;
+  assignedTo?: string;
+  model?: string;
+}) {
+  apiCall('/api/tasks', 'POST', taskParams);
   playSuccessSound();
-  showToast(`Tarefa criada: ${taskParams.title}`, "success");
+  showToast(`Tarefa criada: ${taskParams.title}`, 'success');
 }
 
 function pickTask(task: Task) {
-  apiCall("/api/assign", "POST", { taskId: task.id, category: task.category });
+  apiCall('/api/assign', 'POST', { taskId: task.id, category: task.category });
   playClickSound();
-  showToast("Tarefa atribuída", "info");
+  showToast('Tarefa atribuída', 'info');
 }
 
 function interruptTask(task: Task) {
-  apiCall("/api/interrupt", "POST", { taskId: task.id });
+  apiCall('/api/interrupt', 'POST', { taskId: task.id });
   playErrorSound();
-  showToast("Tarefa interrompida", "error");
+  showToast('Tarefa interrompida', 'error');
 }
 
 function moveTask(task: Task, dir: number) {
   const idx = lanes.indexOf(task.lane);
   const next = idx + dir;
   if (next < 0 || next >= lanes.length) return;
-  apiCall("/api/move", "POST", { taskId: task.id, lane: lanes[next] });
+  apiCall('/api/move', 'POST', { taskId: task.id, lane: lanes[next] });
 }
 
 function reprioritize(task: Task, direction: number) {
-  apiCall("/api/reorder", "POST", { taskId: task.id, direction });
+  apiCall('/api/reorder', 'POST', { taskId: task.id, direction });
 }
 
 function bugFromTask(task: Task) {
   createTask({
     title: `Bug reportado em: ${task.title}`,
-    source: "agente",
-    category: "bug",
-    priority: "alta",
+    source: 'agente',
+    category: 'bug',
+    priority: 'alta',
     githubRepo: task.githubRepo,
   });
 }
 
 function renderKanban() {
-  els.kanban.innerHTML = "";
+  els.kanban.innerHTML = '';
   const agentsById = new Map(agents.map((agent) => [agent.id, agent.role]));
   const tasksByLane = new Map<string, Task[]>();
 
@@ -334,59 +354,59 @@ function renderKanban() {
   });
 
   lanes.forEach((lane) => {
-    const col = document.createElement("div");
-    col.className = "column";
+    const col = document.createElement('div');
+    col.className = 'column';
     col.innerHTML = `<h3>${laneLabels[lane]}</h3>`;
 
     (tasksByLane.get(lane) || []).forEach((task) => {
-      const card = document.createElement("article");
+      const card = document.createElement('article');
       card.className = `task-card priority-${task.priority}`;
-      card.style.cursor = "pointer";
+      card.style.cursor = 'pointer';
       card.onclick = (e) => {
         // Prevent click if clicking an action button
-        if ((e.target as HTMLElement).tagName === "BUTTON") return;
+        if ((e.target as HTMLElement).tagName === 'BUTTON') return;
         openTaskDetailsModal(task);
         playClickSound();
       };
-      
-      const assigned = task.assignedTo ? agentsById.get(task.assignedTo) ?? "-" : "-";
+
+      const assigned = task.assignedTo ? (agentsById.get(task.assignedTo) ?? '-') : '-';
 
       // Logs preview
-      const lastLog = task.logs && task.logs.length > 0 ? task.logs[task.logs.length - 1] : "";
+      const lastLog = task.logs && task.logs.length > 0 ? task.logs[task.logs.length - 1] : '';
 
       card.innerHTML = `
           <strong>#${task.id} ${task.title}</strong>
-          ${task.description ? `<p style="font-size:0.8em; margin: 4px 0">${task.description}</p>` : ""}
+          ${task.description ? `<p style="font-size:0.8em; margin: 4px 0">${task.description}</p>` : ''}
           <div class="task-meta">
-            ${task.githubRepo ? `<span class="tag">Repo: ${task.githubRepo}</span>` : ""}
+            ${task.githubRepo ? `<span class="tag">Repo: ${task.githubRepo}</span>` : ''}
             <span class="tag">${task.category}</span>
             <span class="tag">${task.priority}</span>
             <span class="tag">fonte: ${task.source}</span>
             <span class="tag">agente: ${assigned}</span>
-            ${task.agentType ? `<span class="tag">cli/sdk: ${task.agentType}</span>` : ""}
-            ${task.interrupted ? '<span class="tag">interrompido</span>' : ""}
+            ${task.agentType ? `<span class="tag">cli/sdk: ${task.agentType}</span>` : ''}
+            ${task.interrupted ? '<span class="tag">interrompido</span>' : ''}
           </div>
-          ${lastLog ? `<div style="font-size:0.8em; margin-top:5px; color:#aaa;">> ${lastLog}</div>` : ""}
+          ${lastLog ? `<div style="font-size:0.8em; margin-top:5px; color:#aaa;">> ${lastLog}</div>` : ''}
         `;
 
-      const actions = document.createElement("div");
-      actions.className = "task-actions";
+      const actions = document.createElement('div');
+      actions.className = 'task-actions';
 
       const makeBtn = (txt: string, onClick: () => void) => {
-        const btn = document.createElement("button");
+        const btn = document.createElement('button');
         btn.textContent = txt;
         btn.onclick = onClick;
         return btn;
       };
 
-      if (lane === "backlog") actions.append(makeBtn("Pegar tarefa", () => pickTask(task)));
-      if (lane === "in_progress") actions.append(makeBtn("Interromper", () => interruptTask(task)));
+      if (lane === 'backlog') actions.append(makeBtn('Pegar tarefa', () => pickTask(task)));
+      if (lane === 'in_progress') actions.append(makeBtn('Interromper', () => interruptTask(task)));
 
-      actions.append(makeBtn("←", () => moveTask(task, -1)));
-      actions.append(makeBtn("→", () => moveTask(task, +1)));
-      actions.append(makeBtn("↑", () => reprioritize(task, -1)));
-      actions.append(makeBtn("↓", () => reprioritize(task, +1)));
-      actions.append(makeBtn("+ bug", () => bugFromTask(task)));
+      actions.append(makeBtn('←', () => moveTask(task, -1)));
+      actions.append(makeBtn('→', () => moveTask(task, +1)));
+      actions.append(makeBtn('↑', () => reprioritize(task, -1)));
+      actions.append(makeBtn('↓', () => reprioritize(task, +1)));
+      actions.append(makeBtn('+ bug', () => bugFromTask(task)));
 
       card.append(actions);
       col.append(card);
@@ -398,14 +418,15 @@ function renderKanban() {
 
 function renderAgents() {
   if (agents.length === 0) {
-    els.agentsList.innerHTML = '<div class="agent-empty">Nenhum agente configurado.<br>Clique em "Novo Agente" para adicionar.</div>';
+    els.agentsList.innerHTML =
+      '<div class="agent-empty">Nenhum agente configurado.<br>Clique em "Novo Agente" para adicionar.</div>';
   } else {
-    els.agentsList.innerHTML = "";
+    els.agentsList.innerHTML = '';
     agents.forEach((a) => {
-      const div = document.createElement("div");
-      div.className = "agent-item";
-      const statusClass = a.status === "idle" ? "status-idle" : "status-working";
-      const statusLabel = a.status === "idle" ? "Livre" : "Trabalhando";
+      const div = document.createElement('div');
+      div.className = 'agent-item';
+      const statusClass = a.status === 'idle' ? 'status-idle' : 'status-working';
+      const statusLabel = a.status === 'idle' ? 'Livre' : 'Trabalhando';
       div.innerHTML = `
         <div class="agent-header">
           <strong>${a.role}</strong>
@@ -414,23 +435,23 @@ function renderAgents() {
         <div class="agent-details">
           <span>Modelo: ${a.model}</span>
           <span>Categoria: ${a.category}</span>
-          ${a.tool ? `<span>Ferramenta: ${a.tool}</span>` : ""}
-          ${a.assignedTask ? `<span>Task: #${a.assignedTask}</span>` : ""}
+          ${a.tool ? `<span>Ferramenta: ${a.tool}</span>` : ''}
+          ${a.assignedTask ? `<span>Task: #${a.assignedTask}</span>` : ''}
         </div>
       `;
-      const actions = document.createElement("div");
-      actions.className = "agent-actions";
-      const termBtn = document.createElement("button");
-      termBtn.className = "agent-term-btn";
-      termBtn.textContent = "📟 Terminal";
+      const actions = document.createElement('div');
+      actions.className = 'agent-actions';
+      const termBtn = document.createElement('button');
+      termBtn.className = 'agent-term-btn';
+      termBtn.textContent = '📟 Terminal';
       termBtn.onclick = () => openTerminal(a.id);
-      const editBtn = document.createElement("button");
-      editBtn.className = "agent-edit-btn";
-      editBtn.textContent = "✏️ Editar";
+      const editBtn = document.createElement('button');
+      editBtn.className = 'agent-edit-btn';
+      editBtn.textContent = '✏️ Editar';
       editBtn.onclick = () => openAgentEditModal(a);
-      const deleteBtn = document.createElement("button");
-      deleteBtn.className = "agent-delete-btn";
-      deleteBtn.textContent = "🗑️ Excluir";
+      const deleteBtn = document.createElement('button');
+      deleteBtn.className = 'agent-delete-btn';
+      deleteBtn.textContent = '🗑️ Excluir';
       deleteBtn.onclick = () => deleteAgentById(a.id, a.role);
       actions.append(termBtn, editBtn, deleteBtn);
       div.append(actions);
@@ -457,13 +478,13 @@ class TerminalInstance {
     this.agentId = agentId;
 
     // Create container
-    this.container = document.createElement("div");
-    this.container.className = "terminal-instance";
+    this.container = document.createElement('div');
+    this.container.className = 'terminal-instance';
     els.terminalsContent.appendChild(this.container);
 
     // Create tab
-    this.tab = document.createElement("div");
-    this.tab.className = "terminal-tab";
+    this.tab = document.createElement('div');
+    this.tab.className = 'terminal-tab';
     this.tab.textContent = agentRole;
     this.tab.onclick = () => terminalUIManager.setActive(agentId);
     els.terminalsTabs.appendChild(this.tab);
@@ -474,18 +495,18 @@ class TerminalInstance {
       fontSize: 14,
       fontFamily: "'Share Tech Mono', monospace",
       theme: {
-        background: "#ffffff",
-        foreground: "#1e293b",
-        cursor: "#0f172a",
-        black: "#1e293b",
-        red: "#ef4444",
-        green: "#15803d",
-        yellow: "#eab308",
-        blue: "#0284c7",
-        magenta: "#a855f7",
-        cyan: "#06b6d4",
-        white: "#f8fafc"
-      }
+        background: '#ffffff',
+        foreground: '#1e293b',
+        cursor: '#0f172a',
+        black: '#1e293b',
+        red: '#ef4444',
+        green: '#15803d',
+        yellow: '#eab308',
+        blue: '#0284c7',
+        magenta: '#a855f7',
+        cyan: '#06b6d4',
+        white: '#f8fafc',
+      },
     });
 
     this.fitAddon = new FitAddon.FitAddon();
@@ -497,14 +518,14 @@ class TerminalInstance {
 
     this.term.onData((data: string) => {
       fetch(`/api/terminals/${encodeURIComponent(agentId)}/send`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ data })
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data }),
       });
     });
 
     // Resize handling
-    window.addEventListener("resize", () => this.fitAddon.fit());
+    window.addEventListener('resize', () => this.fitAddon.fit());
   }
 
   write(data: string) {
@@ -512,15 +533,15 @@ class TerminalInstance {
   }
 
   focus() {
-    this.container.classList.add("active");
-    this.tab.classList.add("active");
+    this.container.classList.add('active');
+    this.tab.classList.add('active');
     this.term.focus();
     setTimeout(() => this.fitAddon.fit(), 10);
   }
 
   hide() {
-    this.container.classList.remove("active");
-    this.tab.classList.remove("active");
+    this.container.classList.remove('active');
+    this.tab.classList.remove('active');
   }
 
   dispose() {
@@ -540,17 +561,17 @@ class TerminalUIManager {
       els.closeAllTerminalsBtn.onclick = () => this.toggleMinimize();
     }
     // Set initial state
-    els.terminalsLayer.classList.add("minimized");
+    els.terminalsLayer.classList.add('minimized');
   }
 
   toggleMinimize() {
     this.isMinimized = !this.isMinimized;
     if (this.isMinimized) {
-      els.terminalsLayer.classList.add("minimized");
-      els.closeAllTerminalsBtn.textContent = "Maximizar";
+      els.terminalsLayer.classList.add('minimized');
+      els.closeAllTerminalsBtn.textContent = 'Maximizar';
     } else {
-      els.terminalsLayer.classList.remove("minimized");
-      els.closeAllTerminalsBtn.textContent = "Minimizar";
+      els.terminalsLayer.classList.remove('minimized');
+      els.closeAllTerminalsBtn.textContent = 'Minimizar';
       if (this.activeAgentId) {
         const inst = this.instances.get(this.activeAgentId);
         if (inst) setTimeout(() => inst.fitAddon.fit(), 100);
@@ -561,7 +582,7 @@ class TerminalUIManager {
   async openTerminal(agentId: string) {
     let inst = this.instances.get(agentId);
     if (!inst) {
-      const agent = agents.find(a => a.id === agentId);
+      const agent = agents.find((a) => a.id === agentId);
       if (!agent) return;
 
       inst = new TerminalInstance(agentId, agent.role);
@@ -569,9 +590,9 @@ class TerminalUIManager {
 
       // Start session on server
       try {
-        await fetch(`/api/terminals/${encodeURIComponent(agentId)}/start`, { method: "POST" });
+        await fetch(`/api/terminals/${encodeURIComponent(agentId)}/start`, { method: 'POST' });
       } catch (e) {
-        console.error("Failed to start terminal session", e);
+        console.error('Failed to start terminal session', e);
       }
     }
 
@@ -580,7 +601,7 @@ class TerminalUIManager {
   }
 
   setActive(agentId: string) {
-    this.instances.forEach(inst => inst.hide());
+    this.instances.forEach((inst) => inst.hide());
     const target = this.instances.get(agentId);
     if (target) {
       target.focus();
@@ -603,7 +624,7 @@ class TerminalUIManager {
   }
 
   cleanupDeadAgents(activeAgents: Agent[]) {
-    const activeIds = new Set(activeAgents.map(a => a.id));
+    const activeIds = new Set(activeAgents.map((a) => a.id));
     this.instances.forEach((inst, id) => {
       if (!activeIds.has(id)) {
         inst.dispose();
@@ -621,52 +642,59 @@ function openTerminal(agentId: string) {
 
 async function openTaskDetailsModal(task: Task) {
   els.taskDetailsTitle.textContent = `Tarefa #${task.id}: ${task.title}`;
-  els.taskDetailsDescription.textContent = task.description || "Sem descrição.";
+  els.taskDetailsDescription.textContent = task.description || 'Sem descrição.';
   els.taskDetailsStatus.textContent = laneLabels[task.lane] || task.lane;
   els.taskDetailsStatus.className = `tag lane-${task.lane}`;
-  
+
   const agentsById = new Map(agents.map((agent) => [agent.id, agent.role]));
-  els.taskDetailsAgent.textContent = task.assignedTo ? agentsById.get(task.assignedTo) || task.assignedTo : "Ninguém designado";
-  
+  els.taskDetailsAgent.textContent = task.assignedTo
+    ? agentsById.get(task.assignedTo) || task.assignedTo
+    : 'Ninguém designado';
+
   els.taskDetailsMeta.innerHTML = `
     <span class="tag">${task.category}</span>
     <span class="tag priority-${task.priority}">${task.priority}</span>
-    ${task.githubRepo ? `<span class="tag">Repo: ${task.githubRepo}</span>` : ""}
+    ${task.githubRepo ? `<span class="tag">Repo: ${task.githubRepo}</span>` : ''}
   `;
 
   // WorkDir handling
-  if (task.lane !== "done" && task.workDir) {
-    els.taskOpenFolderBtn.style.display = "block";
+  if (task.lane !== 'done' && task.workDir) {
+    els.taskOpenFolderBtn.style.display = 'block';
     els.taskOpenFolderBtn.onclick = () => {
-      fetch(`/api/tasks/${task.id}/open-folder`, { method: "POST" });
-      showToast("Abrindo pasta local...", "info");
+      fetch(`/api/tasks/${task.id}/open-folder`, { method: 'POST' });
+      showToast('Abrindo pasta local...', 'info');
     };
   } else {
-    els.taskOpenFolderBtn.style.display = "none";
+    els.taskOpenFolderBtn.style.display = 'none';
   }
 
   // Load History
-  els.taskHistoryContent.innerHTML = "Carregando histórico...";
+  els.taskHistoryContent.innerHTML = 'Carregando histórico...';
   els.taskDetailsModal.showModal();
 
   try {
     const res = await fetch(`/api/tasks/${task.id}/terminal`);
     const data = await res.json();
     if (data.logs && data.logs.length > 0) {
-      els.taskHistoryContent.innerHTML = data.logs.map((log: any) => {
-        const time = new Date(log.timestamp).toLocaleTimeString();
-        return `<div class="log-entry">
+      els.taskHistoryContent.innerHTML = data.logs
+        .map((log: any) => {
+          const time = new Date(log.timestamp).toLocaleTimeString();
+          return `<div class="log-entry">
           <span class="log-time">[${time}]</span>
           <span class="log-${log.type}">> ${log.content}</span>
         </div>`;
-      }).join("");
+        })
+        .join('');
       // Scroll to bottom
-      setTimeout(() => els.taskHistoryContent.scrollTop = els.taskHistoryContent.scrollHeight, 50);
+      setTimeout(
+        () => (els.taskHistoryContent.scrollTop = els.taskHistoryContent.scrollHeight),
+        50,
+      );
     } else {
-      els.taskHistoryContent.innerHTML = "Nenhum histórico disponível para esta tarefa.";
+      els.taskHistoryContent.innerHTML = 'Nenhum histórico disponível para esta tarefa.';
     }
   } catch (e) {
-    els.taskHistoryContent.innerHTML = "Erro ao carregar histórico.";
+    els.taskHistoryContent.innerHTML = 'Erro ao carregar histórico.';
     console.error(e);
   }
 }
@@ -676,7 +704,7 @@ function populateAgentAssignDropdown() {
   const currentVal = els.agentAssign.value;
   els.agentAssign.innerHTML = '<option value="">- Automático Direcionado -</option>';
   agents.forEach((a) => {
-    const opt = document.createElement("option");
+    const opt = document.createElement('option');
     opt.value = a.id;
     opt.textContent = `${a.role} (${a.category})`;
     els.agentAssign.append(opt);
@@ -688,26 +716,42 @@ async function openAgentEditModal(agent: Agent) {
   els.agentEditId.value = agent.id;
   els.agentRole.value = agent.role;
   els.agentCategory.value = agent.category;
-  els.agentModalTitle.textContent = "Editar Agente";
-  els.agentSubmitBtn.textContent = "Salvar Alterações";
+  els.agentModalTitle.textContent = 'Editar Agente';
+  els.agentSubmitBtn.textContent = 'Salvar Alterações';
   // Load tools
   els.agentTool.innerHTML = '<option value="">Carregando...</option>';
   try {
     const res = await fetch(`${API_URL}/api/tools`);
     const data = await res.json();
     if (data.tools && data.tools.length > 0) {
-      els.agentTool.innerHTML = '<option value="">Selecione a ferramenta</option>' + data.tools.map((t: any) => `<option value="${t.id}"${t.id === agent.tool ? ' selected' : ''}>${t.name}</option>`).join("");
+      els.agentTool.innerHTML =
+        '<option value="">Selecione a ferramenta</option>' +
+        data.tools
+          .map(
+            (t: any) =>
+              `<option value="${t.id}"${t.id === agent.tool ? ' selected' : ''}>${t.name}</option>`,
+          )
+          .join('');
     }
-  } catch (e) { console.error(e); }
+  } catch (e) {
+    console.error(e);
+  }
   // Load models for the tool
   if (agent.tool) {
     try {
       const res = await fetch(`${API_URL}/api/models?tool=${agent.tool}`);
       const data = await res.json();
       if (data.models && data.models.length > 0) {
-        els.agentModelDropdown.innerHTML = data.models.map((m: string) => `<option value="${m}"${m === agent.model ? ' selected' : ''}>${m}</option>`).join("");
+        els.agentModelDropdown.innerHTML = data.models
+          .map(
+            (m: string) =>
+              `<option value="${m}"${m === agent.model ? ' selected' : ''}>${m}</option>`,
+          )
+          .join('');
       }
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+    }
   } else {
     els.agentModelDropdown.innerHTML = `<option value="${agent.model}" selected>${agent.model}</option>`;
   }
@@ -716,9 +760,9 @@ async function openAgentEditModal(agent: Agent) {
 
 async function deleteAgentById(agentId: string, agentRole: string) {
   if (!confirm(`Tem certeza que deseja excluir o agente "${agentRole}"?`)) return;
-  await apiCall(`/api/agents/${encodeURIComponent(agentId)}`, "DELETE", {});
+  await apiCall(`/api/agents/${encodeURIComponent(agentId)}`, 'DELETE', {});
   playErrorSound();
-  showToast(`Agente "${agentRole}" removido`, "error");
+  showToast(`Agente "${agentRole}" removido`, 'error');
 }
 
 function addEvent(text: string) {
@@ -733,7 +777,7 @@ function renderEvents() {
   els.eventLog.innerHTML = eventLog
     .slice(0, maxEvents)
     .map((e) => `<li>${e.timestamp} — ${e.text}</li>`)
-    .join("");
+    .join('');
 }
 
 function render() {
@@ -744,16 +788,20 @@ function render() {
   updateAgents3D();
 }
 
-els.driverSelect?.addEventListener("change", async () => {
+els.driverSelect?.addEventListener('change', async () => {
   const driver = els.driverSelect.value;
-  await fetch("/api/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ driver }) });
+  await fetch('/api/config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ driver }),
+  });
   updateTaskAgentModels();
 });
 
-els.agentAssign?.addEventListener("change", () => {
+els.agentAssign?.addEventListener('change', () => {
   updateTaskAgentModels();
 });
-els.form.addEventListener("submit", (e) => {
+els.form.addEventListener('submit', (e) => {
   e.preventDefault();
   createTask({
     title: els.title.value.trim(),
@@ -764,50 +812,55 @@ els.form.addEventListener("submit", (e) => {
     description: els.description?.value.trim(),
     agentType: els.agentType?.value.trim(),
     assignedTo: els.agentAssign?.value || undefined,
-    model: els.agentModel?.value
+    model: els.agentModel?.value,
   });
-  els.title.value = "";
-  if (els.description) els.description.value = "";
-  if (els.githubRepo) els.githubRepo.value = "";
-  if (els.agentType) els.agentType.value = "";
-  if (els.agentAssign) els.agentAssign.value = "";
+  els.title.value = '';
+  if (els.description) els.description.value = '';
+  if (els.githubRepo) els.githubRepo.value = '';
+  if (els.agentType) els.agentType.value = '';
+  if (els.agentAssign) els.agentAssign.value = '';
 });
 
-els.toggleViewBtn.addEventListener("click", () => {
-  els.view3d.classList.toggle("active");
-  els.view2d.classList.toggle("active");
+els.toggleViewBtn.addEventListener('click', () => {
+  els.view3d.classList.toggle('active');
+  els.view2d.classList.toggle('active');
 });
 
-els.seedTasksBtn.addEventListener("click", () => {
+els.seedTasksBtn.addEventListener('click', () => {
   [
-    ["Planejar sprint de IA colaborativa", "product_manager", "roadmap", "alta"],
-    ["Auditar permissões do backend", "product_manager", "security", "alta"],
-    ["Otimizar render do quadro 3D", "usuario", "performance", "media"],
-    ["Criar painel de métricas de agente", "usuario", "feature", "media"]
+    ['Planejar sprint de IA colaborativa', 'product_manager', 'roadmap', 'alta'],
+    ['Auditar permissões do backend', 'product_manager', 'security', 'alta'],
+    ['Otimizar render do quadro 3D', 'usuario', 'performance', 'media'],
+    ['Criar painel de métricas de agente', 'usuario', 'feature', 'media'],
   ].forEach(([title, source, category, priority]) =>
-    createTask({ title: title as string, source: source as string, category: category as string, priority: priority as string }),
+    createTask({
+      title: title as string,
+      source: source as string,
+      category: category as string,
+      priority: priority as string,
+    }),
   );
 });
 
-els.resetDataBtn.addEventListener("click", () => {
-  if (confirm("Tem certeza que deseja apagar todos os dados do servidor?")) {
-    apiCall("/api/reset", "POST", {});
+els.resetDataBtn.addEventListener('click', () => {
+  if (confirm('Tem certeza que deseja apagar todos os dados do servidor?')) {
+    apiCall('/api/reset', 'POST', {});
   }
 });
 
-els.clearDoneBtn?.addEventListener("click", () => {
-  if (confirm("Tem certeza que deseja limpar todas as tarefas concluídas?")) {
-    apiCall("/api/tasks/clear-done", "POST", {});
+els.clearDoneBtn?.addEventListener('click', () => {
+  if (confirm('Tem certeza que deseja limpar todas as tarefas concluídas?')) {
+    apiCall('/api/tasks/clear-done', 'POST', {});
   }
 });
 
 // --- Modals Logic ---
-els.createAgentBtn.addEventListener("click", async () => {
+els.createAgentBtn.addEventListener('click', async () => {
   // Reset modal to create mode
-  els.agentEditId.value = "";
+  els.agentEditId.value = '';
   els.agentForm.reset();
-  els.agentModalTitle.textContent = "Criar Novo Agente";
-  els.agentSubmitBtn.textContent = "Criar Agente";
+  els.agentModalTitle.textContent = 'Criar Novo Agente';
+  els.agentSubmitBtn.textContent = 'Criar Agente';
   els.agentModelDropdown.innerHTML = '<option value="">Selecione a ferramenta primeiro</option>';
   els.agentModal.showModal();
   els.agentTool.innerHTML = '<option value="">Carregando...</option>';
@@ -815,7 +868,9 @@ els.createAgentBtn.addEventListener("click", async () => {
     const res = await fetch(`${API_URL}/api/tools`);
     const data = await res.json();
     if (data.tools && data.tools.length > 0) {
-      els.agentTool.innerHTML = '<option value="">Selecione a ferramenta</option>' + data.tools.map((t: any) => `<option value="${t.id}">${t.name}</option>`).join("");
+      els.agentTool.innerHTML =
+        '<option value="">Selecione a ferramenta</option>' +
+        data.tools.map((t: any) => `<option value="${t.id}">${t.name}</option>`).join('');
     } else {
       els.agentTool.innerHTML = '<option value="">Nenhuma ferramenta CLI encontrada</option>';
     }
@@ -824,9 +879,9 @@ els.createAgentBtn.addEventListener("click", async () => {
   }
 });
 
-els.cancelAgentBtn.addEventListener("click", () => els.agentModal.close());
+els.cancelAgentBtn.addEventListener('click', () => els.agentModal.close());
 
-els.agentTool.addEventListener("change", async (e: Event) => {
+els.agentTool.addEventListener('change', async (e: Event) => {
   const tool = (e.target as HTMLSelectElement).value;
   if (!tool) {
     els.agentModelDropdown.innerHTML = '<option value="">Selecione a ferramenta primeiro</option>';
@@ -837,14 +892,18 @@ els.agentTool.addEventListener("change", async (e: Event) => {
     const res = await fetch(`${API_URL}/api/models?tool=${tool}`);
     const data = await res.json();
     if (data.models && data.models.length > 0) {
-      els.agentModelDropdown.innerHTML = data.models.map((m: string) => `<option value="${m}">${m}</option>`).join("");
+      els.agentModelDropdown.innerHTML = data.models
+        .map((m: string) => `<option value="${m}">${m}</option>`)
+        .join('');
     } else {
       els.agentModelDropdown.innerHTML = '<option value="">Nenhum modelo encontrado</option>';
     }
-  } catch (e) { console.error(e); }
+  } catch (e) {
+    console.error(e);
+  }
 });
 
-els.agentForm.addEventListener("submit", async (e) => {
+els.agentForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   const editId = els.agentEditId.value;
   const role = els.agentRole.value;
@@ -854,86 +913,93 @@ els.agentForm.addEventListener("submit", async (e) => {
 
   if (editId) {
     // Edit mode
-    await apiCall(`/api/agents/${encodeURIComponent(editId)}`, "PUT", { role, category, tool, model });
-    showToast(`Agente "${role}" atualizado`, "success");
+    await apiCall(`/api/agents/${encodeURIComponent(editId)}`, 'PUT', {
+      role,
+      category,
+      tool,
+      model,
+    });
+    showToast(`Agente "${role}" atualizado`, 'success');
   } else {
     // Create mode
-    await apiCall("/api/agents", "POST", { role, category, tool, model });
-    showToast(`Agente "${role}" criado`, "success");
+    await apiCall('/api/agents', 'POST', { role, category, tool, model });
+    showToast(`Agente "${role}" criado`, 'success');
   }
   els.agentModal.close();
   els.agentForm.reset();
-  els.agentEditId.value = "";
+  els.agentEditId.value = '';
   els.agentModelDropdown.innerHTML = '<option value="">Selecione a ferramenta primeiro</option>';
 });
 
-els.settingsBtn.addEventListener("click", async () => {
+els.settingsBtn.addEventListener('click', async () => {
   els.settingsModal.showModal();
   try {
     const res = await fetch(`${API_URL}/api/config/clone-dir`);
     const data = await res.json();
-    els.configCloneDir.value = data.cloneDir || "";
-  } catch (e) { console.error(e); }
+    els.configCloneDir.value = data.cloneDir || '';
+  } catch (e) {
+    console.error(e);
+  }
 });
 
-els.cancelSettingsBtn.addEventListener("click", () => els.settingsModal.close());
-els.closeTaskDetailsBtn.addEventListener("click", () => els.taskDetailsModal.close());
+els.cancelSettingsBtn.addEventListener('click', () => els.settingsModal.close());
+els.closeTaskDetailsBtn.addEventListener('click', () => els.taskDetailsModal.close());
 
-els.settingsForm.addEventListener("submit", async (e) => {
+els.settingsForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   // Save clone dir
-  await apiCall("/api/config/clone-dir", "POST", { cloneDir: els.configCloneDir.value });
+  await apiCall('/api/config/clone-dir', 'POST', { cloneDir: els.configCloneDir.value });
 
   // Save env vars
   const envUpdates: Record<string, string> = {};
-  if (els.envOpenAI.value) envUpdates["OPENAI_API_KEY"] = els.envOpenAI.value;
-  if (els.envGemini.value) envUpdates["GEMINI_API_KEY"] = els.envGemini.value;
-  if (els.envAnthropic.value) envUpdates["ANTHROPIC_API_KEY"] = els.envAnthropic.value;
-  if (els.envGithubUser.value) envUpdates["GITHUB_USER"] = els.envGithubUser.value;
-  if (els.envGithub.value) envUpdates["GITHUB_TOKEN"] = els.envGithub.value;
+  if (els.envOpenAI.value) envUpdates['OPENAI_API_KEY'] = els.envOpenAI.value;
+  if (els.envGemini.value) envUpdates['GEMINI_API_KEY'] = els.envGemini.value;
+  if (els.envAnthropic.value) envUpdates['ANTHROPIC_API_KEY'] = els.envAnthropic.value;
+  if (els.envGithubUser.value) envUpdates['GITHUB_USER'] = els.envGithubUser.value;
+  if (els.envGithub.value) envUpdates['GITHUB_TOKEN'] = els.envGithub.value;
 
   if (Object.keys(envUpdates).length > 0) {
-    await apiCall("/api/settings/env", "POST", envUpdates);
-    showToast("Configurações e API Keys salvas!", "success");
+    await apiCall('/api/settings/env', 'POST', envUpdates);
+    showToast('Configurações e API Keys salvas!', 'success');
     // Clear password fields for security
-    els.envOpenAI.value = "";
-    els.envGemini.value = "";
-    els.envAnthropic.value = "";
-    els.envGithubUser.value = "";
-    els.envGithub.value = "";
+    els.envOpenAI.value = '';
+    els.envGemini.value = '';
+    els.envAnthropic.value = '';
+    els.envGithubUser.value = '';
+    els.envGithub.value = '';
   } else {
-    showToast("Configurações salvas!", "success");
+    showToast('Configurações salvas!', 'success');
   }
 
   els.settingsModal.close();
 });
 
 // --- 3D Scene ---
-const canvas = document.getElementById("sceneCanvas") as HTMLCanvasElement;
+const canvas = document.getElementById('sceneCanvas') as HTMLCanvasElement;
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color("#e2e8f0"); // Lighter grey base
+scene.background = new THREE.Color('#e2e8f0'); // Lighter grey base
 const clock = new THREE.Clock();
 
 const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 100);
 camera.position.set(0, 7, 12);
 camera.lookAt(0, 0, 0);
 
-const ambientLight = new THREE.AmbientLight("#ffffff", 1.5);
+const ambientLight = new THREE.AmbientLight('#ffffff', 1.5);
 scene.add(ambientLight);
-const dir = new THREE.DirectionalLight("#ffffff", 1.0);
+const dir = new THREE.DirectionalLight('#ffffff', 1.0);
 dir.position.set(5, 8, 3);
 scene.add(dir);
 
 // Add subtle grid to the floor
-const grid = new THREE.GridHelper(40, 40, "#cbd5e1", "#e2e8f0");
+const grid = new THREE.GridHelper(40, 40, '#cbd5e1', '#e2e8f0');
 grid.position.y = 0;
 scene.add(grid);
 
 function updateLighting() {
-  const workingCount = agents.filter(a => a.status === "working").length;
+  const workingCount = agents.filter((a) => a.status === 'working').length;
   // Target intensity: brighter when busy
   const targetDir = workingCount > 0 ? 1.4 : 1.0;
   const targetAmb = workingCount > 0 ? 1.8 : 1.5;
@@ -954,82 +1020,103 @@ const loader = new GLTFLoader();
 let usingFallbackAvatars = true;
 
 // Preload the gltf, but do not override the fallback flag.
-loader.load("/models/RobotExpressive.glb", (gltf) => {
-  robotModel = gltf.scene;
-  robotAnimations = gltf.animations;
+loader.load(
+  '/models/RobotExpressive.glb',
+  (gltf) => {
+    robotModel = gltf.scene;
+    robotAnimations = gltf.animations;
 
-  robotModel.traverse((child: any) => {
-    if (child.isMesh) {
-      child.castShadow = true;
-      child.receiveShadow = true;
-    }
-  });
-  console.log("Robot animations loaded:", robotAnimations.map(a => a.name));
-  // Keep using fallback avatars
-  // usingFallbackAvatars = false;
-  rebuildAgentMeshes();
-}, undefined, (error) => {
-  console.error("Falha ao carregar modelo 3D do robô. Usando avatar fallback.", error);
-  usingFallbackAvatars = true;
-  rebuildAgentMeshes();
-});
+    robotModel.traverse((child: any) => {
+      if (child.isMesh) {
+        child.castShadow = true;
+        child.receiveShadow = true;
+      }
+    });
+    console.log(
+      'Robot animations loaded:',
+      robotAnimations.map((a) => a.name),
+    );
+    // Keep using fallback avatars
+    // usingFallbackAvatars = false;
+    rebuildAgentMeshes();
+  },
+  undefined,
+  (error) => {
+    console.error('Falha ao carregar modelo 3D do robô. Usando avatar fallback.', error);
+    usingFallbackAvatars = true;
+    rebuildAgentMeshes();
+  },
+);
 
 let computers: THREE.Group[] = [];
 
 // Desk generation
 function spawnComputers() {
   const loader = new GLTFLoader();
-  loader.load("/models/old_computer.glb", (gltf) => {
-    officeData.padPositions.forEach((pos) => {
-      const group = new THREE.Group();
-      group.position.set(pos.x, 0, pos.z - 1.2);
+  loader.load(
+    '/models/old_computer.glb',
+    (gltf) => {
+      officeData.padPositions.forEach((pos) => {
+        const group = new THREE.Group();
+        group.position.set(pos.x, 0, pos.z - 1.2);
 
-      const computer = gltf.scene.clone();
-      computer.scale.set(0.6, 0.6, 0.6);
-      computer.rotation.y = Math.PI;
-      group.add(computer);
+        const computer = gltf.scene.clone();
+        computer.scale.set(0.6, 0.6, 0.6);
+        computer.rotation.y = Math.PI;
+        group.add(computer);
 
-      // Oval rug
-      const rugGeo = new THREE.CylinderGeometry(2, 2, 0.01, 32);
-      const rugMat = new THREE.MeshStandardMaterial({ color: "#64748b" });
-      const rug = new THREE.Mesh(rugGeo, rugMat);
-      rug.scale.set(1, 1, 0.6);
-      rug.position.set(0, 0.01, 0);
-      group.add(rug);
+        // Oval rug
+        const rugGeo = new THREE.CylinderGeometry(2, 2, 0.01, 32);
+        const rugMat = new THREE.MeshStandardMaterial({ color: '#64748b' });
+        const rug = new THREE.Mesh(rugGeo, rugMat);
+        rug.scale.set(1, 1, 0.6);
+        rug.position.set(0, 0.01, 0);
+        group.add(rug);
 
-      scene.add(group);
-      computers.push(group);
-    });
-  }, undefined, (error) => {
-    console.error("Falha ao carregar modelo old_computer.glb, usando fallback", error);
-    officeData.padPositions.forEach((pos) => {
-      const deskGroup = new THREE.Group();
-      deskGroup.position.set(pos.x, 0, pos.z - 1.2);
+        scene.add(group);
+        computers.push(group);
+      });
+    },
+    undefined,
+    (error) => {
+      console.error('Falha ao carregar modelo old_computer.glb, usando fallback', error);
+      officeData.padPositions.forEach((pos) => {
+        const deskGroup = new THREE.Group();
+        deskGroup.position.set(pos.x, 0, pos.z - 1.2);
 
-      // Oval rug
-      const rugGeo = new THREE.CylinderGeometry(2, 2, 0.01, 32);
-      const rugMat = new THREE.MeshStandardMaterial({ color: "#8b9cb0" });
-      const rug = new THREE.Mesh(rugGeo, rugMat);
-      rug.scale.set(1.2, 1, 0.8);
-      rug.position.set(0, 0.01, 0.5); // Shifted a bit forward
-      deskGroup.add(rug);
+        // Oval rug
+        const rugGeo = new THREE.CylinderGeometry(2, 2, 0.01, 32);
+        const rugMat = new THREE.MeshStandardMaterial({ color: '#8b9cb0' });
+        const rug = new THREE.Mesh(rugGeo, rugMat);
+        rug.scale.set(1.2, 1, 0.8);
+        rug.position.set(0, 0.01, 0.5); // Shifted a bit forward
+        deskGroup.add(rug);
 
-      const deskGeo = new THREE.BoxGeometry(2.0, 1.0, 1.2);
-      const deskMat = new THREE.MeshStandardMaterial({ color: "#0f172a", roughness: 0.8, metalness: 0.1 }); // Darker desk
-      const desk = new THREE.Mesh(deskGeo, deskMat);
-      desk.position.set(0, 0.5, 0);
-      deskGroup.add(desk);
+        const deskGeo = new THREE.BoxGeometry(2.0, 1.0, 1.2);
+        const deskMat = new THREE.MeshStandardMaterial({
+          color: '#0f172a',
+          roughness: 0.8,
+          metalness: 0.1,
+        }); // Darker desk
+        const desk = new THREE.Mesh(deskGeo, deskMat);
+        desk.position.set(0, 0.5, 0);
+        deskGroup.add(desk);
 
-      const monGeo = new THREE.BoxGeometry(0.9, 0.6, 0.05);
-      const monMat = new THREE.MeshStandardMaterial({ color: "#0284c7", emissive: "#0284c7", emissiveIntensity: 0.3 }); // Cyan blue monitor
-      const monitor = new THREE.Mesh(monGeo, monMat);
-      monitor.position.set(0, 1.3, 0);
-      deskGroup.add(monitor);
+        const monGeo = new THREE.BoxGeometry(0.9, 0.6, 0.05);
+        const monMat = new THREE.MeshStandardMaterial({
+          color: '#0284c7',
+          emissive: '#0284c7',
+          emissiveIntensity: 0.3,
+        }); // Cyan blue monitor
+        const monitor = new THREE.Mesh(monGeo, monMat);
+        monitor.position.set(0, 1.3, 0);
+        deskGroup.add(monitor);
 
-      scene.add(deskGroup);
-      computers.push(deskGroup);
-    });
-  });
+        scene.add(deskGroup);
+        computers.push(deskGroup);
+      });
+    },
+  );
 }
 
 // Confetti System
@@ -1038,7 +1125,7 @@ function spawnConfetti() {
   const count = 150;
   const positions = new Float32Array(count * 3);
   const colors = new Float32Array(count * 3);
-  const velocities: { x: number, y: number, z: number }[] = [];
+  const velocities: { x: number; y: number; z: number }[] = [];
 
   for (let i = 0; i < count; i++) {
     positions[i * 3] = 0; // x (center)
@@ -1052,8 +1139,8 @@ function spawnConfetti() {
 
     velocities.push({
       x: (Math.random() - 0.5) * 0.3,
-      y: (Math.random() * 0.3) + 0.1,
-      z: (Math.random() - 0.5) * 0.3
+      y: Math.random() * 0.3 + 0.1,
+      z: (Math.random() - 0.5) * 0.3,
     });
   }
 
@@ -1094,11 +1181,17 @@ controls.enableDamping = true;
 controls.dampingFactor = 0.05;
 controls.maxPolarAngle = Math.PI / 2 - 0.1;
 
-const kanbanMesh = new THREE.Mesh(new THREE.BoxGeometry(12, 6, 0.2), new THREE.MeshStandardMaterial({ color: "#ffffff" }));
+const kanbanMesh = new THREE.Mesh(
+  new THREE.BoxGeometry(12, 6, 0.2),
+  new THREE.MeshStandardMaterial({ color: '#ffffff' }),
+);
 kanbanMesh.position.set(0, 3, -4.2);
 // Add column separators
 for (let i = -1; i <= 1; i++) {
-  const line = new THREE.Mesh(new THREE.BoxGeometry(0.075, 5.7, 0.05), new THREE.MeshStandardMaterial({ color: "#e2e8f0" }));
+  const line = new THREE.Mesh(
+    new THREE.BoxGeometry(0.075, 5.7, 0.05),
+    new THREE.MeshStandardMaterial({ color: '#e2e8f0' }),
+  );
   line.position.set(i * 3, 0, 0.11);
   kanbanMesh.add(line);
 }
@@ -1110,43 +1203,43 @@ kanbanGroup.position.set(0, 0, 0.05);
 kanbanMesh.add(kanbanGroup);
 
 function createTaskTexture(task: Task) {
-  const canvas = document.createElement("canvas");
+  const canvas = document.createElement('canvas');
   canvas.width = 512;
   canvas.height = 128;
-  const ctx = canvas.getContext("2d")!;
+  const ctx = canvas.getContext('2d')!;
 
   // Background
   const categoryColors: Record<string, string> = {
-    roadmap: "#a855f7",
-    security: "#ef4444",
-    performance: "#f97316",
-    feature: "#3b82f6",
-    test: "#22c55e",
-    bug: "#06b6d4"
+    roadmap: '#a855f7',
+    security: '#ef4444',
+    performance: '#f97316',
+    feature: '#3b82f6',
+    test: '#22c55e',
+    bug: '#06b6d4',
   };
 
-  ctx.fillStyle = categoryColors[task.category] || "#64748b";
+  ctx.fillStyle = categoryColors[task.category] || '#64748b';
   ctx.fillRect(0, 0, 16, canvas.height); // Color strip on left
 
-  ctx.fillStyle = "#334155";
+  ctx.fillStyle = '#334155';
   ctx.fillRect(16, 0, canvas.width - 16, canvas.height);
 
   // Text
-  ctx.font = "bold 28px Inter, sans-serif";
-  ctx.fillStyle = "#e2e8f0";
+  ctx.font = 'bold 28px Inter, sans-serif';
+  ctx.fillStyle = '#e2e8f0';
   ctx.fillText(`#${task.id}`, 32, 40);
 
-  ctx.font = "24px Inter, sans-serif";
-  ctx.fillStyle = "#cbd5e1";
+  ctx.font = '24px Inter, sans-serif';
+  ctx.fillStyle = '#cbd5e1';
 
   // Truncate title
   let title = task.title;
-  if (title.length > 30) title = title.substring(0, 30) + "...";
+  if (title.length > 30) title = title.substring(0, 30) + '...';
   ctx.fillText(title, 32, 80);
 
   // Status/Meta
-  ctx.font = "18px Inter, sans-serif";
-  ctx.fillStyle = "#94a3b8";
+  ctx.font = '18px Inter, sans-serif';
+  ctx.fillStyle = '#94a3b8';
   let metaStr = `${task.priority.toUpperCase()} • ${task.category}`;
   if (task.githubRepo) metaStr += ` • ${task.githubRepo}`;
   ctx.fillText(metaStr, 32, 110);
@@ -1162,7 +1255,7 @@ function updateKanban3D() {
   const visibleTaskIds = new Set<number>();
   const laneCounts: Record<string, number> = { backlog: 0, in_progress: 0, review: 0, done: 0 };
 
-  tasks.forEach(task => {
+  tasks.forEach((task) => {
     const lane = getLaneSafe(task.lane);
     const count = laneCounts[lane] || 0;
     const { x, y } = getTaskCardPosition(lane, count);
@@ -1181,7 +1274,7 @@ function updateKanban3D() {
           map: texture,
           emissive: 0x222222,
           emissiveMap: texture,
-          emissiveIntensity: 0.4
+          emissiveIntensity: 0.4,
         });
         mesh = new THREE.Mesh(geometry, material);
         mesh.userData = { taskId: task.id, signature };
@@ -1211,26 +1304,38 @@ function updateKanban3D() {
     if (!visibleTaskIds.has(id)) {
       kanbanGroup.remove(mesh);
       if (mesh.geometry) mesh.geometry.dispose();
-      if ((mesh.material as THREE.MeshStandardMaterial).map) (mesh.material as THREE.MeshStandardMaterial).map!.dispose();
-      if ((mesh.material as THREE.MeshStandardMaterial).dispose) (mesh.material as THREE.MeshStandardMaterial).dispose();
+      if ((mesh.material as THREE.MeshStandardMaterial).map)
+        (mesh.material as THREE.MeshStandardMaterial).map!.dispose();
+      if ((mesh.material as THREE.MeshStandardMaterial).dispose)
+        (mesh.material as THREE.MeshStandardMaterial).dispose();
       taskMeshes.delete(id);
     }
   }
 }
 
-const agentMeshes = new Map<string, {
-  group: any;
-  label?: any;
-  target: any;
-  phase: "idle" | "walking_to_board" | "at_board" | "walking_to_desk" | "working" | "walking_from_desk" | "celebrating";
-  phaseTimer: number;
-  color: THREE.Color;
-  mixer?: THREE.AnimationMixer;
-  anims?: Record<string, THREE.AnimationAction>;
-  currentAction?: THREE.AnimationAction | null;
-  laser?: THREE.Line;
-  statusSprite?: THREE.Sprite;
-}>();
+const agentMeshes = new Map<
+  string,
+  {
+    group: any;
+    label?: any;
+    target: any;
+    phase:
+      | 'idle'
+      | 'walking_to_board'
+      | 'at_board'
+      | 'walking_to_desk'
+      | 'working'
+      | 'walking_from_desk'
+      | 'celebrating';
+    phaseTimer: number;
+    color: THREE.Color;
+    mixer?: THREE.AnimationMixer;
+    anims?: Record<string, THREE.AnimationAction>;
+    currentAction?: THREE.AnimationAction | null;
+    laser?: THREE.Line;
+    statusSprite?: THREE.Sprite;
+  }
+>();
 
 function clearAgentMeshes() {
   agentMeshes.forEach((item) => {
@@ -1250,41 +1355,41 @@ function rebuildAgentMeshes() {
     const meshData = createAgentMesh(agent, idx);
     agentMeshes.set(agent.id, {
       ...meshData,
-      phase: "idle",
-      phaseTimer: 0
+      phase: 'idle',
+      phaseTimer: 0,
     });
-    playAction(agentMeshes.get(agent.id), "Idle", 0);
+    playAction(agentMeshes.get(agent.id), 'Idle', 0);
   });
 }
 
 const visualAlerts = new Map<number, THREE.Sprite>();
 
 function createStatusTexture(type: string) {
-  const canvas = document.createElement("canvas");
+  const canvas = document.createElement('canvas');
   canvas.width = 128;
   canvas.height = 128;
-  const ctx = canvas.getContext("2d")!;
+  const ctx = canvas.getContext('2d')!;
 
-  if (type === "idle") {
+  if (type === 'idle') {
     // Pixel art style Z z
     ctx.font = "bold 60px 'Share Tech Mono', monospace";
-    ctx.fillStyle = "#60a5fa"; // Light blue
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText("z", 32, 80);
+    ctx.fillStyle = '#60a5fa'; // Light blue
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('z', 32, 80);
     ctx.font = "bold 80px 'Share Tech Mono', monospace";
-    ctx.fillText("Z", 80, 48);
+    ctx.fillText('Z', 80, 48);
   } else {
     // Fallback emojis
     const emojiMap: Record<string, string> = {
-      working: "🔨",
-      celebrating: "🎉",
-      walking: "🚶"
+      working: '🔨',
+      celebrating: '🎉',
+      walking: '🚶',
     };
-    ctx.font = "64px Inter, sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(emojiMap[type] || "", 64, 68);
+    ctx.font = '64px Inter, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(emojiMap[type] || '', 64, 68);
   }
 
   const tex = new THREE.CanvasTexture(canvas);
@@ -1292,24 +1397,24 @@ function createStatusTexture(type: string) {
 }
 
 const statusTextures = {
-  idle: createStatusTexture("idle"),
-  working: createStatusTexture("working"),
-  celebrating: createStatusTexture("celebrating"),
-  walking: createStatusTexture("walking")
+  idle: createStatusTexture('idle'),
+  working: createStatusTexture('working'),
+  celebrating: createStatusTexture('celebrating'),
+  walking: createStatusTexture('walking'),
 };
 
-function createAlertIcon(type: "bug" | "perf") {
-  const canvas = document.createElement("canvas");
+function createAlertIcon(type: 'bug' | 'perf') {
+  const canvas = document.createElement('canvas');
   canvas.width = 128;
   canvas.height = 128;
-  const ctx = canvas.getContext("2d")!;
+  const ctx = canvas.getContext('2d')!;
 
   // Soft shadow
-  ctx.shadowColor = "rgba(0,0,0,0.3)";
+  ctx.shadowColor = 'rgba(0,0,0,0.3)';
   ctx.shadowBlur = 10;
   ctx.shadowOffsetY = 4;
 
-  ctx.fillStyle = type === "bug" ? "#ff7b7b" : "#fbbf24";
+  ctx.fillStyle = type === 'bug' ? '#ff7b7b' : '#fbbf24';
   ctx.beginPath();
   ctx.arc(64, 64, 50, 0, Math.PI * 2);
   ctx.fill();
@@ -1317,11 +1422,11 @@ function createAlertIcon(type: "bug" | "perf") {
   ctx.shadowBlur = 0;
   ctx.shadowOffsetY = 0;
 
-  ctx.font = "bold 60px Inter, sans-serif";
-  ctx.fillStyle = "white";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText(type === "bug" ? "!" : "⚡", 64, 68);
+  ctx.font = 'bold 60px Inter, sans-serif';
+  ctx.fillStyle = 'white';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(type === 'bug' ? '!' : '⚡', 64, 68);
 
   const tex = new THREE.CanvasTexture(canvas);
   const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
@@ -1331,12 +1436,12 @@ function createAlertIcon(type: "bug" | "perf") {
 }
 
 function updateVisualAlerts() {
-  tasks.forEach(task => {
-    const isBug = (task.category === "bug" || task.category === "test") && task.lane !== "done";
-    const isPerf = task.category === "performance" && task.lane !== "done";
+  tasks.forEach((task) => {
+    const isBug = (task.category === 'bug' || task.category === 'test') && task.lane !== 'done';
+    const isPerf = task.category === 'performance' && task.lane !== 'done';
 
     if ((isBug || isPerf) && !visualAlerts.has(task.id)) {
-      const icon = createAlertIcon(isBug ? "bug" : "perf");
+      const icon = createAlertIcon(isBug ? 'bug' : 'perf');
       scene.add(icon);
       visualAlerts.set(task.id, icon);
     }
@@ -1344,15 +1449,15 @@ function updateVisualAlerts() {
 
   // Remove fixed alerts
   for (const [taskId, sprite] of visualAlerts.entries()) {
-    const task = tasks.find(t => t.id === taskId);
-    if (!task || task.lane === "done") {
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task || task.lane === 'done') {
       scene.remove(sprite);
       if (sprite.material.map) sprite.material.map.dispose();
       sprite.material.dispose();
       visualAlerts.delete(taskId);
     } else {
       // Position alert above the card on the board
-      const cardMesh = kanbanGroup.children.find(c => c.userData.taskId === taskId);
+      const cardMesh = kanbanGroup.children.find((c) => c.userData.taskId === taskId);
       if (cardMesh) {
         const worldPos = new THREE.Vector3();
         cardMesh.getWorldPosition(worldPos);
@@ -1368,7 +1473,7 @@ function updateVisualAlerts() {
 
 function playAction(item: any, name: string, duration = 0.5) {
   if (!item.anims) return;
-  const action = item.anims[name] || item.anims["Idle"];
+  const action = item.anims[name] || item.anims['Idle'];
   if (action && item.currentAction !== action) {
     if (item.currentAction) {
       item.currentAction.fadeOut(duration);
@@ -1383,27 +1488,27 @@ function createAgentMesh(agent: Agent, index: number) {
   group.userData.agentId = agent.id;
 
   const roleColors: Record<string, string> = {
-    "Product Manager": "#111111", // Black turtleneck
-    "Segurança": "#1e3a8a",       // Navy Blue
-    "Performance": "#475569",     // Slate
-    "Novas Funcionalidades": "#0284c7", // Blue
-    "Testes": "#15803d",          // Dark Green
-    "Novas Features": "#0f172a"   // Navy
+    'Product Manager': '#111111', // Black turtleneck
+    Segurança: '#1e3a8a', // Navy Blue
+    Performance: '#475569', // Slate
+    'Novas Funcionalidades': '#0284c7', // Blue
+    Testes: '#15803d', // Dark Green
+    'Novas Features': '#0f172a', // Navy
   };
-  const color = new THREE.Color(roleColors[agent.role] || "#888888");
+  const color = new THREE.Color(roleColors[agent.role] || '#888888');
 
   let mixer: THREE.AnimationMixer | undefined;
   let anims: Record<string, THREE.AnimationAction> | undefined;
 
   // Determine badge color based on tool/model
-  let badgeColor = "#555555";
-  const tool = agent.tool || "unknown";
+  let badgeColor = '#555555';
+  const tool = agent.tool || 'unknown';
 
-  if (tool.includes("openai")) badgeColor = "#10a37f";
-  else if (tool.includes("gemini")) badgeColor = "#4285f4";
-  else if (tool.includes("copilot")) badgeColor = "#6f42c1";
-  else if (tool.includes("opencode")) badgeColor = "#f97316";
-  else if (tool.includes("claude")) badgeColor = "#d97757";
+  if (tool.includes('openai')) badgeColor = '#10a37f';
+  else if (tool.includes('gemini')) badgeColor = '#4285f4';
+  else if (tool.includes('copilot')) badgeColor = '#6f42c1';
+  else if (tool.includes('opencode')) badgeColor = '#f97316';
+  else if (tool.includes('claude')) badgeColor = '#d97757';
 
   if (robotModel && !usingFallbackAvatars) {
     const clonedRobot = SkeletonUtils.clone(robotModel) as THREE.Group;
@@ -1414,7 +1519,7 @@ function createAgentMesh(agent: Agent, index: number) {
     clonedRobot.traverse((child: any) => {
       if (child.isMesh && child.material) {
         child.material = child.material.clone();
-        if (child.name !== "Face") {
+        if (child.name !== 'Face') {
           child.material.color.lerp(color, 0.7);
         }
       }
@@ -1422,7 +1527,7 @@ function createAgentMesh(agent: Agent, index: number) {
 
     mixer = new THREE.AnimationMixer(clonedRobot);
     anims = {};
-    robotAnimations.forEach(clip => {
+    robotAnimations.forEach((clip) => {
       anims![clip.name] = mixer!.clipAction(clip);
     });
   } else {
@@ -1489,19 +1594,40 @@ function createAgentMesh(agent: Agent, index: number) {
 
   let label: THREE.Sprite | undefined = undefined; // We removed the floating label, setting to undefined for TS interface
 
-  const statusMat = new THREE.SpriteMaterial({ map: createStatusTexture("idle"), transparent: true, depthTest: false });
+  const statusMat = new THREE.SpriteMaterial({
+    map: createStatusTexture('idle'),
+    transparent: true,
+    depthTest: false,
+  });
   const statusSprite = new THREE.Sprite(statusMat);
   statusSprite.scale.set(0.6, 0.6, 1);
   statusSprite.position.set(0, 2.2, 0); // Above head
   group.add(statusSprite);
 
-  const laserMat = new THREE.LineBasicMaterial({ color: 0x00f0ff, transparent: true, opacity: 0.6 });
-  const laserGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, 0)]);
+  const laserMat = new THREE.LineBasicMaterial({
+    color: 0x00f0ff,
+    transparent: true,
+    opacity: 0.6,
+  });
+  const laserGeo = new THREE.BufferGeometry().setFromPoints([
+    new THREE.Vector3(0, 0, 0),
+    new THREE.Vector3(0, 0, 0),
+  ]);
   const laser = new THREE.Line(laserGeo, laserMat);
   laser.visible = false;
   scene.add(laser);
 
-  return { group, label, target: group.position.clone(), color, mixer, anims, currentAction: null, laser, statusSprite };
+  return {
+    group,
+    label,
+    target: group.position.clone(),
+    color,
+    mixer,
+    anims,
+    currentAction: null,
+    laser,
+    statusSprite,
+  };
 }
 
 function updateAgents3D() {
@@ -1523,10 +1649,10 @@ function updateAgents3D() {
       const meshData = createAgentMesh(agent, idx);
       agentMeshes.set(agent.id, {
         ...meshData,
-        phase: "idle",
-        phaseTimer: 0
+        phase: 'idle',
+        phaseTimer: 0,
       });
-      playAction(agentMeshes.get(agent.id), "Idle", 0);
+      playAction(agentMeshes.get(agent.id), 'Idle', 0);
     }
   });
 
@@ -1544,24 +1670,24 @@ function updateAgents3D() {
     deskPos.y = 0; // Ground level
 
     // Working Animation is now Sitting
-    const workingAnim = item.anims && item.anims["Sitting"] ? "Sitting" : "Idle";
+    const workingAnim = item.anims && item.anims['Sitting'] ? 'Sitting' : 'Idle';
 
-    if (item.phase === "celebrating") {
+    if (item.phase === 'celebrating') {
       // Logic for celebrating happens inside tick() loop, just skip overriding it here.
-    } else if (agent.status === "working") {
-      if (item.phase === "idle" || item.phase === "walking_from_desk") {
-        item.phase = "walking_to_desk";
+    } else if (agent.status === 'working') {
+      if (item.phase === 'idle' || item.phase === 'walking_from_desk') {
+        item.phase = 'walking_to_desk';
         item.target.copy(deskPos);
-      } else if (item.phase === "walking_to_desk") {
+      } else if (item.phase === 'walking_to_desk') {
         item.target.copy(deskPos);
         if (item.group.position.distanceTo(item.target) < 0.5) {
-          item.phase = "working";
+          item.phase = 'working';
           item.group.position.copy(item.target);
           playAction(item, workingAnim);
         } else {
-          playAction(item, "Walking");
+          playAction(item, 'Walking');
         }
-      } else if (item.phase === "working") {
+      } else if (item.phase === 'working') {
         item.target.copy(deskPos);
         playAction(item, workingAnim, 1.0);
       }
@@ -1569,31 +1695,31 @@ function updateAgents3D() {
       // If was working, walk back to kanban. Spread them evenly to prevent stacking.
       const kanbanPos = new THREE.Vector3(-6 + idx * 2.5, 0, -2.5);
 
-      if (item.phase === "working" || item.phase === "walking_to_desk") {
-        item.phase = "walking_from_desk";
+      if (item.phase === 'working' || item.phase === 'walking_to_desk') {
+        item.phase = 'walking_from_desk';
         item.target.copy(kanbanPos);
-      } else if (item.phase === "walking_from_desk") {
+      } else if (item.phase === 'walking_from_desk') {
         item.target.copy(kanbanPos);
         if (item.group.position.distanceTo(item.target) < 0.5) {
-          item.phase = "idle";
+          item.phase = 'idle';
           item.group.position.copy(item.target);
-          playAction(item, "Idle");
+          playAction(item, 'Idle');
         } else {
-          playAction(item, "Walking");
+          playAction(item, 'Walking');
         }
       } else {
-        item.phase = "idle";
+        item.phase = 'idle';
         item.target.copy(kanbanPos);
-        playAction(item, "Idle");
+        playAction(item, 'Idle');
       }
     }
 
     // Rotate to face target
-    if (item.phase !== "working" && item.phase !== "idle") {
+    if (item.phase !== 'working' && item.phase !== 'idle') {
       item.group.lookAt(item.target.x, item.group.position.y, item.target.z);
-    } else if (item.phase === "working") {
+    } else if (item.phase === 'working') {
       item.group.lookAt(item.group.position.x, item.group.position.y, item.group.position.z - 100);
-    } else if (item.phase === "idle") {
+    } else if (item.phase === 'idle') {
       item.group.rotation.set(0, 0, 0); // Face forward towards camera (Kanban board is at z=-4.2, camera is at z=12, so 0 faces the camera)
     } else {
       item.group.rotation.set(0, 0, 0);
@@ -1617,17 +1743,17 @@ function tick() {
 
     const statusMaterial = item.statusSprite?.material as THREE.SpriteMaterial | undefined;
 
-    if (item.phase === "celebrating") {
+    if (item.phase === 'celebrating') {
       item.phaseTimer -= delta;
-      playAction(item, "ThumbsUp");
+      playAction(item, 'ThumbsUp');
       if (statusMaterial) statusMaterial.map = statusTextures.celebrating;
       if (item.phaseTimer <= 0) {
-        item.phase = "idle";
-        playAction(item, "Idle");
+        item.phase = 'idle';
+        playAction(item, 'Idle');
       }
-    } else if (item.phase === "working") {
+    } else if (item.phase === 'working') {
       if (statusMaterial) statusMaterial.map = statusTextures.working;
-    } else if (item.phase === "idle") {
+    } else if (item.phase === 'idle') {
       if (statusMaterial) statusMaterial.map = statusTextures.idle;
     } else {
       if (statusMaterial) statusMaterial.map = statusTextures.walking;
@@ -1638,17 +1764,21 @@ function tick() {
       const time = Date.now() * 0.005;
       const { leftArm, rightArm, leftLeg, rightLeg } = item.group.userData;
 
-      if (item.phase === "walking_to_desk" || item.phase === "walking_from_desk" || item.phase === "walking_to_board") {
+      if (
+        item.phase === 'walking_to_desk' ||
+        item.phase === 'walking_from_desk' ||
+        item.phase === 'walking_to_board'
+      ) {
         leftArm.rotation.x = Math.sin(time) * 0.5;
         rightArm.rotation.x = -Math.sin(time) * 0.5;
         leftLeg.rotation.x = -Math.sin(time) * 0.5;
         rightLeg.rotation.x = Math.sin(time) * 0.5;
-      } else if (item.phase === "working") {
+      } else if (item.phase === 'working') {
         leftArm.rotation.x = -0.3 + Math.sin(time * 2) * 0.05;
         rightArm.rotation.x = -0.3 + Math.cos(time * 2) * 0.05;
         leftLeg.rotation.x = -0.2;
         rightLeg.rotation.x = -0.2;
-      } else if (item.phase === "celebrating") {
+      } else if (item.phase === 'celebrating') {
         leftArm.rotation.x = -Math.PI + 0.5 + Math.sin(time * 2) * 0.2;
         rightArm.rotation.x = -Math.PI + 0.5 + Math.cos(time * 2) * 0.2;
         leftLeg.rotation.x = 0;
@@ -1666,9 +1796,11 @@ function tick() {
     const agentData = agents.find((a) => a.id === item.group.userData.agentId);
     let termEl = document.getElementById(`term-${agentData?.id}`);
 
-    if (item.phase === "working" && agentData?.assignedTask && item.laser) {
+    if (item.phase === 'working' && agentData?.assignedTask && item.laser) {
       const taskObj = tasks.find((t) => t.id === agentData.assignedTask);
-      const cardMesh = kanbanGroup.children.find((c) => c.userData.taskId === agentData.assignedTask);
+      const cardMesh = kanbanGroup.children.find(
+        (c) => c.userData.taskId === agentData.assignedTask,
+      );
 
       if (cardMesh && taskObj) {
         // Laser
@@ -1681,14 +1813,19 @@ function tick() {
         item.laser.visible = true;
 
         // Change laser color based on task category
-        const laserColor = (taskObj.category === "test" || taskObj.category === "bug") ? 0xef4444 : (taskObj.category === "performance" ? 0xeab308 : 0x00f0ff);
+        const laserColor =
+          taskObj.category === 'test' || taskObj.category === 'bug'
+            ? 0xef4444
+            : taskObj.category === 'performance'
+              ? 0xeab308
+              : 0x00f0ff;
         (item.laser.material as THREE.LineBasicMaterial).color.setHex(laserColor);
 
         // Terminal DOM
         if (!termEl) {
-          termEl = document.createElement("div");
+          termEl = document.createElement('div');
           termEl.id = `term-${agentData.id}`;
-          termEl.className = "agent-terminal";
+          termEl.className = 'agent-terminal';
           els.terminalsLayer?.appendChild(termEl);
         }
 
@@ -1700,25 +1837,32 @@ function tick() {
 
         termEl.style.left = `${px}px`;
         termEl.style.top = `${py}px`;
-        termEl.style.display = "block";
+        termEl.style.display = 'block';
 
-        const lastLog = taskObj.logs && taskObj.logs.length > 0 ? taskObj.logs[taskObj.logs.length - 1] : "Buscando contexto...";
+        const lastLog =
+          taskObj.logs && taskObj.logs.length > 0
+            ? taskObj.logs[taskObj.logs.length - 1]
+            : 'Buscando contexto...';
         const newHTML = `<strong>> ${taskObj.title.substring(0, 15)}...</strong><br/><span class="term-log">${lastLog}</span>`;
         if (termEl.innerHTML !== newHTML) {
           termEl.innerHTML = newHTML;
         }
-
       } else {
         item.laser.visible = false;
-        if (termEl) termEl.style.display = "none";
+        if (termEl) termEl.style.display = 'none';
       }
     } else {
       if (item.laser) item.laser.visible = false;
-      if (termEl) termEl.style.display = "none";
+      if (termEl) termEl.style.display = 'none';
     }
 
     // Spawn trail if moving
-    if (item.phase !== "idle" && item.phase !== "working" && item.phase !== "at_board" && item.phase !== "celebrating") {
+    if (
+      item.phase !== 'idle' &&
+      item.phase !== 'working' &&
+      item.phase !== 'at_board' &&
+      item.phase !== 'celebrating'
+    ) {
       if (Math.random() < 0.4) {
         spawnTrail(item.group.position, item.color);
       }
@@ -1730,10 +1874,10 @@ function tick() {
   updateTrails();
 
   // Keep constant corporate lighting, no pulse
-  const activeCount = agents.filter(a => a.status === "working").length;
+  const activeCount = agents.filter((a) => a.status === 'working').length;
   if (activeCount > 0) {
-    dir.intensity = 1.2 + (activeCount * 0.05);
-    ambientLight.intensity = 1.5 + (activeCount * 0.05);
+    dir.intensity = 1.2 + activeCount * 0.05;
+    ambientLight.intensity = 1.5 + activeCount * 0.05;
   } else {
     dir.intensity = 1.0;
     ambientLight.intensity = 1.5;
@@ -1786,9 +1930,9 @@ evtSource.onmessage = (event) => {
   try {
     const msg = JSON.parse(event.data);
 
-    if (msg.type === "terminal:data") {
+    if (msg.type === 'terminal:data') {
       terminalUIManager.handleTerminalData(msg.agentId, msg.content);
-    } else if (msg.type === "terminal:exit") {
+    } else if (msg.type === 'terminal:exit') {
       terminalUIManager.handleTerminalExit(msg.agentId, msg.code);
     } else {
       // Default state update
@@ -1797,7 +1941,7 @@ evtSource.onmessage = (event) => {
       if (msg.agents) terminalUIManager.cleanupDeadAgents(msg.agents);
     }
   } catch (e) {
-    console.error("Error parsing SSE data", e);
+    console.error('Error parsing SSE data', e);
   }
 };
 
@@ -1805,7 +1949,7 @@ evtSource.onmessage = (event) => {
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
 
-const tooltip = document.getElementById("agentTooltip") as HTMLElement;
+const tooltip = document.getElementById('agentTooltip') as HTMLElement;
 
 function onPointerDown(event: PointerEvent) {
   const rect = canvas.getBoundingClientRect();
@@ -1823,12 +1967,12 @@ function onPointerDown(event: PointerEvent) {
   const intersectsAgents = raycaster.intersectObjects(agentGroupsObjects, true);
 
   // Hide tooltip by default
-  tooltip.style.display = "none";
+  tooltip.style.display = 'none';
 
   if (intersectsTasks.length > 0) {
     const object = intersectsTasks[0].object;
     const taskId = object.userData.taskId;
-    const task = tasks.find(t => t.id === taskId);
+    const task = tasks.find((t) => t.id === taskId);
 
     if (task) {
       openTaskDetailsModal(task);
@@ -1851,11 +1995,11 @@ function onPointerDown(event: PointerEvent) {
     }
 
     if (foundGroupId) {
-      const agent = agents.find(a => a.id === foundGroupId);
+      const agent = agents.find((a) => a.id === foundGroupId);
       if (agent) {
         let text = `Agente: ${agent.role}\nModelo: ${agent.model}\nStatus: ${agent.status}`;
         if (agent.assignedTask) {
-          const task = tasks.find(t => t.id === agent.assignedTask);
+          const task = tasks.find((t) => t.id === agent.assignedTask);
           if (task) {
             text += `\nTrabalhando na Task #${task.id}: ${task.title}`;
           } else {
@@ -1865,7 +2009,7 @@ function onPointerDown(event: PointerEvent) {
         tooltip.textContent = text;
         tooltip.style.left = `${event.clientX}px`;
         tooltip.style.top = `${event.clientY}px`;
-        tooltip.style.display = "block";
+        tooltip.style.display = 'block';
       }
     }
   }
@@ -1874,20 +2018,20 @@ function onPointerDown(event: PointerEvent) {
 window.addEventListener('pointerdown', onPointerDown);
 
 // --- Keyboard Shortcuts ---
-window.addEventListener("keydown", (e) => {
+window.addEventListener('keydown', (e) => {
   if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 
-  if (e.key === " ") {
+  if (e.key === ' ') {
     e.preventDefault();
     els.toggleViewBtn.click();
     playClickSound();
   }
-  if (e.key === "n" || e.key === "N") {
+  if (e.key === 'n' || e.key === 'N') {
     e.preventDefault();
     els.title.focus();
     playClickSound();
   }
-  if (e.key === "Escape") {
+  if (e.key === 'Escape') {
     els.agentModal.close();
     els.settingsModal.close();
     playClickSound();
@@ -1899,12 +2043,16 @@ async function loadAvailableTools() {
     const res = await fetch(`${API_URL}/api/tools`);
     const data = await res.json();
     if (data.tools && data.tools.length > 0) {
-      els.driverSelect.innerHTML = data.tools.map((t: any) => `<option value="${t.id}">${t.name}</option>`).join("");
-      const agentTypeOptions = '<option value="">Automático / Opcional</option>' + data.tools.map((t: any) => `<option value="${t.id}">${t.name}</option>`).join("");
+      els.driverSelect.innerHTML = data.tools
+        .map((t: any) => `<option value="${t.id}">${t.name}</option>`)
+        .join('');
+      const agentTypeOptions =
+        '<option value="">Automático / Opcional</option>' +
+        data.tools.map((t: any) => `<option value="${t.id}">${t.name}</option>`).join('');
       els.agentType.innerHTML = agentTypeOptions;
     }
   } catch (e) {
-    console.error("Erro ao carregar ferramentas:", e);
+    console.error('Erro ao carregar ferramentas:', e);
   }
 }
 

@@ -1,5 +1,7 @@
 # Vibe Kanban — MVP inicial
 
+[![CI/CD Pipeline](https://github.com/juninmd/vibe-kanban/actions/workflows/ci.yml/badge.svg)](https://github.com/juninmd/vibe-kanban/actions/workflows/ci.yml)
+
 Protótipo inicial de uma sala de orquestração com:
 
 - **Visão 3D** com agentes (bonecos) e cenário básico (kanban + computadores).
@@ -63,6 +65,15 @@ Pré-requisitos:
    ```
 
 > Observação: os manifests estão em `k8s/` e usam a imagem local `vibe-kanban:kind` com `imagePullPolicy: IfNotPresent`.
+
+## Pipeline CI/CD
+
+O projeto conta com uma pipeline CI/CD automatizada via GitHub Actions. O processo inclui:
+
+- **Lint e Format**: Verificações rigorosas de estilo e formatação com ESLint e Prettier (`pnpm run lint` e `pnpm run format`).
+- **Testes e Cobertura**: Testes unitários, de API, de orquestração (via `node --test`) e E2E via Playwright (`pnpm run test:e2e`). A cobertura de testes gerada é enviada via c8 e enviada ao Codecov.
+- **Segurança**: Varreduras de vulnerabilidade e análise de dependências automatizadas via Snyk na pipeline de CI.
+- **Deploy Automático**: A branch `main` conta com deploy automático se o projeto passar em todos os *Quality Gates*. O deploy requer as chaves apropriadas do ambiente, mapeadas nas *secrets* do repositório.
 
 ## Estrutura
 

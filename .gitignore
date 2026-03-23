@@ -5,6 +5,9 @@ frontend.log
 
 # Environment and secrets
 .env
+
+# Testing
+coverage/
 .env.local
 .env.*.local
 *.key

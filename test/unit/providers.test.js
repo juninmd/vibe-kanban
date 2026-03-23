@@ -7,12 +7,12 @@ describe('providers', () => {
     const tools = getAvailableTools([
       { id: 'gemini', name: 'Gemini CLI', isAvailable: () => true },
       { id: 'openai', name: 'OpenAI API', isAvailable: () => false },
-      { id: 'claude', name: 'Claude Code', isAvailable: () => true }
+      { id: 'claude', name: 'Claude Code', isAvailable: () => true },
     ]);
 
     assert.deepEqual(tools, [
       { id: 'gemini', name: 'Gemini CLI' },
-      { id: 'claude', name: 'Claude Code' }
+      { id: 'claude', name: 'Claude Code' },
     ]);
   });
 });

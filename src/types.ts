@@ -3,8 +3,8 @@ export interface Task {
   title: string;
   source: string;
   category: string;
-  priority: "alta" | "media" | "baixa";
-  lane: "backlog" | "in_progress" | "review" | "done";
+  priority: 'alta' | 'media' | 'baixa';
+  lane: 'backlog' | 'in_progress' | 'review' | 'done';
   assignedTo: string | null;
   interrupted: boolean;
   logs: string[];
@@ -21,7 +21,7 @@ export interface Agent {
   role: string;
   model: string;
   category: string;
-  status: "idle" | "working";
+  status: 'idle' | 'working';
   assignedTask: number | null;
   tool?: string;
   terminalId?: string;

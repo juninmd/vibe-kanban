@@ -35,7 +35,7 @@ describe('OpenCodeDriver Integration', () => {
       lane: 'in_progress',
       assignedTo: 'agent-opencode',
       interrupted: false,
-      logs: []
+      logs: [],
     };
 
     const agent = {
@@ -46,19 +46,19 @@ describe('OpenCodeDriver Integration', () => {
       status: 'working',
       assignedTask: 101,
       tool: 'opencode',
-      terminalId: 'term-1'
+      terminalId: 'term-1',
     };
 
     const ctx = {
       onLog: (id, msg) => logs.push(msg),
       onComplete: (id) => {},
       onBugFound: (id, desc) => {},
-      onInterrupt: (id) => {}
+      onInterrupt: (id) => {},
     };
 
     await driver.executeTask(task, agent, ctx);
 
-    const runLog = logs.find(l => l.startsWith('Running: opencode'));
+    const runLog = logs.find((l) => l.startsWith('Running: opencode'));
     assert.ok(runLog, 'Should log the run command');
     assert.ok(runLog.includes('opencode run'), 'Command should include opencode run');
 
@@ -78,7 +78,7 @@ describe('OpenCodeDriver Integration', () => {
       lane: 'in_progress',
       assignedTo: 'agent-ollama',
       interrupted: false,
-      logs: []
+      logs: [],
     };
 
     const agent = {
@@ -89,19 +89,19 @@ describe('OpenCodeDriver Integration', () => {
       status: 'working',
       assignedTask: 102,
       tool: 'opencode',
-      terminalId: 'term-2'
+      terminalId: 'term-2',
     };
 
     const ctx = {
       onLog: (id, msg) => logs.push(msg),
       onComplete: (id) => {},
       onBugFound: (id, desc) => {},
-      onInterrupt: (id) => {}
+      onInterrupt: (id) => {},
     };
 
     await driver.executeTask(task, agent, ctx);
 
-    const runLog = logs.find(l => l.startsWith('Running: opencode'));
+    const runLog = logs.find((l) => l.startsWith('Running: opencode'));
     assert.ok(runLog, 'Should log the run command');
     assert.ok(runLog.includes('--model ollama:llama3'), 'Command should include --model flag');
 

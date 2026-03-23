@@ -25,7 +25,7 @@ describe('Vibe Kanban API', async () => {
   before(async () => {
     serverProcess = spawn('node', ['dist/server.js'], {
       stdio: 'pipe',
-      env: { ...process.env, PORT: '5174' }
+      env: { ...process.env, PORT: '5174' },
     });
 
     const ready = await waitForServer();
@@ -65,8 +65,8 @@ describe('Vibe Kanban API', async () => {
         source: 'test',
         category: 'test',
         priority: 'media',
-        githubRepo: 'acme/vibe'
-      })
+        githubRepo: 'acme/vibe',
+      }),
     });
 
     assert.equal(res.status, 201);
@@ -83,14 +83,14 @@ describe('Vibe Kanban API', async () => {
     const taskRes = await fetch(`${API_URL}/api/tasks`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: 'Perf Task', category: 'performance' })
+      body: JSON.stringify({ title: 'Perf Task', category: 'performance' }),
     });
     const { task } = await taskRes.json();
 
     const assignRes = await fetch(`${API_URL}/api/assign`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ taskId: task.id })
+      body: JSON.stringify({ taskId: task.id }),
     });
 
     assert.equal(assignRes.status, 200);
@@ -104,14 +104,14 @@ describe('Vibe Kanban API', async () => {
     const taskRes = await fetch(`${API_URL}/api/tasks`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: 'Roadmap task', category: 'roadmap' })
+      body: JSON.stringify({ title: 'Roadmap task', category: 'roadmap' }),
     });
     const { task } = await taskRes.json();
 
     const moveRes = await fetch(`${API_URL}/api/move`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ taskId: task.id, lane: 'review' })
+      body: JSON.stringify({ taskId: task.id, lane: 'review' }),
     });
 
     assert.equal(moveRes.status, 200);
@@ -123,7 +123,7 @@ describe('Vibe Kanban API', async () => {
     await fetch(`${API_URL}/api/tasks`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: 'To be deleted', source: 'test' })
+      body: JSON.stringify({ title: 'To be deleted', source: 'test' }),
     });
 
     const res = await fetch(`${API_URL}/api/reset`, { method: 'POST' });
@@ -139,7 +139,7 @@ describe('Vibe Kanban API', async () => {
     const res = await fetch(`${API_URL}/api/config/clone-dir`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cloneDir: ' ./test-clones/ ' })
+      body: JSON.stringify({ cloneDir: ' ./test-clones/ ' }),
     });
 
     assert.equal(res.status, 200);
@@ -155,7 +155,7 @@ describe('Vibe Kanban API', async () => {
     const taskRes = await fetch(`${API_URL}/api/tasks`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: 'Task to assign', source: 'test', category: 'roadmap' })
+      body: JSON.stringify({ title: 'Task to assign', source: 'test', category: 'roadmap' }),
     });
     const taskData = await taskRes.json();
     const taskId = taskData.task.id;
@@ -164,7 +164,7 @@ describe('Vibe Kanban API', async () => {
     const assignRes = await fetch(`${API_URL}/api/assign`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ taskId })
+      body: JSON.stringify({ taskId }),
     });
     assert.strictEqual(assignRes.status, 200);
     const assignData = await assignRes.json();
@@ -177,33 +177,38 @@ describe('Vibe Kanban API', async () => {
     await fetch(`${API_URL}/api/tasks`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: 'Task Backlog', source: 'test', category: 'roadmap', lane: 'backlog' })
+      body: JSON.stringify({
+        title: 'Task Backlog',
+        source: 'test',
+        category: 'roadmap',
+        lane: 'backlog',
+      }),
     });
 
     // 2. Create a task and move to done
     const taskRes = await fetch(`${API_URL}/api/tasks`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: 'Task Done', source: 'test', category: 'roadmap' })
+      body: JSON.stringify({ title: 'Task Done', source: 'test', category: 'roadmap' }),
     });
     const taskData = await taskRes.json();
     await fetch(`${API_URL}/api/move`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ taskId: taskData.task.id, lane: 'done' })
+      body: JSON.stringify({ taskId: taskData.task.id, lane: 'done' }),
     });
 
     // 3. Call clear-done
     const clearRes = await fetch(`${API_URL}/api/tasks/clear-done`, {
-      method: 'POST'
+      method: 'POST',
     });
     assert.equal(clearRes.status, 200);
 
     // 4. Verify state
     const stateRes = await fetch(`${API_URL}/api/state`);
     const state = await stateRes.json();
-    const backlogTask = state.tasks.find(t => t.title === 'Task Backlog');
-    const doneTask = state.tasks.find(t => t.title === 'Task Done');
+    const backlogTask = state.tasks.find((t) => t.title === 'Task Backlog');
+    const doneTask = state.tasks.find((t) => t.title === 'Task Done');
 
     assert.ok(backlogTask, 'Backlog task should remain');
     assert.ok(!doneTask, 'Done task should be deleted');
