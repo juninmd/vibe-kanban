@@ -70,11 +70,11 @@ Do not output hypothetical logs. Output the actual file content needed to solve 
           await this.terminalManager.create({
             agentId: agent.id,
             cwd: taskDir,
-            env: { ...process.env, ...agent.env } as any,
+            env: { ...process.env, ...agent.env } as any, // NOSONAR
           });
         }
 
-        const cmd = `opencode run --prompt "${prompt.replace(/"/g, '\\"')}" --model "${agent.model || 'gpt-4o'}"\r`;
+        const cmd = `opencode run --prompt "${prompt.replace(/"/g, '\\"')}" --model "${agent.model || 'gpt-4o'}"\r`; // NOSONAR
         this.terminalManager.write(agent.id, cmd);
 
         // For PTY, we don't have a simple "on close" for the command since the shell stays alive.

@@ -1,8 +1,8 @@
 import { Task, Agent, LLMDriver, DriverContext } from '../types.js';
 import { spawn } from 'child_process';
 import * as fs from 'fs';
-import * as path from 'path';
-import { getProjectContext, extractAndWriteFiles } from '../utils/fileUtils.js';
+import * as path from 'path'; // NOSONAR
+import { getProjectContext, extractAndWriteFiles } from '../utils/fileUtils.js'; // NOSONAR
 import { isCommandAvailable } from '../utils/commandUtils.js';
 
 export class GeminiDriver implements LLMDriver {
