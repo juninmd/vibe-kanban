@@ -72,7 +72,7 @@ export async function prepareWorktree(
     } catch (e: any) {
       let safeMsg = e.message;
       if (githubToken) {
-        safeMsg = safeMsg.replace(new RegExp(githubToken, 'g'), '***');
+        safeMsg = safeMsg.split(githubToken).join('***');
       }
       if (!hideError) {
         const sanitizedError = new Error(

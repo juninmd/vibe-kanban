@@ -382,7 +382,7 @@ async function startTask(task: Task, agent: Agent) {
 
     const runAttempt = (tool: string) => {
       let executeDriver: LLMDriver | undefined;
-      if (drivers && typeof drivers === 'object' && tool in drivers) {
+      if (drivers && typeof drivers === 'object' && Object.prototype.hasOwnProperty.call(drivers, tool)) {
         executeDriver = drivers[tool];
       }
       if (!executeDriver) {

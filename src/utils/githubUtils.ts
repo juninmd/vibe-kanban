@@ -115,9 +115,9 @@ export async function createPullRequest(
     // If PR already exists, it might return a 422
     if (
       response.status === 422 &&
-      errorData.errors &&
+      Array.isArray(errorData.errors) &&
       errorData.errors.some((e: any) =>
-        typeof e.message === 'string' && e.message.indexOf('A pull request already exists') !== -1
+        e && typeof e.message === 'string' && e.message.indexOf('A pull request already exists') !== -1
       )
     ) {
       return `Pull Request já existe para a branch ${branchName}.`;

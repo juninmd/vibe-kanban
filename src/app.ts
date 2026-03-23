@@ -2564,8 +2564,8 @@ window.addEventListener('pointerdown', onPointerDown);
 
 // --- Keyboard Shortcuts ---
 window.addEventListener('keydown', (e) => {
-  const isInputOrTextArea = e.target instanceof Element && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA');
-  if (isInputOrTextArea) {
+  const targetTag = e.target ? (e.target as HTMLElement).tagName : '';
+  if (targetTag === 'INPUT' || targetTag === 'TEXTAREA' || targetTag === 'SELECT') {
     return;
   }
 

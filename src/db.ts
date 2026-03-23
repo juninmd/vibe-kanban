@@ -53,15 +53,19 @@ db.exec(`
 // Migration: add workDir column if missing
 try {
   db.exec(`ALTER TABLE tasks ADD COLUMN workDir TEXT`);
-} catch (e) {
-  /* column already exists */
+} catch (e: unknown) {
+  if (e instanceof Error && !e.message.includes('duplicate column')) {
+    console.error('Migration error workDir:', e.message);
+  }
 }
 
 // Migration: add baseRepoDir column if missing
 try {
   db.exec(`ALTER TABLE tasks ADD COLUMN baseRepoDir TEXT`);
-} catch (e) {
-  /* column already exists */
+} catch (e: unknown) {
+  if (e instanceof Error && !e.message.includes('duplicate column')) {
+    console.error('Migration error baseRepoDir:', e.message);
+  }
 }
 
 export const DB = {

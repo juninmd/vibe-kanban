@@ -49,8 +49,9 @@ export function isEligibleForFallback(
   if (exitCode !== undefined && exitCode > 128) return true;
 
   // Check if the output explicitly says it exited with a code > 128
-  // Optimized regex to prevent ReDoS by eliminating alternating capture groups that could backtrack
-  const exitMatch = output.match(/code\s+(\d+)|código\s+(\d+)|erro\s+(\d+)|status\s+(\d+)/i);
+  // Look only at the end of the output (last 1000 characters) to prevent ReDoS on massive logs
+  const tailOutput = output.length > 1000 ? output.slice(-1000) : output;
+  const exitMatch = tailOutput.match(/code\s+(\d+)|código\s+(\d+)|erro\s+(\d+)|status\s+(\d+)/i);
   if (exitMatch) {
     const codeStr = exitMatch[1] || exitMatch[2] || exitMatch[3] || exitMatch[4];
     if (codeStr && parseInt(codeStr, 10) > 128) {
