@@ -327,6 +327,8 @@ const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? dri
           const attempts = (fallbackAttempts.get(tid) || 0) + 1;
           fallbackAttempts.set(tid, attempts);
 
+          // We consider provider exhaustion to be complete when we have tried all tools in the providerChain
+          // AND have exceeded the total MAX_FALLBACK_ATTEMPTS for transient errors. This prevents infinite fallback loops.
           const isCompleteProviderExhaustion = attempts > MAX_FALLBACK_ATTEMPTS && attemptIndex >= providerChain.length - 1;
 
           if (!isCompleteProviderExhaustion) {
