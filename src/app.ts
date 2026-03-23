@@ -1132,15 +1132,15 @@ function spawnConfetti() {
     positions[i * 3 + 1] = 5; // y (high up)
     positions[i * 3 + 2] = -4; // z (near board)
 
-    const color = new THREE.Color().setHSL(Math.random(), 0.9, 0.6);
+    const color = new THREE.Color().setHSL(Math.random(), 0.9, 0.6); // NOSONAR
     colors[i * 3] = color.r;
     colors[i * 3 + 1] = color.g;
     colors[i * 3 + 2] = color.b;
 
     velocities.push({
-      x: (Math.random() - 0.5) * 0.3,
-      y: Math.random() * 0.3 + 0.1,
-      z: (Math.random() - 0.5) * 0.3,
+      x: (Math.random() - 0.5) * 0.3, // NOSONAR
+      y: Math.random() * 0.3 + 0.1, // NOSONAR
+      z: (Math.random() - 0.5) * 0.3, // NOSONAR
     });
   }
 
@@ -1864,6 +1864,7 @@ function tick() {
       item.phase !== 'celebrating'
     ) {
       if (Math.random() < 0.4) {
+        // NOSONAR
         spawnTrail(item.group.position, item.color);
       }
     }
@@ -1903,8 +1904,8 @@ function spawnTrail(position: THREE.Vector3, color: THREE.Color) {
   mesh.position.copy(position);
   mesh.position.y += 0.5; // center of body
   // Random offset for "sparkle"
-  mesh.position.x += (Math.random() - 0.5) * 0.2;
-  mesh.position.z += (Math.random() - 0.5) * 0.2;
+  mesh.position.x += (Math.random() - 0.5) * 0.2; // NOSONAR
+  mesh.position.z += (Math.random() - 0.5) * 0.2; // NOSONAR
   scene.add(mesh);
   trailParticles.push({ mesh, life: 1.0 });
 }
@@ -2018,7 +2019,8 @@ function onPointerDown(event: PointerEvent) {
 window.addEventListener('pointerdown', onPointerDown);
 
 // --- Keyboard Shortcuts ---
-window.addEventListener('keydown', (e) => { // NOSONAR
+window.addEventListener('keydown', (e) => {
+  // NOSONAR
   if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 
   if (e.key === ' ') {

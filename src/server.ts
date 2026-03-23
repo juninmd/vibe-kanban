@@ -198,7 +198,8 @@ function parseBody(req: any): Promise<any> {
     req.on('end', () => {
       try {
         resolve(data ? JSON.parse(data) : {});
-      } catch (e) { // NOSONAR
+      } catch (e) {
+        // NOSONAR
         resolve({}); // NOSONAR
       } // NOSONAR
     });
@@ -393,7 +394,8 @@ function autoAssign() {
     // 1. If manually assigned:
     if (task.assignedTo) {
       const assignedAgent = agentsById.get(task.assignedTo);
-      if (assignedAgent && assignedAgent.status === 'idle') { // NOSONAR
+      if (assignedAgent && assignedAgent.status === 'idle') {
+        // NOSONAR
         startTask(task, assignedAgent);
         assignedAgent.status = 'working';
       }
@@ -1060,7 +1062,8 @@ const server = createServer(async (req, res) => {
     const body = await parseBody(req);
     const envPath = path.resolve(process.cwd(), '.env');
     let envContent = '';
-    const ALLOWED_ENV_KEYS = [ // NOSONAR
+    const ALLOWED_ENV_KEYS = [
+      // NOSONAR
       'OPENAI_API_KEY',
       'GEMINI_API_KEY',
       'ANTHROPIC_API_KEY',

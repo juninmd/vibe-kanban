@@ -16,7 +16,8 @@ export function getProjectContext(dir: string, maxChars: number = 20000): string
     let items: string[] = [];
     try {
       items = fs.readdirSync(currentDir);
-    } catch (e) { // NOSONAR
+    } catch (e) {
+      // NOSONAR
       return; // NOSONAR
     } // NOSONAR
 
@@ -29,7 +30,8 @@ export function getProjectContext(dir: string, maxChars: number = 20000): string
       let stat;
       try {
         stat = fs.statSync(fullPath);
-      } catch (e) { // NOSONAR
+      } catch (e) {
+        // NOSONAR
         continue; // NOSONAR
       } // NOSONAR
 
