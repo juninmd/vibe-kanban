@@ -79,10 +79,7 @@ export async function prepareWorktree(
           `Git command failed: git ${args.join(' ')}\n${safeMsg}`,
         );
         if (e.stack && githubToken) {
-          (sanitizedError as any).stack = e.stack.replace(
-            new RegExp(githubToken, 'g'),
-            '***',
-          );
+          (sanitizedError as any).stack = e.stack.split(githubToken).join('***');
         } else {
           (sanitizedError as any).stack = e.stack;
         }

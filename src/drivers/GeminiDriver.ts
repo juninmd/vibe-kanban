@@ -202,7 +202,9 @@ content
         this.runningTasks.delete(task.id);
         try {
           fs.rmSync(tmpDir, { recursive: true, force: true });
-        } catch {}
+        } catch (e) {
+          console.error(`Error cleaning up tmp directory ${tmpDir}:`, e);
+        }
 
         if (sessionTimeout.wasTimedOut()) {
           ctx.onLog(task.id, TIMEOUT_MESSAGE);

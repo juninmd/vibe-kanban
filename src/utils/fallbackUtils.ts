@@ -49,11 +49,13 @@ export function isEligibleForFallback(
   if (exitCode !== undefined && exitCode > 128) return true;
 
   // Check if the output explicitly says it exited with a code > 128
-  const exitMatch = output.match(
-    /(?:exited with code|falhou com código|encerrado com código|encerrado com erro|exited with status) (\d+)/i,
-  );
-  if (exitMatch && parseInt(exitMatch[1], 10) > 128) {
-    return true;
+  // Optimized regex to prevent ReDoS by eliminating alternating capture groups that could backtrack
+  const exitMatch = output.match(/code\s+(\d+)|código\s+(\d+)|erro\s+(\d+)|status\s+(\d+)/i);
+  if (exitMatch) {
+    const codeStr = exitMatch[1] || exitMatch[2] || exitMatch[3] || exitMatch[4];
+    if (codeStr && parseInt(codeStr, 10) > 128) {
+      return true;
+    }
   }
 
   return false;

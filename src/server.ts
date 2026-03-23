@@ -296,6 +296,7 @@ function parseBody(req: any): Promise<any> {
       try {
         resolve(data ? JSON.parse(data) : {});
       } catch (e) {
+        console.error('Error parsing JSON body:', e);
         resolve({});
       }
     });
@@ -380,10 +381,14 @@ async function startTask(task: Task, agent: Agent) {
     let attemptIndex = 0;
 
     const runAttempt = (tool: string) => {
-      const executeDriver =
-        (Object.prototype.hasOwnProperty.call(drivers, tool)
-          ? drivers[tool]
-          : null) || resolveDriverForAgent(agent);
+      let executeDriver: LLMDriver | undefined;
+      if (drivers && typeof drivers === 'object' && tool in drivers) {
+        executeDriver = drivers[tool];
+      }
+      if (!executeDriver) {
+        executeDriver = resolveDriverForAgent(agent);
+      }
+
       const executionAgent = { ...agent, tool };
       activeTaskDrivers.set(task.id, executeDriver);
       addTerminalLine(agent.id, task.id, 'system', `🤖 Provider: ${tool}`);
@@ -1064,12 +1069,12 @@ const server = createServer(async (req, res) => {
       return jsonResponse(res, 404, { error: 'Task or workDir not found' });
     }
 
-    const command =
-      process.platform === 'win32'
-        ? `explorer "${task.workDir}"`
-        : process.platform === 'darwin'
-          ? `open "${task.workDir}"`
-          : `xdg-open "${task.workDir}"`;
+    let command = `xdg-open "${task.workDir}"`;
+    if (process.platform === 'win32') {
+      command = `explorer "${task.workDir}"`;
+    } else if (process.platform === 'darwin') {
+      command = `open "${task.workDir}"`;
+    }
     exec(command);
     addEvent(`Abrindo pasta da tarefa #${taskId}: ${task.workDir}`);
     return jsonResponse(res, 200, { ok: true });
@@ -1325,8 +1330,8 @@ const server = createServer(async (req, res) => {
       }
     });
 
-    // Clean up multiple newlines
-    envContent = envContent.replace(/\n\n+/g, '\n').trim();
+    // Clean up multiple newlines safely without ReDoS
+    envContent = envContent.split(/\r?\n/).filter((line) => line.trim() !== '').join('\n').trim();
 
     try {
       fs.writeFileSync(envPath, envContent);

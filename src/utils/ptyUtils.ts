@@ -16,8 +16,7 @@ export interface PtySpawnArgs {
 }
 
 // biome-ignore lint/suspicious/noControlCharactersInRegex: required for ANSI escape sequence stripping
-const ANSI_REGEX =
-  /\x1b(?:\[[0-9;?]*[a-zA-Z]|\][^\x07]*\x07|\([A-Z0-9]|[A-Z])/g;
+const ANSI_REGEX = /\x1b\[[0-9;?]*[a-zA-Z]/g;
 
 /**
  * Strip ANSI escape sequences and normalize PTY line endings.

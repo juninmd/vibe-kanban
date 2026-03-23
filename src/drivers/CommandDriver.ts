@@ -80,7 +80,8 @@ Do not output hypothetical logs. Output the actual file content needed to solve 
           });
         }
 
-        const cmd = `opencode run --model "${agent.model || 'gpt-4o'}" "${prompt.replace(/"/g, '\\"')}"\r`;
+        const safePrompt = prompt.split('"').join('\\"');
+        const cmd = `opencode run --model "${agent.model || 'gpt-4o'}" "${safePrompt}"\r`;
         logDebugCommand(ctx, task.id, 'opencode', [
           'run',
           '--model',

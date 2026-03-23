@@ -38,6 +38,7 @@ export function getProjectContext(
       try {
         stat = fs.statSync(fullPath);
       } catch (e) {
+        console.error(`Error reading stat for ${fullPath}:`, e);
         continue;
       }
 

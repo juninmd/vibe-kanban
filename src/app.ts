@@ -2342,12 +2342,13 @@ function tick() {
         item.laser.visible = true;
 
         // Change laser color based on task category
-        const laserColor =
-          taskObj.category === 'test' || taskObj.category === 'bug'
-            ? 0xef4444
-            : taskObj.category === 'performance'
-              ? 0xeab308
-              : 0x00f0ff;
+        let laserColor = 0x00f0ff;
+        if (taskObj.category === 'test' || taskObj.category === 'bug') {
+          laserColor = 0xef4444;
+        } else if (taskObj.category === 'performance') {
+          laserColor = 0xeab308;
+        }
+
         (item.laser.material as THREE.LineBasicMaterial).color.setHex(
           laserColor,
         );
@@ -2563,11 +2564,10 @@ window.addEventListener('pointerdown', onPointerDown);
 
 // --- Keyboard Shortcuts ---
 window.addEventListener('keydown', (e) => {
-  if (
-    e.target instanceof HTMLInputElement ||
-    e.target instanceof HTMLTextAreaElement
-  )
+  const isInputOrTextArea = e.target instanceof Element && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA');
+  if (isInputOrTextArea) {
     return;
+  }
 
   if (e.key === 'q' || e.key === 'Q') {
     e.preventDefault();
