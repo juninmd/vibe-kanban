@@ -74,14 +74,6 @@ export function getBodyMaterials(role: string, modelName?: string, badgeColorFal
         ctx.fillRect(0, 0, 256, 256);
 
         if (modelName) {
-            // Need to rotate 180 and mirror because face index 4 of BoxGeometry might have different UV mapping.
-            // BoxGeometry front face mapping often displays texture upside down and horizontally mirrored depending on how UVs are laid out.
-            ctx.save();
-            ctx.translate(128, 128);
-            ctx.rotate(Math.PI);
-            ctx.scale(-1, 1);
-            ctx.translate(-128, -128);
-
             const rectWidth = 180;
             const rectHeight = 60;
             const rectY = 98; // Center on chest
@@ -117,7 +109,6 @@ export function getBodyMaterials(role: string, modelName?: string, badgeColorFal
             } else {
                 ctx.fillText(modelName, 128, rectY + rectHeight / 2 + 2);
             }
-            ctx.restore();
         }
     }, 'linear');
 
