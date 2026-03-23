@@ -265,7 +265,7 @@ async function updateTaskAgentModels() {
       els.agentModelDropdown.innerHTML = '<option value="">Nenhum modelo encontrado</option>';
     }
   } catch (e) {
-    console.error('Erro ao carregar modelos para a tarefa:', e);
+    console.warn('Erro ao carregar modelos para a tarefa:', e);
   }
 }
 
@@ -276,7 +276,7 @@ async function fetchState() {
     const data = await res.json();
     updateState(data);
   } catch (e) {
-    console.error('Failed to fetch state:', e);
+    console.warn('Failed to fetch state:', e);
   }
 }
 
@@ -290,7 +290,7 @@ async function apiCall(endpoint: string, method: string, body: any) {
     // State update handled by SSE
     return await res.json();
   } catch (e) {
-    console.error(`API call failed ${endpoint}:`, e);
+    console.warn(`API call failed ${endpoint}:`, e);
   }
 }
 
@@ -592,7 +592,7 @@ class TerminalUIManager {
       try {
         await fetch(`/api/terminals/${encodeURIComponent(agentId)}/start`, { method: 'POST' });
       } catch (e) {
-        console.error('Failed to start terminal session', e);
+        console.warn('Failed to start terminal session', e);
       }
     }
 
@@ -695,7 +695,7 @@ async function openTaskDetailsModal(task: Task) {
     }
   } catch (e) {
     els.taskHistoryContent.innerHTML = 'Erro ao carregar histórico.';
-    console.error(e);
+    console.warn(e);
   }
 }
 
@@ -734,7 +734,7 @@ async function openAgentEditModal(agent: Agent) {
           .join('');
     }
   } catch (e) {
-    console.error(e);
+    console.warn(e);
   }
   // Load models for the tool
   if (agent.tool) {
@@ -750,7 +750,7 @@ async function openAgentEditModal(agent: Agent) {
           .join('');
       }
     } catch (e) {
-      console.error(e);
+      console.warn(e);
     }
   } else {
     els.agentModelDropdown.innerHTML = `<option value="${agent.model}" selected>${agent.model}</option>`;
@@ -875,7 +875,7 @@ els.createAgentBtn.addEventListener('click', async () => {
       els.agentTool.innerHTML = '<option value="">Nenhuma ferramenta CLI encontrada</option>';
     }
   } catch (e) {
-    console.error(e);
+    console.warn(e);
   }
 });
 
@@ -899,7 +899,7 @@ els.agentTool.addEventListener('change', async (e: Event) => {
       els.agentModelDropdown.innerHTML = '<option value="">Nenhum modelo encontrado</option>';
     }
   } catch (e) {
-    console.error(e);
+    console.warn(e);
   }
 });
 
@@ -938,7 +938,7 @@ els.settingsBtn.addEventListener('click', async () => {
     const data = await res.json();
     els.configCloneDir.value = data.cloneDir || '';
   } catch (e) {
-    console.error(e);
+    console.warn(e);
   }
 });
 
@@ -1032,7 +1032,7 @@ loader.load(
         child.receiveShadow = true;
       }
     });
-    console.log(
+    console.info(
       'Robot animations loaded:',
       robotAnimations.map((a) => a.name),
     );
@@ -1042,7 +1042,7 @@ loader.load(
   },
   undefined,
   (error) => {
-    console.error('Falha ao carregar modelo 3D do robô. Usando avatar fallback.', error);
+    console.warn('Falha ao carregar modelo 3D do robô. Usando avatar fallback.', error);
     usingFallbackAvatars = true;
     rebuildAgentMeshes();
   },
@@ -1079,7 +1079,7 @@ function spawnComputers() {
     },
     undefined,
     (error) => {
-      console.error('Falha ao carregar modelo old_computer.glb, usando fallback', error);
+      console.warn('Falha ao carregar modelo old_computer.glb, usando fallback', error);
       officeData.padPositions.forEach((pos) => {
         const deskGroup = new THREE.Group();
         deskGroup.position.set(pos.x, 0, pos.z - 1.2);
@@ -1941,7 +1941,7 @@ evtSource.onmessage = (event) => {
       if (msg.agents) terminalUIManager.cleanupDeadAgents(msg.agents);
     }
   } catch (e) {
-    console.error('Error parsing SSE data', e);
+    console.warn('Error parsing SSE data', e);
   }
 };
 
@@ -2052,7 +2052,7 @@ async function loadAvailableTools() {
       els.agentType.innerHTML = agentTypeOptions;
     }
   } catch (e) {
-    console.error('Erro ao carregar ferramentas:', e);
+    console.warn('Erro ao carregar ferramentas:', e);
   }
 }
 

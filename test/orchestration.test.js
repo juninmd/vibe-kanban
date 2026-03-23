@@ -73,7 +73,10 @@ describe('Orchestration API', async () => {
     const state = await stateRes.json();
     const updatedTask = state.tasks.find((t) => t.id === task.id);
 
-    assert.ok(updatedTask.assignedTo || updatedTask.interrupted === true, 'Task should be assigned automatically or marked interrupted');
+    assert.ok(
+      updatedTask.assignedTo || updatedTask.interrupted === true,
+      'Task should be assigned automatically or marked interrupted',
+    );
   });
 
   test('Disable Orchestration: Does not assign tasks automatically', async () => {
@@ -144,6 +147,9 @@ describe('Orchestration API', async () => {
     const state = await stateRes.json();
     const updatedTask = state.tasks.find((t) => t.id === task.id);
 
-    assert.ok(updatedTask.assignedTo || updatedTask.interrupted === true, 'Task should be assigned after manual trigger or marked interrupted');
+    assert.ok(
+      updatedTask.assignedTo || updatedTask.interrupted === true,
+      'Task should be assigned after manual trigger or marked interrupted',
+    );
   });
 });

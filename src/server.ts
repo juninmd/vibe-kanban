@@ -66,7 +66,7 @@ function initializeDefaultAgents() {
         terminalId: `term-${Date.now()}-${idx}-${Math.random().toString(36).substr(2, 9)}`,
       });
     });
-    console.log('Initialized default agents.');
+    console.info('Initialized default agents.');
   }
 }
 
@@ -146,7 +146,7 @@ function broadcastState() {
     try {
       client.res.write(`data: ${data}\n\n`);
     } catch (e) {
-      console.error(`Error broadcasting to client ${client.id}:`, e);
+      console.warn(`Error broadcasting to client ${client.id}:`, e);
     }
   });
 }
@@ -1151,4 +1151,4 @@ const server = createServer(async (req, res) => {
   jsonResponse(res, 404, { error: 'Not found' });
 });
 
-server.listen(PORT, () => console.log(`Server listening on http://localhost:${PORT}`));
+server.listen(PORT, () => console.info(`Server listening on http://localhost:${PORT}`));
