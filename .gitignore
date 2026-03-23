@@ -22,3 +22,10 @@ vibe_config.json
 vibe_kanban.db
 *.log
 vibe_kanban.db-journal
+
+# Additional security patterns
+*.pem
+*.key
+*.p12
+config/secrets.yml
+secrets/
