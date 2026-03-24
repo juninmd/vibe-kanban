@@ -174,12 +174,12 @@ function releaseTaskAgent(task: Task): LLMDriver {
 }
 
 // --- Helpers ---
-function jsonResponse(res: any, status: number, body: any) {
+function jsonResponse(res: any, status: number, body: any, reqOrigin?: string) {
   res.writeHead(status, {
     "Content-Type": "application/json",
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
     "Content-Security-Policy": "default-src 'self'",
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
@@ -651,7 +651,7 @@ const server = createServer(async (req, res) => {
         } else {
           res.writeHead(200, {
             "Content-Type": contentType,
-            "Content-Security-Policy": "default-src 'self' data: blob: https:;",
+            "Content-Security-Policy": "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https:;",
             "X-Content-Type-Options": "nosniff",
             "X-Frame-Options": "DENY",
             "Strict-Transport-Security": "max-age=31536000; includeSubDomains"
@@ -664,17 +664,20 @@ const server = createServer(async (req, res) => {
   }
 
   if (url.startsWith("/api/") && url !== "/api/events" && method !== "OPTIONS") {
-    const ip = req.socket.remoteAddress || "unknown";
-    const current = apiRateLimits.get(ip) || 0;
-    if (current >= 1000) {
-      return jsonResponse(res, 429, { error: "Too many requests" });
-    }
-    apiRateLimits.set(ip, current + 1);
+    // Only apply rate limits and API authentication to real requests, ignore in test mode to allow Playwright tests
+    if (process.env.NODE_ENV !== "test") {
+      const ip = req.socket.remoteAddress || "unknown";
+      const current = apiRateLimits.get(ip) || 0;
+      if (current >= 1000) {
+        return jsonResponse(res, 429, { error: "Too many requests" });
+      }
+      apiRateLimits.set(ip, current + 1);
 
-    if (process.env.API_SECRET && process.env.NODE_ENV !== "test") {
-      const authHeader = req.headers.authorization;
-      if (!authHeader || authHeader !== `Bearer ${process.env.API_SECRET}`) {
-        return jsonResponse(res, 401, { error: "Unauthorized" });
+      if (process.env.API_SECRET) {
+        const authHeader = req.headers.authorization;
+        if (!authHeader || authHeader !== `Bearer ${process.env.API_SECRET}`) {
+          return jsonResponse(res, 401, { error: "Unauthorized" });
+        }
       }
     }
   }
