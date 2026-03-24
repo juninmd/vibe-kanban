@@ -177,7 +177,7 @@ function releaseTaskAgent(task: Task): LLMDriver {
 function jsonResponse(res: any, status: number, body: any, reqOrigin?: string) {
   res.writeHead(status, {
     "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Origin": reqOrigin || "http://localhost:5174",
     "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
     "Content-Security-Policy": "default-src 'self'",
@@ -684,7 +684,7 @@ const server = createServer(async (req, res) => {
 
   if (method === "OPTIONS") {
     res.writeHead(200, {
-      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Origin": req.headers.origin || "http://localhost:5174",
       "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type, Authorization",
       "Content-Security-Policy": "default-src 'self'",
