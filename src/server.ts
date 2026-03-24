@@ -3,6 +3,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as crypto from "crypto";
 import { execSync, exec } from "child_process";
+import { promisify } from "util";
 import { Task, Agent, State, EventLog, LLMDriver } from "./types.js";
 import { GeminiDriver } from "./drivers/GeminiDriver.js";
 import { CopilotDriver } from "./drivers/CopilotDriver.js";
@@ -54,6 +55,21 @@ function initializeState(): State {
   if (existingTasks.length === 0 && process.env.NODE_ENV !== 'test') {
     DB.createTask({ title: "Analyze codex codebase", source: "system", category: "roadmap", priority: "media", lane: "backlog", assignedTo: null, interrupted: false, logs: [], githubRepo: "https://github.com/openai/codex", description: "Analyze openai/codex" });
     DB.createTask({ title: "Analyze opencode codebase", source: "system", category: "roadmap", priority: "media", lane: "backlog", assignedTo: null, interrupted: false, logs: [], githubRepo: "https://github.com/anomalyco/opencode", description: "Analyze anomalyco/opencode" });
+  }
+
+  // Orphan task recovery (self-healing on startup) inspired by 'lisa'
+  const currentTasks = DB.getTasks();
+  for (const t of currentTasks) {
+    if (t.lane === "in_progress") {
+      DB.updateTask(t.id, { lane: "backlog", assignedTo: null, interrupted: true });
+    }
+  }
+
+  const currentAgents = DB.getAgents();
+  for (const a of currentAgents) {
+    if (a.status !== "idle") {
+      DB.updateAgent(a.id, { status: "idle", assignedTask: null });
+    }
   }
 
   return {
@@ -259,6 +275,76 @@ const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? dri
       activeTaskDrivers.set(task.id, executeDriver);
       addTerminalLine(agent.id, task.id, "system", `🤖 Provider: ${tool}`);
 
+      const onBugFoundCallback = (tid: number, desc: string) => {
+        const nextTool = providerChain[attemptIndex + 1];
+        if (nextTool && isEligibleForProviderFallback(desc)) {
+          attemptIndex += 1;
+          addEvent(`[ProviderFallback] Tarefa #${tid} falhou com ${providerChain[attemptIndex - 1]} (${desc}). Tentando ${nextTool}.`);
+          runAttempt(nextTool);
+          return;
+        }
+
+        activeTaskDrivers.delete(tid);
+        const t = getTask(tid);
+        if (!t) return;
+
+        if (isEligibleForFallback(desc)) {
+            const attempts = (fallbackAttempts.get(tid) || 0) + 1;
+            fallbackAttempts.set(tid, attempts);
+
+            const isCompleteProviderExhaustion = attempts > MAX_FALLBACK_ATTEMPTS && attemptIndex >= providerChain.length - 1;
+
+            if (!isCompleteProviderExhaustion) {
+                if (attempts <= MAX_FALLBACK_ATTEMPTS) {
+                    addEvent(`[Fallback] Erro transiente em #${tid}: ${desc}. Tentando novamente... (${attempts}/${MAX_FALLBACK_ATTEMPTS})`);
+                    if (t.assignedTo) {
+                        addTerminalLine(t.assignedTo, tid, "stderr", `⚠️ Erro transiente detectado. Acionando Fallback (${attempts}/${MAX_FALLBACK_ATTEMPTS}): ${desc}`);
+                        terminateTask(tid, "backlog", true);
+                    }
+                    return;
+                }
+            } else {
+                addEvent(`[Fallback] Falha na tarefa #${tid} após ${MAX_FALLBACK_ATTEMPTS} tentativas.`);
+                if (t.assignedTo) {
+                    addTerminalLine(t.assignedTo, tid, "stderr", `❌ Exaustão completa de provedores. Tarefa não pode ser concluída: ${desc}`);
+                    const currentExhaustions = (agentExhaustionCount.get(t.assignedTo) || 0) + 1;
+                    agentExhaustionCount.set(t.assignedTo, currentExhaustions);
+
+                    if (currentExhaustions >= 3) {
+                        addTerminalLine(t.assignedTo, tid, "system", `❌ Agente entrou em estado de ERRO após sucessivas exaustões.`);
+                        updateAgent(t.assignedTo, { status: "error" });
+                    }
+                }
+
+                fallbackAttempts.delete(tid);
+                terminateTask(tid, "done", false);
+                return;
+            }
+        }
+
+        const count = (bugCounts.get(tid) || 0) + 1;
+        bugCounts.set(tid, count);
+        if (count > 3) {
+          console.warn(`Bug rate limit reached for task #${tid}`);
+          return;
+        }
+        addEvent(`BUG encontrado em #${tid}: ${desc}`);
+        if (t.assignedTo) {
+          addTerminalLine(t.assignedTo, tid, "stderr", `❌ Bug: ${desc}`);
+          terminateTask(tid, "backlog", true);
+        }
+        DB.createTask({
+          title: `Bug: ${desc.substring(0, 100)}`,
+          source: "system",
+          category: "bug",
+          priority: "alta",
+          lane: "backlog",
+          assignedTo: null,
+          interrupted: false,
+          logs: [],
+        });
+      };
+
       executeDriver.executeTask(updatedTask, executionAgent, {
         onLog: (tid, msg) => {
       const t = getTask(tid);
@@ -278,23 +364,50 @@ const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? dri
       if (t && t.assignedTo) {
         addTerminalLine(t.assignedTo, tid, "system", `✅ Tarefa #${tid} concluída!`);
 
-        // Reset fallback attempts on success
-        fallbackAttempts.delete(tid);
+        // Proof of Work validation (inspired by 'lisa' guardrails)
+        const workDir = t.workDir || path.join(appConfig.cloneDir, `task-${t.id}`);
+        const pkgJsonPath = path.join(workDir, "package.json");
+        if (fs.existsSync(pkgJsonPath)) {
+            try {
+                const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, "utf-8"));
+                if (pkg.scripts && pkg.scripts.test) {
+                    addTerminalLine(t.assignedTo, tid, "system", `🔍 Executando testes locais (Proof of Work) antes do push...`);
+
+                    try {
+                            const execAsync = promisify(exec);
+                            await execAsync("npm test", { cwd: workDir });
+                        addTerminalLine(t.assignedTo, tid, "system", `✅ Testes passaram.`);
+                    } catch (testErr: any) {
+                        let errMsg = `Test validation failed: ${testErr.message || "Unknown error"}\n`;
+                        if (testErr.stdout) errMsg += testErr.stdout.toString() + "\n";
+                        if (testErr.stderr) errMsg += testErr.stderr.toString();
+
+                        addTerminalLine(t.assignedTo, tid, "stderr", `❌ Falha nos testes. Reportando como BUG.`);
+                            onBugFoundCallback(tid, errMsg);
+                        return; // Stop completion flow
+                    }
+                }
+            } catch (e) {}
+        }
 
         // Auto PR generation
         if (t.githubRepo && process.env.GITHUB_TOKEN) {
             addTerminalLine(t.assignedTo, tid, "system", `🔄 Gerando Pull Request para o repositório ${t.githubRepo}...`);
             try {
-                const workDir = t.workDir || path.join(appConfig.cloneDir, `task-${t.id}`);
                 const githubUser = process.env.GITHUB_USER || "vibe-agent";
                 const prResult = await createPullRequest(workDir, t.id, t.title, t.githubRepo, process.env.GITHUB_TOKEN, githubUser);
                 addTerminalLine(t.assignedTo, tid, "system", `✅ ${prResult}`);
                 addEvent(`PR criado para Tarefa #${tid}: ${t.githubRepo}`);
             } catch (prError: any) {
                 addTerminalLine(t.assignedTo, tid, "stderr", `❌ Falha ao criar Pull Request: ${prError.message}`);
-                addEvent(`Erro ao criar PR para Tarefa #${tid}.`);
+                addEvent(`Erro ao criar PR para Tarefa #${tid}. Reportando como BUG.`);
+                onBugFoundCallback(tid, `Falha ao criar Pull Request: ${prError.message}`);
+                return; // Stop completion flow
             }
         }
+
+        // Reset fallback attempts on success (after test and PR passes)
+        fallbackAttempts.delete(tid);
 
         if (t.baseRepoDir && t.workDir) {
             const branchName = `feature/task-${tid}`;
@@ -310,80 +423,7 @@ const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? dri
         bugCounts.delete(tid);
       }
     },
-    onBugFound: (tid, desc) => {
-      const nextTool = providerChain[attemptIndex + 1];
-      if (nextTool && isEligibleForProviderFallback(desc)) {
-        attemptIndex += 1;
-        addEvent(`[ProviderFallback] Tarefa #${tid} falhou com ${providerChain[attemptIndex - 1]} (${desc}). Tentando ${nextTool}.`);
-        runAttempt(nextTool);
-        return;
-      }
-
-      activeTaskDrivers.delete(tid);
-      const t = getTask(tid);
-      if (!t) return;
-
-      if (isEligibleForFallback(desc)) {
-          const attempts = (fallbackAttempts.get(tid) || 0) + 1;
-          fallbackAttempts.set(tid, attempts);
-
-          // We consider provider exhaustion to be complete when we have tried all tools in the providerChain
-          // AND have exceeded the total MAX_FALLBACK_ATTEMPTS for transient errors. This prevents infinite fallback loops.
-          const isCompleteProviderExhaustion = attempts > MAX_FALLBACK_ATTEMPTS && attemptIndex >= providerChain.length - 1;
-
-          if (!isCompleteProviderExhaustion) {
-              if (attempts <= MAX_FALLBACK_ATTEMPTS) {
-                  addEvent(`[Fallback] Erro transiente em #${tid}: ${desc}. Tentando novamente... (${attempts}/${MAX_FALLBACK_ATTEMPTS})`);
-                  if (t.assignedTo) {
-                      addTerminalLine(t.assignedTo, tid, "stderr", `⚠️ Erro transiente detectado. Acionando Fallback (${attempts}/${MAX_FALLBACK_ATTEMPTS}): ${desc}`);
-                      terminateTask(tid, "backlog", true); // Will be picked up again
-                  }
-                  return; // Stop normal bug flow
-              }
-          } else {
-              addEvent(`[Fallback] Falha na tarefa #${tid} após ${MAX_FALLBACK_ATTEMPTS} tentativas.`);
-              if (t.assignedTo) {
-                  addTerminalLine(t.assignedTo, tid, "stderr", `❌ Exaustão completa de provedores. Tarefa não pode ser concluída: ${desc}`);
-                  const currentExhaustions = (agentExhaustionCount.get(t.assignedTo) || 0) + 1;
-                  agentExhaustionCount.set(t.assignedTo, currentExhaustions);
-
-                  if (currentExhaustions >= 3) {
-                      addTerminalLine(t.assignedTo, tid, "system", `❌ Agente entrou em estado de ERRO após sucessivas exaustões.`);
-                      updateAgent(t.assignedTo, { status: "error" });
-                  }
-              }
-
-              fallbackAttempts.delete(tid); // Clean up on ultimate failure
-              terminateTask(tid, "done", false); // Unassigns and sets to done
-              return; // Stop normal bug flow
-          }
-      }
-
-      // Normal Bug Flow
-      // Rate limit: max 3 bugs per task
-      const count = (bugCounts.get(tid) || 0) + 1;
-      bugCounts.set(tid, count);
-      if (count > 3) {
-        console.warn(`Bug rate limit reached for task #${tid}`);
-        return;
-      }
-      addEvent(`BUG encontrado em #${tid}: ${desc}`);
-      if (t.assignedTo) {
-        addTerminalLine(t.assignedTo, tid, "stderr", `❌ Bug: ${desc}`);
-        terminateTask(tid, "backlog", true);
-      }
-      // Only create bug task if under limit
-      DB.createTask({
-        title: `Bug: ${desc.substring(0, 100)}`,
-        source: "system",
-        category: "bug",
-        priority: "alta",
-        lane: "backlog",
-        assignedTo: null,
-        interrupted: false,
-        logs: [],
-      });
-    },
+    onBugFound: onBugFoundCallback,
     onInterrupt: (tid) => {
       const t = getTask(tid);
       if (t?.assignedTo) {
