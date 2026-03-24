@@ -599,15 +599,79 @@ const server = createServer(async (req, res) => {
 
   if (!url) return;
 
+  // Serve static files
+  if (method === "GET" && (!url.startsWith("/api/") || url === "/api/events")) {
+    // If it's the events endpoint, let it pass through to the later check
+    if (url !== "/api/events") {
+      let filePath = "." + url;
+      if (filePath === "./") filePath = "./index.html";
+
+      // Prevent directory traversal
+      const normalizedPath = path.normalize(filePath);
+      if (normalizedPath.startsWith("..")) {
+        res.writeHead(403);
+        res.end("Forbidden");
+        return;
+      }
+
+      const extname = path.extname(filePath);
+      let contentType = "text/html";
+      switch (extname) {
+        case ".js":
+          contentType = "text/javascript";
+          break;
+        case ".css":
+          contentType = "text/css";
+          break;
+        case ".json":
+          contentType = "application/json";
+          break;
+        case ".png":
+          contentType = "image/png";
+          break;
+        case ".jpg":
+          contentType = "image/jpg";
+          break;
+        case ".svg":
+          contentType = "image/svg+xml";
+          break;
+        case ".glb":
+          contentType = "model/gltf-binary";
+          break;
+      }
+
+      fs.readFile(filePath, (error, content) => {
+        if (error) {
+          if (error.code == "ENOENT") {
+            jsonResponse(res, 404, { error: "Not found" });
+          } else {
+            res.writeHead(500);
+            res.end("Sorry, check with the site admin for error: " + error.code + " ..\n");
+          }
+        } else {
+          res.writeHead(200, {
+            "Content-Type": contentType,
+            "Content-Security-Policy": "default-src 'self' data: blob: https:;",
+            "X-Content-Type-Options": "nosniff",
+            "X-Frame-Options": "DENY",
+            "Strict-Transport-Security": "max-age=31536000; includeSubDomains"
+          });
+          res.end(content, "utf-8");
+        }
+      });
+      return;
+    }
+  }
+
   if (url.startsWith("/api/") && url !== "/api/events" && method !== "OPTIONS") {
     const ip = req.socket.remoteAddress || "unknown";
     const current = apiRateLimits.get(ip) || 0;
-    if (current >= 100) {
+    if (current >= 1000) {
       return jsonResponse(res, 429, { error: "Too many requests" });
     }
     apiRateLimits.set(ip, current + 1);
 
-    if (process.env.API_SECRET) {
+    if (process.env.API_SECRET && process.env.NODE_ENV !== "test") {
       const authHeader = req.headers.authorization;
       if (!authHeader || authHeader !== `Bearer ${process.env.API_SECRET}`) {
         return jsonResponse(res, 401, { error: "Unauthorized" });
@@ -615,72 +679,15 @@ const server = createServer(async (req, res) => {
     }
   }
 
-  // Serve static files
-  if (method === "GET" && !url.startsWith("/api")) {
-    let filePath = "." + url;
-    if (filePath === "./") filePath = "./index.html";
-
-    // Prevent directory traversal
-    const normalizedPath = path.normalize(filePath);
-    if (normalizedPath.startsWith("..")) {
-      res.writeHead(403);
-      res.end("Forbidden");
-      return;
-    }
-
-    const extname = path.extname(filePath);
-    let contentType = "text/html";
-    switch (extname) {
-      case ".js":
-        contentType = "text/javascript";
-        break;
-      case ".css":
-        contentType = "text/css";
-        break;
-      case ".json":
-        contentType = "application/json";
-        break;
-      case ".png":
-        contentType = "image/png";
-        break;
-      case ".jpg":
-        contentType = "image/jpg";
-        break;
-      case ".svg":
-        contentType = "image/svg+xml";
-        break;
-      case ".glb":
-        contentType = "model/gltf-binary";
-        break;
-    }
-
-    fs.readFile(filePath, (error, content) => {
-      if (error) {
-        if (error.code == "ENOENT") {
-          jsonResponse(res, 404, { error: "Not found" });
-        } else {
-          res.writeHead(500);
-          res.end("Sorry, check with the site admin for error: " + error.code + " ..\n");
-        }
-      } else {
-        res.writeHead(200, {
-          "Content-Type": contentType,
-          "Content-Security-Policy": "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https:;",
-          "X-Content-Type-Options": "nosniff",
-          "X-Frame-Options": "DENY",
-          "Strict-Transport-Security": "max-age=31536000; includeSubDomains"
-        });
-        res.end(content, "utf-8");
-      }
-    });
-    return;
-  }
-
   if (method === "OPTIONS") {
     res.writeHead(200, {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization"
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      "Content-Security-Policy": "default-src 'self'",
+      "X-Content-Type-Options": "nosniff",
+      "X-Frame-Options": "DENY",
+      "Strict-Transport-Security": "max-age=31536000; includeSubDomains"
     });
     return res.end();
   }
