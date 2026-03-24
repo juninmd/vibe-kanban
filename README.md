@@ -1,5 +1,6 @@
 # 📋 Vibe Kanban
 
+[![CI/CD Pipeline](https://github.com/juninmd/vibe-kanban/actions/workflows/ci.yml/badge.svg)](https://github.com/juninmd/vibe-kanban/actions/workflows/ci.yml)
 ![Status: Active](https://img.shields.io/badge/Status-Active-brightgreen.svg)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript)](https://www.typescriptlang.org/)
 [![Three.js](https://img.shields.io/badge/Three.js-0.160.0-black?logo=threedotjs)](https://threejs.org/)
@@ -38,6 +39,11 @@ pnpm start
 # Use the CLI
 node dist/cli/vibe.js --help
 ```
+
+## Build and Deployment Instructions
+The project is automatically built and tested on every push to `main` and `develop`.
+Deployments are triggered on pushes to the `main` branch after passing CI checks.
+To build locally: `pnpm build`.
 
 ## OpenCode on Windows
 

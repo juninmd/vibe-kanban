@@ -13,3 +13,8 @@ vibe_kanban.db
 *.log
 vibe_kanban.db-journal
 vibe_kanban.db
+
+# Test coverage & reports
+coverage/
+playwright-report/
+test-results/
