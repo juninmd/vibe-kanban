@@ -46,8 +46,8 @@ importers:
         specifier: ^14.0.3
         version: 14.0.3
       three:
-        specifier: ^0.160.0
-        version: 0.160.1
+        specifier: ^0.183.2
+        version: 0.183.2
       tsx:
         specifier: ^4.7.1
         version: 4.21.0
@@ -573,8 +573,8 @@ packages:
     resolution: {integrity: sha512-ujeqbceABgwMZxEJnk2HDY2DlnUZ+9oEcb1KzTVfYHio0UE6dG71n60d8D2I4qNvleWrrXpmjpt7vZeF1LnMZQ==}
     engines: {node: '>=6'}
 
-  three@0.160.1:
-    resolution: {integrity: sha512-Bgl2wPJypDOZ1stAxwfWAcJ0WQf7QzlptsxkjYiURPz+n5k4RBDLsq+6f9Y75TYxn6aHLcWz+JNmwTOXWrQTBQ==}
+  three@0.183.2:
+    resolution: {integrity: sha512-di3BsL2FEQ1PA7Hcvn4fyJOlxRRgFYBpMTcyOgkwJIaDOdJMebEFPA+t98EvjuljDx4hNulAGwF6KIjtwI5jgQ==}
 
   tr46@0.0.3:
     resolution: {integrity: sha512-N3WMsuqV66lT30CrXNbEjx4GEwlow3v6rr4mCcv6prnfwhS01rkgyFdjPNBYd9br7LpXV1+Emh01fHnq2Gdgrw==}
@@ -1078,7 +1078,7 @@ snapshots:
       inherits: 2.0.4
       readable-stream: 3.6.2
 
-  three@0.160.1: {}
+  three@0.183.2: {}
 
   tr46@0.0.3: {}
 
