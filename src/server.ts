@@ -173,13 +173,46 @@ function releaseTaskAgent(task: Task): LLMDriver {
   return resolveDriverForAgent(agent);
 }
 
+// --- Security & Rate Limiting ---
+const rateLimiter = new Map<string, { count: number; resetTime: number }>();
+function checkRateLimit(ip: string): boolean {
+  const now = Date.now();
+  let record = rateLimiter.get(ip);
+  if (!record || record.resetTime < now) {
+    record = { count: 1, resetTime: now + 60000 };
+    rateLimiter.set(ip, record);
+    return true;
+  }
+  if (record.count >= 100) return false;
+  record.count++;
+  return true;
+}
+
+// Clean up old rate limit records
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, record] of rateLimiter.entries()) {
+    if (record.resetTime < now) rateLimiter.delete(ip);
+  }
+}, 60000);
+
 // --- Helpers ---
-function jsonResponse(res: any, status: number, body: any) {
+function getSecurityHeaders(origin: string = "*"): Record<string, string> {
+  return {
+    "Access-Control-Allow-Origin": origin,
+    "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type,Authorization",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Content-Security-Policy": "default-src 'self' 'unsafe-inline' 'unsafe-eval' *; connect-src 'self' ws: wss: *; script-src 'self' 'unsafe-inline' 'unsafe-eval' *; style-src 'self' 'unsafe-inline' *;",
+    "Strict-Transport-Security": "max-age=31536000; includeSubDomains"
+  };
+}
+
+function jsonResponse(res: any, status: number, body: any, origin: string = "*") {
   res.writeHead(status, {
     "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type"
+    ...getSecurityHeaders(origin)
   });
   res.end(JSON.stringify(body));
 }
@@ -589,6 +622,22 @@ const server = createServer(async (req, res) => {
   const { method, url } = req as any;
 
   if (!url) return;
+  const ip = req.socket.remoteAddress || "unknown";
+  const origin = req.headers.origin || "*";
+
+  if (url !== "/api/events" && !checkRateLimit(ip)) {
+    return jsonResponse(res, 429, { error: "Too many requests" }, origin);
+  }
+
+  // Authentication check for APIs (except frontend routes and preflight)
+  if (url.startsWith("/api/") && method !== "OPTIONS" && url !== "/api/events") {
+    const authHeader = req.headers.authorization;
+    if (process.env.API_SECRET) {
+      if (!authHeader || authHeader !== `Bearer ${process.env.API_SECRET}`) {
+        return jsonResponse(res, 401, { error: "Unauthorized" }, origin);
+      }
+    }
+  }
 
   // Serve static files
   if (method === "GET" && !url.startsWith("/api")) {
@@ -598,7 +647,7 @@ const server = createServer(async (req, res) => {
     // Prevent directory traversal
     const normalizedPath = path.normalize(filePath);
     if (normalizedPath.startsWith("..")) {
-      res.writeHead(403);
+      res.writeHead(403, { "Content-Type": "text/plain", ...getSecurityHeaders(origin) });
       res.end("Forbidden");
       return;
     }
@@ -629,27 +678,33 @@ const server = createServer(async (req, res) => {
         break;
     }
 
+    const cacheControl = extname === ".js" || extname === ".css" || extname === ".html" ? "no-cache" : "public, max-age=86400";
+
     fs.readFile(filePath, (error, content) => {
       if (error) {
         if (error.code == "ENOENT") {
-          jsonResponse(res, 404, { error: "Not found" });
+          jsonResponse(res, 404, { error: "Not found" }, origin);
         } else {
-          res.writeHead(500);
+          res.writeHead(500, { "Content-Type": "text/plain", ...getSecurityHeaders(origin) });
           res.end("Sorry, check with the site admin for error: " + error.code + " ..\n");
         }
       } else {
-        res.writeHead(200, { "Content-Type": contentType });
-        res.end(content, "utf-8");
+        res.writeHead(200, { "Content-Type": contentType, "Cache-Control": cacheControl, ...getSecurityHeaders(origin) });
+        res.end(content);
       }
     });
     return;
   }
 
-  if (method === "OPTIONS") return jsonResponse(res, 200, { ok: true });
+  if (method === "OPTIONS") {
+    res.writeHead(204, getSecurityHeaders(origin));
+    res.end();
+    return;
+  }
 
   // GET /api/config/clone-dir
   if (url === "/api/config/clone-dir" && method === "GET") {
-    return jsonResponse(res, 200, { cloneDir: appConfig.cloneDir });
+    return jsonResponse(res, 200, { cloneDir: appConfig.cloneDir }, origin);
   }
 
   // POST /api/config/clone-dir
@@ -659,12 +714,12 @@ const server = createServer(async (req, res) => {
     fs.mkdirSync(appConfig.cloneDir, { recursive: true });
     fs.writeFileSync(CONFIG_FILE, JSON.stringify(appConfig, null, 2));
     addEvent(`Pasta padrão de clones alterada para: ${appConfig.cloneDir}`);
-    return jsonResponse(res, 200, { cloneDir: appConfig.cloneDir });
+    return jsonResponse(res, 200, { cloneDir: appConfig.cloneDir }, origin);
   }
 
   // GET /api/tools
   if (url === "/api/tools" && method === "GET") {
-    return jsonResponse(res, 200, { tools: getAvailableTools() });
+    return jsonResponse(res, 200, { tools: getAvailableTools() }, origin);
   }
 
   // GET /api/models?tool=xxx
@@ -675,7 +730,7 @@ const server = createServer(async (req, res) => {
     let models: string[] = [];
 
     if (tool === "mock") {
-        return jsonResponse(res, 200, { models: ["mock-model"] });
+        return jsonResponse(res, 200, { models: ["mock-model"] }, origin);
     }
 
     // 1) Tentar descoberta dinâmica via driver (CLI/API reais)
@@ -702,19 +757,19 @@ const server = createServer(async (req, res) => {
       }
     }
 
-    return jsonResponse(res, 200, { models });
+    return jsonResponse(res, 200, { models }, origin);
   }
 
   // GET /api/tooling/landscape
   if (url === "/api/tooling/landscape" && method === "GET") {
-    return jsonResponse(res, 200, getToolingLandscape());
+    return jsonResponse(res, 200, getToolingLandscape(), origin);
   }
 
   // POST /api/demands/intake
   if (url === "/api/demands/intake" && method === "POST") {
     const body = await parseBody(req);
     if (!body?.title || typeof body.title !== "string") {
-      return jsonResponse(res, 400, { error: "title is required" });
+      return jsonResponse(res, 400, { error: "title is required" }, origin);
     }
 
     const intake = enrichDemand({
@@ -724,7 +779,7 @@ const server = createServer(async (req, res) => {
     });
 
     addEvent(`[DemandIntake] Nova demanda enriquecida: ${body.title}`);
-    return jsonResponse(res, 200, intake);
+    return jsonResponse(res, 200, intake, origin);
   }
 
   // POST /api/agents (Create dynamic agent)
@@ -743,14 +798,14 @@ const server = createServer(async (req, res) => {
     DB.saveAgent(newAgent);
     addEvent(`Novo agente criado: ${newAgent.role} (${newAgent.tool} - ${newAgent.model})`);
     broadcastState();
-    return jsonResponse(res, 201, { agent: newAgent });
+    return jsonResponse(res, 201, { agent: newAgent }, origin);
   }
 
   // PUT /api/agents/:id (Edit agent)
   if (url.startsWith("/api/agents/") && method === "PUT") {
     const agentId = decodeURIComponent(url.split("/api/agents/")[1]);
     const existing = DB.getAgent(agentId);
-    if (!existing) return jsonResponse(res, 404, { error: "Agent not found" });
+    if (!existing) return jsonResponse(res, 404, { error: "Agent not found" }, origin);
     const body = await parseBody(req);
     const updates: Partial<Agent> = {};
     if (body.role !== undefined) updates.role = body.role;
@@ -760,14 +815,14 @@ const server = createServer(async (req, res) => {
     DB.updateAgent(agentId, updates);
     addEvent(`Agente atualizado: ${body.role || existing.role}`);
     broadcastState();
-    return jsonResponse(res, 200, { agent: DB.getAgent(agentId) });
+    return jsonResponse(res, 200, { agent: DB.getAgent(agentId) }, origin);
   }
 
   // DELETE /api/agents/:id (Delete agent)
   if (url.startsWith("/api/agents/") && method === "DELETE") {
     const agentId = decodeURIComponent(url.split("/api/agents/")[1]);
     const existing = DB.getAgent(agentId);
-    if (!existing) return jsonResponse(res, 404, { error: "Agent not found" });
+    if (!existing) return jsonResponse(res, 404, { error: "Agent not found" }, origin);
     // Release any assigned task
     if (existing.assignedTask) {
       const task = DB.getTask(existing.assignedTask);
@@ -780,15 +835,17 @@ const server = createServer(async (req, res) => {
     DB.deleteAgent(agentId);
     addEvent(`Agente removido: ${existing.role}`);
     broadcastState();
-    return jsonResponse(res, 200, { ok: true });
+    return jsonResponse(res, 200, { ok: true }, origin);
   }
 
   // GET /api/events (SSE)
   if (url === "/api/events" && method === "GET") {
+    const origin = req.headers.origin || "*";
     res.writeHead(200, {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",
-      "Connection": "keep-alive"
+      "Connection": "keep-alive",
+      ...getSecurityHeaders(origin)
     });
 
     // Send initial state
@@ -809,14 +866,14 @@ const server = createServer(async (req, res) => {
       tasks: DB.getTasks(),
       agents: DB.getAgents(),
       events: DB.getEvents()
-    });
+    }, origin);
   }
 
   // GET /api/tasks/:id/terminal
   if (url.match(/^\/api\/tasks\/[^/]+\/terminal$/) && method === "GET") {
     const taskId = Number(url.split("/api/tasks/")[1].replace("/terminal", ""));
     const logs = DB.getTaskTerminalLogs(taskId);
-    return jsonResponse(res, 200, { logs });
+    return jsonResponse(res, 200, { logs }, origin);
   }
 
   // POST /api/tasks/:id/open-folder
@@ -824,13 +881,13 @@ const server = createServer(async (req, res) => {
     const taskId = Number(url.split("/api/tasks/")[1].replace("/open-folder", ""));
     const task = DB.getTask(taskId);
     if (!task || !task.workDir) {
-      return jsonResponse(res, 404, { error: "Task or workDir not found" });
+      return jsonResponse(res, 404, { error: "Task or workDir not found" }, origin);
     }
 
     const command = process.platform === "win32" ? `explorer "${task.workDir}"` : (process.platform === "darwin" ? `open "${task.workDir}"` : `xdg-open "${task.workDir}"`);
     exec(command);
     addEvent(`Abrindo pasta da tarefa #${taskId}: ${task.workDir}`);
-    return jsonResponse(res, 200, { ok: true });
+    return jsonResponse(res, 200, { ok: true }, origin);
   }
 
   // GET /api/agents/:id/terminal
@@ -839,7 +896,7 @@ const server = createServer(async (req, res) => {
     // Prefer in-memory buffer, fallback to DB
     const memLogs = terminalBuffers.get(agentId);
     const logs = memLogs && memLogs.length > 0 ? memLogs : DB.getTerminalLogs(agentId).reverse();
-    return jsonResponse(res, 200, { logs });
+    return jsonResponse(res, 200, { logs }, origin);
   }
 
   // DELETE /api/agents/:id/terminal
@@ -848,21 +905,21 @@ const server = createServer(async (req, res) => {
     terminalBuffers.delete(agentId);
     DB.clearTerminalLogs(agentId);
     addEvent(`Logs do terminal do agente ${agentId} limpos.`);
-    return jsonResponse(res, 200, { ok: true });
+    return jsonResponse(res, 200, { ok: true }, origin);
   }
 
   // --- Terminal PTY Endpoints ---
 
   // GET /api/terminals
   if (url === "/api/terminals" && method === "GET") {
-    return jsonResponse(res, 200, { terminals: terminalManager.listActive() });
+    return jsonResponse(res, 200, { terminals: terminalManager.listActive() }, origin);
   }
 
   // POST /api/terminals/:agentId/start
   if (url.match(/^\/api\/terminals\/[^/]+\/start$/) && method === "POST") {
     const agentId = decodeURIComponent(url.split("/api/terminals/")[1].replace("/start", ""));
     const agent = DB.getAgent(agentId);
-    if (!agent) return jsonResponse(res, 404, { error: "Agent not found" });
+    if (!agent) return jsonResponse(res, 404, { error: "Agent not found" }, origin);
 
     const body = await parseBody(req);
     try {
@@ -873,9 +930,9 @@ const server = createServer(async (req, res) => {
         rows: body.rows || 30,
         env: body.env
       });
-      return jsonResponse(res, 200, info);
+      return jsonResponse(res, 200, info, origin);
     } catch (e: any) {
-      return jsonResponse(res, 500, { error: e.message });
+      return jsonResponse(res, 500, { error: e.message }, origin);
     }
   }
 
@@ -885,9 +942,9 @@ const server = createServer(async (req, res) => {
     const body = await parseBody(req);
     try {
       terminalManager.write(agentId, body.data || "");
-      return jsonResponse(res, 200, { ok: true });
+      return jsonResponse(res, 200, { ok: true }, origin);
     } catch (e: any) {
-      return jsonResponse(res, 404, { error: e.message });
+      return jsonResponse(res, 404, { error: e.message }, origin);
     }
   }
 
@@ -896,14 +953,14 @@ const server = createServer(async (req, res) => {
     const agentId = decodeURIComponent(url.split("/api/terminals/")[1].replace("/resize", ""));
     const body = await parseBody(req);
     terminalManager.resize(agentId, body.cols || 120, body.rows || 30);
-    return jsonResponse(res, 200, { ok: true });
+    return jsonResponse(res, 200, { ok: true }, origin);
   }
 
   // POST /api/terminals/:agentId/kill
   if (url.match(/^\/api\/terminals\/[^/]+\/kill$/) && method === "POST") {
     const agentId = decodeURIComponent(url.split("/api/terminals/")[1].replace("/kill", ""));
     await terminalManager.kill(agentId);
-    return jsonResponse(res, 200, { ok: true });
+    return jsonResponse(res, 200, { ok: true }, origin);
   }
 
   // POST /api/tasks (Create task)
@@ -932,7 +989,7 @@ const server = createServer(async (req, res) => {
       workDir,
     });
     addEvent(`Novo card criado: ${task.title} (${task.source})`);
-    return jsonResponse(res, 201, { task });
+    return jsonResponse(res, 201, { task }, origin);
   }
 
   // POST /api/assign (Assign task to agent)
@@ -954,8 +1011,8 @@ const server = createServer(async (req, res) => {
         }
     }
 
-    if (!task) return jsonResponse(res, 404, { error: "Task not found" });
-    if (!agent) return jsonResponse(res, 404, { error: "No available agent" });
+    if (!task) return jsonResponse(res, 404, { error: "Task not found" }, origin);
+    if (!agent) return jsonResponse(res, 404, { error: "No available agent" }, origin);
 
     await startTask(task, agent);
 
@@ -963,14 +1020,14 @@ const server = createServer(async (req, res) => {
     const updatedTask = getTask(task.id);
     const updatedAgent = getAgent(agent.id);
 
-    return jsonResponse(res, 200, { task: updatedTask, agent: updatedAgent });
+    return jsonResponse(res, 200, { task: updatedTask, agent: updatedAgent }, origin);
   }
 
   // POST /api/interrupt
   if (url === "/api/interrupt" && method === "POST") {
     const { taskId } = await parseBody(req);
     const task = getTask(taskId);
-    if (!task) return jsonResponse(res, 404, { error: "Task not found" });
+    if (!task) return jsonResponse(res, 404, { error: "Task not found" }, origin);
 
     if (task.assignedTo) {
       const executeDriver = activeTaskDrivers.get(task.id) || releaseTaskAgent(task);
@@ -980,14 +1037,14 @@ const server = createServer(async (req, res) => {
       terminateTask(task.id, "backlog", true);
       addEvent(`Tarefa #${taskId} interrompida.`);
     }
-    return jsonResponse(res, 200, { task: getTask(taskId) });
+    return jsonResponse(res, 200, { task: getTask(taskId) }, origin);
   }
 
   // POST /api/move
   if (url === "/api/move" && method === "POST") {
     const { taskId, lane } = await parseBody(req);
     const task = getTask(taskId);
-    if (!task) return jsonResponse(res, 404, { error: "Task not found" });
+    if (!task) return jsonResponse(res, 404, { error: "Task not found" }, origin);
 
     // If moving out of in_progress, interrupt/finish logic
     if (task.lane === "in_progress" && lane !== "in_progress") {
@@ -999,14 +1056,14 @@ const server = createServer(async (req, res) => {
       }
     }
     updateTask(task.id, { lane });
-    return jsonResponse(res, 200, { task: getTask(taskId) });
+    return jsonResponse(res, 200, { task: getTask(taskId) }, origin);
   }
 
   // POST /api/reorder (Move task up/down in priority/list)
   if (url === "/api/reorder" && method === "POST") {
     const { taskId, direction } = await parseBody(req);
     const task = getTask(taskId);
-    if (!task) return jsonResponse(res, 404, { error: "Task not found" });
+    if (!task) return jsonResponse(res, 404, { error: "Task not found" }, origin);
 
     const allTasks = DB.getTasks();
     const laneTasks = allTasks.filter(t => t.lane === task.lane);
@@ -1024,7 +1081,7 @@ const server = createServer(async (req, res) => {
       addEvent(`Prioridade reordenada no card #${taskId}`);
     }
 
-    return jsonResponse(res, 200, { tasks: DB.getTasks() });
+    return jsonResponse(res, 200, { tasks: DB.getTasks() }, origin);
   }
 
   // POST /api/settings/env
@@ -1062,9 +1119,9 @@ const server = createServer(async (req, res) => {
     try {
       fs.writeFileSync(envPath, envContent);
       addEvent("Variáveis de ambiente atualizadas.");
-      return jsonResponse(res, 200, { ok: true });
+      return jsonResponse(res, 200, { ok: true }, origin);
     } catch (e) {
-      return jsonResponse(res, 500, { error: "Failed to write .env file" });
+      return jsonResponse(res, 500, { error: "Failed to write .env file" }, origin);
     }
   }
 
@@ -1074,9 +1131,9 @@ const server = createServer(async (req, res) => {
     if (drivers[driver]) {
       currentDriver = drivers[driver];
       addEvent(`Driver alterado para: ${currentDriver.name}`);
-      return jsonResponse(res, 200, { driver: currentDriver.name });
+      return jsonResponse(res, 200, { driver: currentDriver.name }, origin);
     }
-    return jsonResponse(res, 400, { error: "Invalid driver" });
+    return jsonResponse(res, 400, { error: "Invalid driver" }, origin);
   }
 
   // POST /api/tasks/clear-done
@@ -1084,7 +1141,7 @@ const server = createServer(async (req, res) => {
     DB.clearDoneTasks();
     addEvent("Tarefas concluídas foram limpas.");
     broadcastState();
-    return jsonResponse(res, 200, { ok: true });
+    return jsonResponse(res, 200, { ok: true }, origin);
   }
 
   // POST /api/orchestrator/config (Enable/disable auto-assignment)
@@ -1093,16 +1150,16 @@ const server = createServer(async (req, res) => {
     if (typeof body.enabled === "boolean") {
       orchestrationEnabled = body.enabled;
       addEvent(`Orquestração automática ${orchestrationEnabled ? "ativada" : "desativada"}.`);
-      return jsonResponse(res, 200, { enabled: orchestrationEnabled });
+      return jsonResponse(res, 200, { enabled: orchestrationEnabled }, origin);
     }
-    return jsonResponse(res, 400, { error: "Invalid body. Expected { enabled: boolean }" });
+    return jsonResponse(res, 400, { error: "Invalid body. Expected { enabled: boolean }" }, origin);
   }
 
   // POST /api/orchestrator/run (Manually trigger assignment logic)
   if (url === "/api/orchestrator/run" && method === "POST") {
     autoAssign();
     addEvent("Orquestração manual executada via API.");
-    return jsonResponse(res, 200, { ok: true });
+    return jsonResponse(res, 200, { ok: true }, origin);
   }
 
   // Reset
@@ -1110,10 +1167,10 @@ const server = createServer(async (req, res) => {
     DB.reset();
     addEvent("Sistema resetado.");
     broadcastState();
-    return jsonResponse(res, 200, { ok: true });
+    return jsonResponse(res, 200, { ok: true }, origin);
   }
 
-  jsonResponse(res, 404, { error: "Not found" });
+  jsonResponse(res, 404, { error: "Not found" }, origin);
 });
 
 server.listen(PORT, () => console.log(`Server listening on http://localhost:${PORT}`));
