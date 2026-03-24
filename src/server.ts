@@ -15,7 +15,10 @@ import { TerminalManager } from "./terminal/TerminalManager.js";
 import { Memory } from "./memory.js";
 import { createPullRequest } from "./utils/githubUtils.js";
 import { isCommandAvailable } from "./utils/commandUtils.js";
-import { buildProviderChain, isEligibleForProviderFallback } from "./drivers/providerFallback.js";
+import {
+  buildProviderChain,
+  isEligibleForProviderFallback,
+} from "./drivers/providerFallback.js";
 import { getAvailableTools } from "./providers.js";
 import { isEligibleForFallback } from "./utils/fallbackUtils.js";
 import { getToolingLandscape } from "./utils/toolingLandscape.js";
@@ -31,19 +34,73 @@ try {
   if (fs.existsSync(CONFIG_FILE)) {
     appConfig = JSON.parse(fs.readFileSync(CONFIG_FILE, "utf-8"));
   }
-} catch (e) { }
+} catch (e) {}
 
 // --- State and Persistence ---
 function initializeState(): State {
   const existingAgents = DB.getAgents();
   if (existingAgents.length === 0) {
     const defaultAgents: Agent[] = [
-      { id: `agent-pm`, role: "Product Manager", model: "default", category: "roadmap", status: "idle", assignedTask: null, tool: "openai", terminalId: `term-pm` },
-      { id: `agent-sec`, role: "Segurança", model: "default", category: "security", status: "idle", assignedTask: null, tool: "gemini", terminalId: `term-sec` },
-      { id: `agent-perf`, role: "Performance", model: "default", category: "performance", status: "idle", assignedTask: null, tool: "copilot", terminalId: `term-perf` },
-      { id: `agent-func`, role: "Novas Funcionalidades", model: "default", category: "feature", status: "idle", assignedTask: null, tool: "claude", terminalId: `term-func` },
-      { id: `agent-test`, role: "Testes", model: "default", category: "test", status: "idle", assignedTask: null, tool: "opencode", terminalId: `term-test` },
-      { id: `agent-feat`, role: "Novas Features", model: "default", category: "feature", status: "idle", assignedTask: null, tool: "opencode", terminalId: `term-feat` }
+      {
+        id: `agent-pm`,
+        role: "Product Manager",
+        model: "default",
+        category: "roadmap",
+        status: "idle",
+        assignedTask: null,
+        tool: "openai",
+        terminalId: `term-pm`,
+      },
+      {
+        id: `agent-sec`,
+        role: "Segurança",
+        model: "default",
+        category: "security",
+        status: "idle",
+        assignedTask: null,
+        tool: "gemini",
+        terminalId: `term-sec`,
+      },
+      {
+        id: `agent-perf`,
+        role: "Performance",
+        model: "default",
+        category: "performance",
+        status: "idle",
+        assignedTask: null,
+        tool: "copilot",
+        terminalId: `term-perf`,
+      },
+      {
+        id: `agent-func`,
+        role: "Novas Funcionalidades",
+        model: "default",
+        category: "feature",
+        status: "idle",
+        assignedTask: null,
+        tool: "claude",
+        terminalId: `term-func`,
+      },
+      {
+        id: `agent-test`,
+        role: "Testes",
+        model: "default",
+        category: "test",
+        status: "idle",
+        assignedTask: null,
+        tool: "opencode",
+        terminalId: `term-test`,
+      },
+      {
+        id: `agent-feat`,
+        role: "Novas Features",
+        model: "default",
+        category: "feature",
+        status: "idle",
+        assignedTask: null,
+        tool: "opencode",
+        terminalId: `term-feat`,
+      },
     ];
     for (const agent of defaultAgents) {
       DB.saveAgent(agent);
@@ -51,15 +108,37 @@ function initializeState(): State {
   }
 
   const existingTasks = DB.getTasks();
-  if (existingTasks.length === 0 && process.env.NODE_ENV !== 'test') {
-    DB.createTask({ title: "Analyze codex codebase", source: "system", category: "roadmap", priority: "media", lane: "backlog", assignedTo: null, interrupted: false, logs: [], githubRepo: "https://github.com/openai/codex", description: "Analyze openai/codex" });
-    DB.createTask({ title: "Analyze opencode codebase", source: "system", category: "roadmap", priority: "media", lane: "backlog", assignedTo: null, interrupted: false, logs: [], githubRepo: "https://github.com/anomalyco/opencode", description: "Analyze anomalyco/opencode" });
+  if (existingTasks.length === 0 && process.env.NODE_ENV !== "test") {
+    DB.createTask({
+      title: "Analyze codex codebase",
+      source: "system",
+      category: "roadmap",
+      priority: "media",
+      lane: "backlog",
+      assignedTo: null,
+      interrupted: false,
+      logs: [],
+      githubRepo: "https://github.com/openai/codex",
+      description: "Analyze openai/codex",
+    });
+    DB.createTask({
+      title: "Analyze opencode codebase",
+      source: "system",
+      category: "roadmap",
+      priority: "media",
+      lane: "backlog",
+      assignedTo: null,
+      interrupted: false,
+      logs: [],
+      githubRepo: "https://github.com/anomalyco/opencode",
+      description: "Analyze anomalyco/opencode",
+    });
   }
 
   return {
     tasks: DB.getTasks(),
     agents: DB.getAgents(),
-    events: DB.getEvents()
+    events: DB.getEvents(),
   };
 }
 
@@ -72,21 +151,38 @@ let broadcastScheduled = false;
 let lastBroadcastState = "";
 
 // --- Terminal Buffer (in-memory per agent, last 500 lines) ---
-const terminalBuffers = new Map<string, { type: string; content: string; timestamp: number }[]>();
+const terminalBuffers = new Map<
+  string,
+  { type: string; content: string; timestamp: number }[]
+>();
 const TERMINAL_BUFFER_MAX = 500;
 
-function addTerminalLine(agentId: string, taskId: number | null, type: string, content: string) {
+function addTerminalLine(
+  agentId: string,
+  taskId: number | null,
+  type: string,
+  content: string,
+) {
   // In-memory buffer
   let buf = terminalBuffers.get(agentId);
-  if (!buf) { buf = []; terminalBuffers.set(agentId, buf); }
+  if (!buf) {
+    buf = [];
+    terminalBuffers.set(agentId, buf);
+  }
   const entry = { type, content, timestamp: Date.now() };
   buf.push(entry);
   if (buf.length > TERMINAL_BUFFER_MAX) buf.shift();
   // Persist to DB
   DB.addTerminalLog(agentId, taskId, type, content);
   // Broadcast terminal update to SSE clients
-  const termData = JSON.stringify({ terminalUpdate: { agentId, taskId, ...entry } });
-  clients.forEach(c => { try { c.res.write(`data: ${termData}\n\n`); } catch (e) { } });
+  const termData = JSON.stringify({
+    terminalUpdate: { agentId, taskId, ...entry },
+  });
+  clients.forEach((c) => {
+    try {
+      c.res.write(`data: ${termData}\n\n`);
+    } catch (e) {}
+  });
 }
 
 // Bug rate limiter & Fallback State
@@ -124,14 +220,14 @@ function broadcastState() {
   const fullState = {
     tasks: DB.getTasks(),
     agents: DB.getAgents(),
-    events: DB.getEvents()
+    events: DB.getEvents(),
   };
   const data = JSON.stringify(fullState);
 
   if (data === lastBroadcastState) return;
   lastBroadcastState = data;
 
-  clients.forEach(client => {
+  clients.forEach((client) => {
     try {
       client.res.write(`data: ${data}\n\n`);
     } catch (e) {
@@ -146,10 +242,18 @@ function addEvent(text: string) {
   scheduleBroadcast();
 }
 
-function getTask(id: number) { return DB.getTask(id); }
-function getAgent(id: string) { return DB.getAgent(id); }
+function getTask(id: number) {
+  return DB.getTask(id);
+}
+function getAgent(id: string) {
+  return DB.getAgent(id);
+}
 
-function terminateTask(taskId: number, lane: "backlog" | "done", interrupted: boolean) {
+function terminateTask(
+  taskId: number,
+  lane: "backlog" | "done",
+  interrupted: boolean,
+) {
   const task = getTask(taskId);
   if (task && task.assignedTo) {
     updateAgent(task.assignedTo, { status: "idle", assignedTask: null });
@@ -197,22 +301,43 @@ setInterval(() => {
 }, 60000);
 
 // --- Helpers ---
-function getSecurityHeaders(origin: string = "*"): Record<string, string> {
+function getSecurityHeaders(origin: string = ""): Record<string, string> {
+  const allowedOrigins = [
+    "http://localhost:5174",
+    "http://127.0.0.1:5174",
+    "http://localhost:4174",
+    "http://127.0.0.1:4174",
+  ];
+
+  if (process.env.VIBE_FRONTEND_URL) {
+    allowedOrigins.push(process.env.VIBE_FRONTEND_URL);
+  }
+
+  const safeOrigin = allowedOrigins.includes(origin)
+    ? origin
+    : allowedOrigins[0];
+
   return {
-    "Access-Control-Allow-Origin": origin,
+    "Access-Control-Allow-Origin": safeOrigin,
     "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type,Authorization",
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
-    "Content-Security-Policy": "default-src 'self' 'unsafe-inline' 'unsafe-eval' *; connect-src 'self' ws: wss: *; script-src 'self' 'unsafe-inline' 'unsafe-eval' *; style-src 'self' 'unsafe-inline' *;",
-    "Strict-Transport-Security": "max-age=31536000; includeSubDomains"
+    "Content-Security-Policy":
+      "default-src 'self' 'unsafe-inline' 'unsafe-eval' *; connect-src 'self' ws: wss: *; script-src 'self' 'unsafe-inline' 'unsafe-eval' *; style-src 'self' 'unsafe-inline' *;",
+    "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
   };
 }
 
-function jsonResponse(res: any, status: number, body: any, origin: string = "*") {
+function jsonResponse(
+  res: any,
+  status: number,
+  body: any,
+  origin: string = "",
+) {
   res.writeHead(status, {
     "Content-Type": "application/json",
-    ...getSecurityHeaders(origin)
+    ...getSecurityHeaders(origin),
   });
   res.end(JSON.stringify(body));
 }
@@ -222,7 +347,11 @@ function parseBody(req: any): Promise<any> {
     let data = "";
     req.on("data", (chunk: any) => (data += chunk));
     req.on("end", () => {
-      try { resolve(data ? JSON.parse(data) : {}); } catch (e) { resolve({}); }
+      try {
+        resolve(data ? JSON.parse(data) : {});
+      } catch (e) {
+        resolve({});
+      }
     });
   });
 }
@@ -238,10 +367,11 @@ async function startTask(task: Task, agent: Agent) {
 
   updateAgent(agent.id, {
     status: "working",
-    assignedTask: task.id
+    assignedTask: task.id,
   });
 
-  let finalWorkDir = task.workDir || path.join(appConfig.cloneDir, `task-${task.id}`);
+  let finalWorkDir =
+    task.workDir || path.join(appConfig.cloneDir, `task-${task.id}`);
   let taskBaseRepoDir: string | undefined = undefined;
 
   // 2. Perform slow async Git worktree setup
@@ -250,11 +380,18 @@ async function startTask(task: Task, agent: Agent) {
     try {
       const branchName = `feature/task-${task.id}`;
       addEvent(`[Worktree] Preparando isolamento para Tarefa #${task.id}...`);
-      const wtInfo = await prepareWorktree(appConfig.cloneDir, task.githubRepo, branchName, process.env.GITHUB_TOKEN);
+      const wtInfo = await prepareWorktree(
+        appConfig.cloneDir,
+        task.githubRepo,
+        branchName,
+        process.env.GITHUB_TOKEN,
+      );
       finalWorkDir = wtInfo.worktreeDir;
       taskBaseRepoDir = wtInfo.baseRepoDir;
     } catch (err: any) {
-      addEvent(`[Worktree Error] Falha ao preparar repositório para a Tarefa #${task.id}: ${err.message}`);
+      addEvent(
+        `[Worktree Error] Falha ao preparar repositório para a Tarefa #${task.id}: ${err.message}`,
+      );
     }
   }
 
@@ -269,16 +406,26 @@ async function startTask(task: Task, agent: Agent) {
   // 3. Update task with final directory info
   updateTask(task.id, {
     workDir: finalWorkDir,
-    baseRepoDir: taskBaseRepoDir
+    baseRepoDir: taskBaseRepoDir,
   });
 
   // Refresh task object with new workDir
   const updatedTask = DB.getTask(task.id) || task;
 
   const attempt = (fallbackAttempts.get(task.id) || 0) + 1;
-  const attemptStr = attempt > 1 ? ` (Tentativa de Fallback ${attempt}/${MAX_FALLBACK_ATTEMPTS})` : "";
-  addEvent(`[AutoPilot] ${agent.role} iniciou a tarefa #${task.id}${attemptStr}`);
-  addTerminalLine(agent.id, task.id, "system", `=== Tarefa #${task.id}: ${task.title}${attemptStr} ===`);
+  const attemptStr =
+    attempt > 1
+      ? ` (Tentativa de Fallback ${attempt}/${MAX_FALLBACK_ATTEMPTS})`
+      : "";
+  addEvent(
+    `[AutoPilot] ${agent.role} iniciou a tarefa #${task.id}${attemptStr}`,
+  );
+  addTerminalLine(
+    agent.id,
+    task.id,
+    "system",
+    `=== Tarefa #${task.id}: ${task.title}${attemptStr} ===`,
+  );
 
   const providerChain = buildProviderChain(agent, drivers);
   bugCounts.set(task.id, 0);
@@ -287,148 +434,215 @@ async function startTask(task: Task, agent: Agent) {
     let attemptIndex = 0;
 
     const runAttempt = (tool: string) => {
-const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? drivers[tool] : null) || resolveDriverForAgent(agent);
+      const executeDriver =
+        (Object.prototype.hasOwnProperty.call(drivers, tool)
+          ? drivers[tool]
+          : null) || resolveDriverForAgent(agent);
       const executionAgent = { ...agent, tool };
       activeTaskDrivers.set(task.id, executeDriver);
       addTerminalLine(agent.id, task.id, "system", `🤖 Provider: ${tool}`);
 
-      executeDriver.executeTask(updatedTask, executionAgent, {
-        onLog: (tid, msg) => {
-      const t = getTask(tid);
-      if (t) {
-        const updatedLogs = [...t.logs, msg];
-        updateTask(tid, { logs: updatedLogs });
-        // Write to terminal buffer for the assigned agent
-        if (t.assignedTo) {
-          addTerminalLine(t.assignedTo, tid, "stdout", msg);
-        }
-        if (msg.includes("Error") || msg.includes("Completed")) addEvent(`#${tid}: ${msg}`);
-      }
-    },
-    onComplete: async (tid) => {
-      activeTaskDrivers.delete(tid);
-      const t = getTask(tid);
-      if (t && t.assignedTo) {
-        addTerminalLine(t.assignedTo, tid, "system", `✅ Tarefa #${tid} concluída!`);
-
-        // Reset fallback attempts on success
-        fallbackAttempts.delete(tid);
-
-        // Auto PR generation
-        if (t.githubRepo && process.env.GITHUB_TOKEN) {
-            addTerminalLine(t.assignedTo, tid, "system", `🔄 Gerando Pull Request para o repositório ${t.githubRepo}...`);
-            try {
-                const workDir = t.workDir || path.join(appConfig.cloneDir, `task-${t.id}`);
-                const githubUser = process.env.GITHUB_USER || "vibe-agent";
-                const prResult = await createPullRequest(workDir, t.id, t.title, t.githubRepo, process.env.GITHUB_TOKEN, githubUser);
-                addTerminalLine(t.assignedTo, tid, "system", `✅ ${prResult}`);
-                addEvent(`PR criado para Tarefa #${tid}: ${t.githubRepo}`);
-            } catch (prError: any) {
-                addTerminalLine(t.assignedTo, tid, "stderr", `❌ Falha ao criar Pull Request: ${prError.message}`);
-                addEvent(`Erro ao criar PR para Tarefa #${tid}.`);
+      executeDriver
+        .executeTask(updatedTask, executionAgent, {
+          onLog: (tid, msg) => {
+            const t = getTask(tid);
+            if (t) {
+              const updatedLogs = [...t.logs, msg];
+              updateTask(tid, { logs: updatedLogs });
+              // Write to terminal buffer for the assigned agent
+              if (t.assignedTo) {
+                addTerminalLine(t.assignedTo, tid, "stdout", msg);
+              }
+              if (msg.includes("Error") || msg.includes("Completed"))
+                addEvent(`#${tid}: ${msg}`);
             }
-        }
+          },
+          onComplete: async (tid) => {
+            activeTaskDrivers.delete(tid);
+            const t = getTask(tid);
+            if (t && t.assignedTo) {
+              addTerminalLine(
+                t.assignedTo,
+                tid,
+                "system",
+                `✅ Tarefa #${tid} concluída!`,
+              );
 
-        if (t.baseRepoDir && t.workDir) {
-            const branchName = `feature/task-${tid}`;
-            try {
-                await cleanupWorktree(t.baseRepoDir, t.workDir, branchName);
-            } catch(e: any) {
-                addEvent(`Erro ao limpar worktree para a Tarefa #${tid}: ${e.message}`);
+              // Reset fallback attempts on success
+              fallbackAttempts.delete(tid);
+
+              // Auto PR generation
+              if (t.githubRepo && process.env.GITHUB_TOKEN) {
+                addTerminalLine(
+                  t.assignedTo,
+                  tid,
+                  "system",
+                  `🔄 Gerando Pull Request para o repositório ${t.githubRepo}...`,
+                );
+                try {
+                  const workDir =
+                    t.workDir || path.join(appConfig.cloneDir, `task-${t.id}`);
+                  const githubUser = process.env.GITHUB_USER || "vibe-agent";
+                  const prResult = await createPullRequest(
+                    workDir,
+                    t.id,
+                    t.title,
+                    t.githubRepo,
+                    process.env.GITHUB_TOKEN,
+                    githubUser,
+                  );
+                  addTerminalLine(
+                    t.assignedTo,
+                    tid,
+                    "system",
+                    `✅ ${prResult}`,
+                  );
+                  addEvent(`PR criado para Tarefa #${tid}: ${t.githubRepo}`);
+                } catch (prError: any) {
+                  addTerminalLine(
+                    t.assignedTo,
+                    tid,
+                    "stderr",
+                    `❌ Falha ao criar Pull Request: ${prError.message}`,
+                  );
+                  addEvent(`Erro ao criar PR para Tarefa #${tid}.`);
+                }
+              }
+
+              if (t.baseRepoDir && t.workDir) {
+                const branchName = `feature/task-${tid}`;
+                try {
+                  await cleanupWorktree(t.baseRepoDir, t.workDir, branchName);
+                } catch (e: any) {
+                  addEvent(
+                    `Erro ao limpar worktree para a Tarefa #${tid}: ${e.message}`,
+                  );
+                }
+              }
+
+              terminateTask(tid, "done", false);
+              addEvent(`Tarefa #${tid} concluída!`);
+              bugCounts.delete(tid);
             }
-        }
+          },
+          onBugFound: (tid, desc) => {
+            const nextTool = providerChain[attemptIndex + 1];
+            if (nextTool && isEligibleForProviderFallback(desc)) {
+              attemptIndex += 1;
+              addEvent(
+                `[ProviderFallback] Tarefa #${tid} falhou com ${providerChain[attemptIndex - 1]} (${desc}). Tentando ${nextTool}.`,
+              );
+              runAttempt(nextTool);
+              return;
+            }
 
-        terminateTask(tid, "done", false);
-        addEvent(`Tarefa #${tid} concluída!`);
-        bugCounts.delete(tid);
-      }
-    },
-    onBugFound: (tid, desc) => {
-      const nextTool = providerChain[attemptIndex + 1];
-      if (nextTool && isEligibleForProviderFallback(desc)) {
-        attemptIndex += 1;
-        addEvent(`[ProviderFallback] Tarefa #${tid} falhou com ${providerChain[attemptIndex - 1]} (${desc}). Tentando ${nextTool}.`);
-        runAttempt(nextTool);
-        return;
-      }
+            activeTaskDrivers.delete(tid);
+            const t = getTask(tid);
+            if (!t) return;
 
-      activeTaskDrivers.delete(tid);
-      const t = getTask(tid);
-      if (!t) return;
+            if (isEligibleForFallback(desc)) {
+              const attempts = (fallbackAttempts.get(tid) || 0) + 1;
+              fallbackAttempts.set(tid, attempts);
 
-      if (isEligibleForFallback(desc)) {
-          const attempts = (fallbackAttempts.get(tid) || 0) + 1;
-          fallbackAttempts.set(tid, attempts);
+              // We consider provider exhaustion to be complete when we have tried all tools in the providerChain
+              // AND have exceeded the total MAX_FALLBACK_ATTEMPTS for transient errors. This prevents infinite fallback loops.
+              const isCompleteProviderExhaustion =
+                attempts > MAX_FALLBACK_ATTEMPTS &&
+                attemptIndex >= providerChain.length - 1;
 
-          // We consider provider exhaustion to be complete when we have tried all tools in the providerChain
-          // AND have exceeded the total MAX_FALLBACK_ATTEMPTS for transient errors. This prevents infinite fallback loops.
-          const isCompleteProviderExhaustion = attempts > MAX_FALLBACK_ATTEMPTS && attemptIndex >= providerChain.length - 1;
-
-          if (!isCompleteProviderExhaustion) {
-              if (attempts <= MAX_FALLBACK_ATTEMPTS) {
-                  addEvent(`[Fallback] Erro transiente em #${tid}: ${desc}. Tentando novamente... (${attempts}/${MAX_FALLBACK_ATTEMPTS})`);
+              if (!isCompleteProviderExhaustion) {
+                if (attempts <= MAX_FALLBACK_ATTEMPTS) {
+                  addEvent(
+                    `[Fallback] Erro transiente em #${tid}: ${desc}. Tentando novamente... (${attempts}/${MAX_FALLBACK_ATTEMPTS})`,
+                  );
                   if (t.assignedTo) {
-                      addTerminalLine(t.assignedTo, tid, "stderr", `⚠️ Erro transiente detectado. Acionando Fallback (${attempts}/${MAX_FALLBACK_ATTEMPTS}): ${desc}`);
-                      terminateTask(tid, "backlog", true); // Will be picked up again
+                    addTerminalLine(
+                      t.assignedTo,
+                      tid,
+                      "stderr",
+                      `⚠️ Erro transiente detectado. Acionando Fallback (${attempts}/${MAX_FALLBACK_ATTEMPTS}): ${desc}`,
+                    );
+                    terminateTask(tid, "backlog", true); // Will be picked up again
                   }
                   return; // Stop normal bug flow
-              }
-          } else {
-              addEvent(`[Fallback] Falha na tarefa #${tid} após ${MAX_FALLBACK_ATTEMPTS} tentativas.`);
-              if (t.assignedTo) {
-                  addTerminalLine(t.assignedTo, tid, "stderr", `❌ Exaustão completa de provedores. Tarefa não pode ser concluída: ${desc}`);
-                  const currentExhaustions = (agentExhaustionCount.get(t.assignedTo) || 0) + 1;
+                }
+              } else {
+                addEvent(
+                  `[Fallback] Falha na tarefa #${tid} após ${MAX_FALLBACK_ATTEMPTS} tentativas.`,
+                );
+                if (t.assignedTo) {
+                  addTerminalLine(
+                    t.assignedTo,
+                    tid,
+                    "stderr",
+                    `❌ Exaustão completa de provedores. Tarefa não pode ser concluída: ${desc}`,
+                  );
+                  const currentExhaustions =
+                    (agentExhaustionCount.get(t.assignedTo) || 0) + 1;
                   agentExhaustionCount.set(t.assignedTo, currentExhaustions);
 
                   if (currentExhaustions >= 3) {
-                      addTerminalLine(t.assignedTo, tid, "system", `❌ Agente entrou em estado de ERRO após sucessivas exaustões.`);
-                      updateAgent(t.assignedTo, { status: "error" });
+                    addTerminalLine(
+                      t.assignedTo,
+                      tid,
+                      "system",
+                      `❌ Agente entrou em estado de ERRO após sucessivas exaustões.`,
+                    );
+                    updateAgent(t.assignedTo, { status: "error" });
                   }
+                }
+
+                fallbackAttempts.delete(tid); // Clean up on ultimate failure
+                terminateTask(tid, "done", false); // Unassigns and sets to done
+                return; // Stop normal bug flow
               }
+            }
 
-              fallbackAttempts.delete(tid); // Clean up on ultimate failure
-              terminateTask(tid, "done", false); // Unassigns and sets to done
-              return; // Stop normal bug flow
-          }
-      }
-
-      // Normal Bug Flow
-      // Rate limit: max 3 bugs per task
-      const count = (bugCounts.get(tid) || 0) + 1;
-      bugCounts.set(tid, count);
-      if (count > 3) {
-        console.warn(`Bug rate limit reached for task #${tid}`);
-        return;
-      }
-      addEvent(`BUG encontrado em #${tid}: ${desc}`);
-      if (t.assignedTo) {
-        addTerminalLine(t.assignedTo, tid, "stderr", `❌ Bug: ${desc}`);
-        terminateTask(tid, "backlog", true);
-      }
-      // Only create bug task if under limit
-      DB.createTask({
-        title: `Bug: ${desc.substring(0, 100)}`,
-        source: "system",
-        category: "bug",
-        priority: "alta",
-        lane: "backlog",
-        assignedTo: null,
-        interrupted: false,
-        logs: [],
-      });
-    },
-    onInterrupt: (tid) => {
-      const t = getTask(tid);
-      if (t?.assignedTo) {
-        addTerminalLine(t.assignedTo, tid, "system", `⏹️ Tarefa #${tid} interrompida`);
-      }
-    },
-    memory: Memory.getInstance()
-      }).catch((err: any) => {
-        activeTaskDrivers.delete(updatedTask.id);
-        addEvent(`Erro ao executar tarefa #${updatedTask.id}: ${err.message}`);
-        terminateTask(updatedTask.id, "backlog", true);
-      });
+            // Normal Bug Flow
+            // Rate limit: max 3 bugs per task
+            const count = (bugCounts.get(tid) || 0) + 1;
+            bugCounts.set(tid, count);
+            if (count > 3) {
+              console.warn(`Bug rate limit reached for task #${tid}`);
+              return;
+            }
+            addEvent(`BUG encontrado em #${tid}: ${desc}`);
+            if (t.assignedTo) {
+              addTerminalLine(t.assignedTo, tid, "stderr", `❌ Bug: ${desc}`);
+              terminateTask(tid, "backlog", true);
+            }
+            // Only create bug task if under limit
+            DB.createTask({
+              title: `Bug: ${desc.substring(0, 100)}`,
+              source: "system",
+              category: "bug",
+              priority: "alta",
+              lane: "backlog",
+              assignedTo: null,
+              interrupted: false,
+              logs: [],
+            });
+          },
+          onInterrupt: (tid) => {
+            const t = getTask(tid);
+            if (t?.assignedTo) {
+              addTerminalLine(
+                t.assignedTo,
+                tid,
+                "system",
+                `⏹️ Tarefa #${tid} interrompida`,
+              );
+            }
+          },
+          memory: Memory.getInstance(),
+        })
+        .catch((err: any) => {
+          activeTaskDrivers.delete(updatedTask.id);
+          addEvent(
+            `Erro ao executar tarefa #${updatedTask.id}: ${err.message}`,
+          );
+          terminateTask(updatedTask.id, "backlog", true);
+        });
     };
 
     try {
@@ -443,17 +657,20 @@ const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? dri
 }
 
 function autoAssign() {
-  const backlogTasks = DB.getTasks().filter(t => t.lane === "backlog");
-  const priorityOrder: Record<string, number> = { "alta": 3, "media": 2, "baixa": 1 };
-  backlogTasks.sort((a, b) => (priorityOrder[b.priority] || 0) - (priorityOrder[a.priority] || 0));
+  const backlogTasks = DB.getTasks().filter((t) => t.lane === "backlog");
+  const priorityOrder: Record<string, number> = { alta: 3, media: 2, baixa: 1 };
+  backlogTasks.sort(
+    (a, b) =>
+      (priorityOrder[b.priority] || 0) - (priorityOrder[a.priority] || 0),
+  );
   if (backlogTasks.length === 0) return;
   const agents = DB.getAgents();
-  const agentsById = new Map(agents.map(agent => [agent.id, agent]));
+  const agentsById = new Map(agents.map((agent) => [agent.id, agent]));
   const idleAgentsByCategory = new Map<string, Agent[]>();
 
   agents
-    .filter(agent => agent.status === "idle")
-    .forEach(agent => {
+    .filter((agent) => agent.status === "idle")
+    .forEach((agent) => {
       const bucket = idleAgentsByCategory.get(agent.category) || [];
       bucket.push(agent);
       idleAgentsByCategory.set(agent.category, bucket);
@@ -472,7 +689,7 @@ function autoAssign() {
 
     // 2. Otherwise use basic heuristic: match category.
     const availableAgents = idleAgentsByCategory.get(task.category);
-    const agent = availableAgents?.find(a => a.status === "idle");
+    const agent = availableAgents?.find((a) => a.status === "idle");
 
     if (agent) {
       startTask(task, agent).catch(console.error);
@@ -492,16 +709,19 @@ setInterval(() => {
 
 // --- PM Auto-Create Logic ---
 async function generateRoadmapTasks() {
-  const backlogTasks = DB.getTasks().filter(t => t.lane === "backlog");
+  const backlogTasks = DB.getTasks().filter((t) => t.lane === "backlog");
   if (backlogTasks.length >= 3) return;
 
   if (!process.env.OPENAI_API_KEY && !process.env.GEMINI_API_KEY) {
-    addEvent("[PM] API key não configurada. Configure OPENAI_API_KEY ou GEMINI_API_KEY nas configurações.");
+    addEvent(
+      "[PM] API key não configurada. Configure OPENAI_API_KEY ou GEMINI_API_KEY nas configurações.",
+    );
     return;
   }
 
   const existingAgents = DB.getAgents();
-  const roles = existingAgents.map(a => a.role).join(", ") || "Nenhum agente configurado";
+  const roles =
+    existingAgents.map((a) => a.role).join(", ") || "Nenhum agente configurado";
 
   const prompt = `You are a Product Manager for "Vibe Kanban 3D", a 3D Task Orchestrator with AI agents.
 Current agents: ${roles}.
@@ -531,12 +751,13 @@ Generate 2 realistic tasks. Return ONLY a JSON array: [{"title":"...","category"
             assignedTo: null,
             interrupted: false,
             logs: [],
-            description: t.description
+            description: t.description,
           });
           count++;
         }
       });
-      if (count > 0) addEvent(`[PM] Adicionou ${count} novas tarefas ao backlog.`);
+      if (count > 0)
+        addEvent(`[PM] Adicionou ${count} novas tarefas ao backlog.`);
     } catch (e) {
       console.warn("PM: Failed to parse response JSON");
     }
@@ -548,29 +769,32 @@ Generate 2 realistic tasks. Return ONLY a JSON array: [{"title":"...","category"
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`
+          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
         },
         body: JSON.stringify({
           model: "gpt-4o",
           response_format: { type: "json_object" },
           messages: [
             { role: "system", content: "You generate JSON task arrays." },
-            { role: "user", content: prompt }
-          ]
-        })
+            { role: "user", content: prompt },
+          ],
+        }),
       });
       const data = await res.json();
       const content = data.choices?.[0]?.message?.content;
       if (content) processTasks(content);
     } else if (process.env.GEMINI_API_KEY) {
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { responseMimeType: "application/json" }
-        })
-      });
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { responseMimeType: "application/json" },
+          }),
+        },
+      );
       const data = await res.json();
       const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
       if (content) processTasks(content);
@@ -594,13 +818,18 @@ function sanitizeCloneDir(input: unknown): string {
 // --- Drivers ---
 const terminalManager = new TerminalManager({
   onOutput: (agentId, data) => {
-    // We can also broadcast this to specific clients if needed, 
+    // We can also broadcast this to specific clients if needed,
     // but for now we'll use addTerminalLine for persistence and general broadcast.
     addTerminalLine(agentId, null, "stdout", data);
   },
   onExit: (agentId, code) => {
-    addTerminalLine(agentId, null, "system", `Terminal exited with code ${code}`);
-  }
+    addTerminalLine(
+      agentId,
+      null,
+      "system",
+      `Terminal exited with code ${code}`,
+    );
+  },
 });
 
 const cliDriver = new CommandDriver(() => appConfig.cloneDir, terminalManager);
@@ -615,7 +844,9 @@ const drivers: Record<string, LLMDriver> = {
 // Keep the app functional even when Gemini CLI is not installed.
 let currentDriver: LLMDriver = drivers.gemini;
 if (!isCommandAvailable("gemini")) {
-  addEvent("Aviso: Gemini CLI não encontrado. Driver padrão definido como Gemini, mas pode falhar sem a CLI instalada.");
+  addEvent(
+    "Aviso: Gemini CLI não encontrado. Driver padrão definido como Gemini, mas pode falhar sem a CLI instalada.",
+  );
 }
 
 const server = createServer(async (req, res) => {
@@ -623,14 +854,18 @@ const server = createServer(async (req, res) => {
 
   if (!url) return;
   const ip = req.socket.remoteAddress || "unknown";
-  const origin = req.headers.origin || "*";
+  const origin = req.headers.origin || "";
 
   if (url !== "/api/events" && !checkRateLimit(ip)) {
     return jsonResponse(res, 429, { error: "Too many requests" }, origin);
   }
 
   // Authentication check for APIs (except frontend routes and preflight)
-  if (url.startsWith("/api/") && method !== "OPTIONS" && url !== "/api/events") {
+  if (
+    url.startsWith("/api/") &&
+    method !== "OPTIONS" &&
+    url !== "/api/events"
+  ) {
     const authHeader = req.headers.authorization;
     if (process.env.API_SECRET) {
       if (!authHeader || authHeader !== `Bearer ${process.env.API_SECRET}`) {
@@ -647,7 +882,10 @@ const server = createServer(async (req, res) => {
     // Prevent directory traversal
     const normalizedPath = path.normalize(filePath);
     if (normalizedPath.startsWith("..")) {
-      res.writeHead(403, { "Content-Type": "text/plain", ...getSecurityHeaders(origin) });
+      res.writeHead(403, {
+        "Content-Type": "text/plain",
+        ...getSecurityHeaders(origin),
+      });
       res.end("Forbidden");
       return;
     }
@@ -678,18 +916,32 @@ const server = createServer(async (req, res) => {
         break;
     }
 
-    const cacheControl = extname === ".js" || extname === ".css" || extname === ".html" ? "no-cache" : "public, max-age=86400";
+    const cacheControl =
+      extname === ".js" || extname === ".css" || extname === ".html"
+        ? "no-cache"
+        : "public, max-age=86400";
 
     fs.readFile(filePath, (error, content) => {
       if (error) {
         if (error.code == "ENOENT") {
           jsonResponse(res, 404, { error: "Not found" }, origin);
         } else {
-          res.writeHead(500, { "Content-Type": "text/plain", ...getSecurityHeaders(origin) });
-          res.end("Sorry, check with the site admin for error: " + error.code + " ..\n");
+          res.writeHead(500, {
+            "Content-Type": "text/plain",
+            ...getSecurityHeaders(origin),
+          });
+          res.end(
+            "Sorry, check with the site admin for error: " +
+              error.code +
+              " ..\n",
+          );
         }
       } else {
-        res.writeHead(200, { "Content-Type": contentType, "Cache-Control": cacheControl, ...getSecurityHeaders(origin) });
+        res.writeHead(200, {
+          "Content-Type": contentType,
+          "Cache-Control": cacheControl,
+          ...getSecurityHeaders(origin),
+        });
         res.end(content);
       }
     });
@@ -724,17 +976,24 @@ const server = createServer(async (req, res) => {
 
   // GET /api/models?tool=xxx
   if (url.startsWith("/api/models") && method === "GET") {
-    const urlObj = new URL(url as string, `http://${req.headers?.host || "localhost"}`);
+    const urlObj = new URL(
+      url as string,
+      `http://${req.headers?.host || "localhost"}`,
+    );
     const tool = urlObj.searchParams.get("tool") || undefined;
 
     let models: string[] = [];
 
     if (tool === "mock") {
-        return jsonResponse(res, 200, { models: ["mock-model"] }, origin);
+      return jsonResponse(res, 200, { models: ["mock-model"] }, origin);
     }
 
     // 1) Tentar descoberta dinâmica via driver (CLI/API reais)
-    if (tool && drivers[tool] && typeof drivers[tool].listModels === "function") {
+    if (
+      tool &&
+      drivers[tool] &&
+      typeof drivers[tool].listModels === "function"
+    ) {
       try {
         models = await drivers[tool].listModels();
       } catch (e) {
@@ -745,9 +1004,20 @@ const server = createServer(async (req, res) => {
     // 2) Fallback estático apenas se não conseguimos nada dinâmico
     if (!models || models.length === 0) {
       if (tool === "gemini") {
-        models = ["gemini-2.0-flash", "gemini-2.0-flash-lite-preview", "gemini-2.0-pro-exp-02-05", "gemini-2.0-flash-thinking-exp-01-21", "gemini-1.5-flash", "gemini-1.5-pro"];
+        models = [
+          "gemini-2.0-flash",
+          "gemini-2.0-flash-lite-preview",
+          "gemini-2.0-pro-exp-02-05",
+          "gemini-2.0-flash-thinking-exp-01-21",
+          "gemini-1.5-flash",
+          "gemini-1.5-pro",
+        ];
       } else if (tool === "claude") {
-        models = ["claude-sonnet-4-20250514", "claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022"];
+        models = [
+          "claude-sonnet-4-20250514",
+          "claude-3-5-sonnet-20241022",
+          "claude-3-5-haiku-20241022",
+        ];
       } else if (tool === "copilot") {
         models = ["gpt-4o", "gpt-4o-mini"];
       } else if (tool === "opencode") {
@@ -774,8 +1044,9 @@ const server = createServer(async (req, res) => {
 
     const intake = enrichDemand({
       title: body.title,
-      description: typeof body.description === "string" ? body.description : undefined,
-      repoUrl: typeof body.repoUrl === "string" ? body.repoUrl : undefined
+      description:
+        typeof body.description === "string" ? body.description : undefined,
+      repoUrl: typeof body.repoUrl === "string" ? body.repoUrl : undefined,
     });
 
     addEvent(`[DemandIntake] Nova demanda enriquecida: ${body.title}`);
@@ -793,10 +1064,12 @@ const server = createServer(async (req, res) => {
       status: "idle",
       assignedTask: null,
       tool: body.tool,
-      terminalId: `term-${Date.now()}`
+      terminalId: `term-${Date.now()}`,
     };
     DB.saveAgent(newAgent);
-    addEvent(`Novo agente criado: ${newAgent.role} (${newAgent.tool} - ${newAgent.model})`);
+    addEvent(
+      `Novo agente criado: ${newAgent.role} (${newAgent.tool} - ${newAgent.model})`,
+    );
     broadcastState();
     return jsonResponse(res, 201, { agent: newAgent }, origin);
   }
@@ -805,7 +1078,8 @@ const server = createServer(async (req, res) => {
   if (url.startsWith("/api/agents/") && method === "PUT") {
     const agentId = decodeURIComponent(url.split("/api/agents/")[1]);
     const existing = DB.getAgent(agentId);
-    if (!existing) return jsonResponse(res, 404, { error: "Agent not found" }, origin);
+    if (!existing)
+      return jsonResponse(res, 404, { error: "Agent not found" }, origin);
     const body = await parseBody(req);
     const updates: Partial<Agent> = {};
     if (body.role !== undefined) updates.role = body.role;
@@ -822,7 +1096,8 @@ const server = createServer(async (req, res) => {
   if (url.startsWith("/api/agents/") && method === "DELETE") {
     const agentId = decodeURIComponent(url.split("/api/agents/")[1]);
     const existing = DB.getAgent(agentId);
-    if (!existing) return jsonResponse(res, 404, { error: "Agent not found" }, origin);
+    if (!existing)
+      return jsonResponse(res, 404, { error: "Agent not found" }, origin);
     // Release any assigned task
     if (existing.assignedTask) {
       const task = DB.getTask(existing.assignedTask);
@@ -840,33 +1115,40 @@ const server = createServer(async (req, res) => {
 
   // GET /api/events (SSE)
   if (url === "/api/events" && method === "GET") {
-    const origin = req.headers.origin || "*";
+    const origin = req.headers.origin || "";
     res.writeHead(200, {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",
-      "Connection": "keep-alive",
-      ...getSecurityHeaders(origin)
+      Connection: "keep-alive",
+      ...getSecurityHeaders(origin),
     });
 
     // Send initial state
-    res.write(`data: ${JSON.stringify({ tasks: DB.getTasks(), agents: DB.getAgents(), events: DB.getEvents() })}\n\n`);
+    res.write(
+      `data: ${JSON.stringify({ tasks: DB.getTasks(), agents: DB.getAgents(), events: DB.getEvents() })}\n\n`,
+    );
 
     const clientId = crypto.randomUUID();
     clients.push({ id: clientId, res });
 
     req.on("close", () => {
-      clients = clients.filter(c => c.id !== clientId);
+      clients = clients.filter((c) => c.id !== clientId);
     });
     return;
   }
 
   // GET /api/state
   if (url === "/api/state" && method === "GET") {
-    return jsonResponse(res, 200, {
-      tasks: DB.getTasks(),
-      agents: DB.getAgents(),
-      events: DB.getEvents()
-    }, origin);
+    return jsonResponse(
+      res,
+      200,
+      {
+        tasks: DB.getTasks(),
+        agents: DB.getAgents(),
+        events: DB.getEvents(),
+      },
+      origin,
+    );
   }
 
   // GET /api/tasks/:id/terminal
@@ -878,13 +1160,25 @@ const server = createServer(async (req, res) => {
 
   // POST /api/tasks/:id/open-folder
   if (url.match(/^\/api\/tasks\/[^/]+\/open-folder$/) && method === "POST") {
-    const taskId = Number(url.split("/api/tasks/")[1].replace("/open-folder", ""));
+    const taskId = Number(
+      url.split("/api/tasks/")[1].replace("/open-folder", ""),
+    );
     const task = DB.getTask(taskId);
     if (!task || !task.workDir) {
-      return jsonResponse(res, 404, { error: "Task or workDir not found" }, origin);
+      return jsonResponse(
+        res,
+        404,
+        { error: "Task or workDir not found" },
+        origin,
+      );
     }
 
-    const command = process.platform === "win32" ? `explorer "${task.workDir}"` : (process.platform === "darwin" ? `open "${task.workDir}"` : `xdg-open "${task.workDir}"`);
+    const command =
+      process.platform === "win32"
+        ? `explorer "${task.workDir}"`
+        : process.platform === "darwin"
+          ? `open "${task.workDir}"`
+          : `xdg-open "${task.workDir}"`;
     exec(command);
     addEvent(`Abrindo pasta da tarefa #${taskId}: ${task.workDir}`);
     return jsonResponse(res, 200, { ok: true }, origin);
@@ -892,16 +1186,23 @@ const server = createServer(async (req, res) => {
 
   // GET /api/agents/:id/terminal
   if (url.match(/^\/api\/agents\/[^/]+\/terminal$/) && method === "GET") {
-    const agentId = decodeURIComponent(url.split("/api/agents/")[1].replace("/terminal", ""));
+    const agentId = decodeURIComponent(
+      url.split("/api/agents/")[1].replace("/terminal", ""),
+    );
     // Prefer in-memory buffer, fallback to DB
     const memLogs = terminalBuffers.get(agentId);
-    const logs = memLogs && memLogs.length > 0 ? memLogs : DB.getTerminalLogs(agentId).reverse();
+    const logs =
+      memLogs && memLogs.length > 0
+        ? memLogs
+        : DB.getTerminalLogs(agentId).reverse();
     return jsonResponse(res, 200, { logs }, origin);
   }
 
   // DELETE /api/agents/:id/terminal
   if (url.match(/^\/api\/agents\/[^/]+\/terminal$/) && method === "DELETE") {
-    const agentId = decodeURIComponent(url.split("/api/agents/")[1].replace("/terminal", ""));
+    const agentId = decodeURIComponent(
+      url.split("/api/agents/")[1].replace("/terminal", ""),
+    );
     terminalBuffers.delete(agentId);
     DB.clearTerminalLogs(agentId);
     addEvent(`Logs do terminal do agente ${agentId} limpos.`);
@@ -912,14 +1213,22 @@ const server = createServer(async (req, res) => {
 
   // GET /api/terminals
   if (url === "/api/terminals" && method === "GET") {
-    return jsonResponse(res, 200, { terminals: terminalManager.listActive() }, origin);
+    return jsonResponse(
+      res,
+      200,
+      { terminals: terminalManager.listActive() },
+      origin,
+    );
   }
 
   // POST /api/terminals/:agentId/start
   if (url.match(/^\/api\/terminals\/[^/]+\/start$/) && method === "POST") {
-    const agentId = decodeURIComponent(url.split("/api/terminals/")[1].replace("/start", ""));
+    const agentId = decodeURIComponent(
+      url.split("/api/terminals/")[1].replace("/start", ""),
+    );
     const agent = DB.getAgent(agentId);
-    if (!agent) return jsonResponse(res, 404, { error: "Agent not found" }, origin);
+    if (!agent)
+      return jsonResponse(res, 404, { error: "Agent not found" }, origin);
 
     const body = await parseBody(req);
     try {
@@ -928,7 +1237,7 @@ const server = createServer(async (req, res) => {
         cwd: body.cwd || appConfig.cloneDir || process.cwd(),
         cols: body.cols || 120,
         rows: body.rows || 30,
-        env: body.env
+        env: body.env,
       });
       return jsonResponse(res, 200, info, origin);
     } catch (e: any) {
@@ -938,7 +1247,9 @@ const server = createServer(async (req, res) => {
 
   // POST /api/terminals/:agentId/send
   if (url.match(/^\/api\/terminals\/[^/]+\/send$/) && method === "POST") {
-    const agentId = decodeURIComponent(url.split("/api/terminals/")[1].replace("/send", ""));
+    const agentId = decodeURIComponent(
+      url.split("/api/terminals/")[1].replace("/send", ""),
+    );
     const body = await parseBody(req);
     try {
       terminalManager.write(agentId, body.data || "");
@@ -950,7 +1261,9 @@ const server = createServer(async (req, res) => {
 
   // POST /api/terminals/:agentId/resize
   if (url.match(/^\/api\/terminals\/[^/]+\/resize$/) && method === "POST") {
-    const agentId = decodeURIComponent(url.split("/api/terminals/")[1].replace("/resize", ""));
+    const agentId = decodeURIComponent(
+      url.split("/api/terminals/")[1].replace("/resize", ""),
+    );
     const body = await parseBody(req);
     terminalManager.resize(agentId, body.cols || 120, body.rows || 30);
     return jsonResponse(res, 200, { ok: true }, origin);
@@ -958,7 +1271,9 @@ const server = createServer(async (req, res) => {
 
   // POST /api/terminals/:agentId/kill
   if (url.match(/^\/api\/terminals\/[^/]+\/kill$/) && method === "POST") {
-    const agentId = decodeURIComponent(url.split("/api/terminals/")[1].replace("/kill", ""));
+    const agentId = decodeURIComponent(
+      url.split("/api/terminals/")[1].replace("/kill", ""),
+    );
     await terminalManager.kill(agentId);
     return jsonResponse(res, 200, { ok: true }, origin);
   }
@@ -1001,18 +1316,22 @@ const server = createServer(async (req, res) => {
 
     // Fallback: Se não tem agentId ou não achou o agent, pega qualquer um livre pra passar nos testes
     if (!agent && task) {
-        agent = DB.getAgents().find(a => a.category === task.category && a.status === "idle");
-        if (!agent) {
-             agent = DB.getAgents().find(a => a.status === "idle");
-        }
-        if (!agent && process.env.NODE_ENV === 'test') {
-             // force returning a mock agent if no agent is idle, useful for testing assigning
-             agent = DB.getAgents()[0] || null;
-        }
+      agent = DB.getAgents().find(
+        (a) => a.category === task.category && a.status === "idle",
+      );
+      if (!agent) {
+        agent = DB.getAgents().find((a) => a.status === "idle");
+      }
+      if (!agent && process.env.NODE_ENV === "test") {
+        // force returning a mock agent if no agent is idle, useful for testing assigning
+        agent = DB.getAgents()[0] || null;
+      }
     }
 
-    if (!task) return jsonResponse(res, 404, { error: "Task not found" }, origin);
-    if (!agent) return jsonResponse(res, 404, { error: "No available agent" }, origin);
+    if (!task)
+      return jsonResponse(res, 404, { error: "Task not found" }, origin);
+    if (!agent)
+      return jsonResponse(res, 404, { error: "No available agent" }, origin);
 
     await startTask(task, agent);
 
@@ -1020,17 +1339,24 @@ const server = createServer(async (req, res) => {
     const updatedTask = getTask(task.id);
     const updatedAgent = getAgent(agent.id);
 
-    return jsonResponse(res, 200, { task: updatedTask, agent: updatedAgent }, origin);
+    return jsonResponse(
+      res,
+      200,
+      { task: updatedTask, agent: updatedAgent },
+      origin,
+    );
   }
 
   // POST /api/interrupt
   if (url === "/api/interrupt" && method === "POST") {
     const { taskId } = await parseBody(req);
     const task = getTask(taskId);
-    if (!task) return jsonResponse(res, 404, { error: "Task not found" }, origin);
+    if (!task)
+      return jsonResponse(res, 404, { error: "Task not found" }, origin);
 
     if (task.assignedTo) {
-      const executeDriver = activeTaskDrivers.get(task.id) || releaseTaskAgent(task);
+      const executeDriver =
+        activeTaskDrivers.get(task.id) || releaseTaskAgent(task);
       activeTaskDrivers.delete(task.id);
       // Stop driver
       executeDriver.interruptTask(task);
@@ -1044,12 +1370,14 @@ const server = createServer(async (req, res) => {
   if (url === "/api/move" && method === "POST") {
     const { taskId, lane } = await parseBody(req);
     const task = getTask(taskId);
-    if (!task) return jsonResponse(res, 404, { error: "Task not found" }, origin);
+    if (!task)
+      return jsonResponse(res, 404, { error: "Task not found" }, origin);
 
     // If moving out of in_progress, interrupt/finish logic
     if (task.lane === "in_progress" && lane !== "in_progress") {
       if (task.assignedTo) {
-        const executeDriver = activeTaskDrivers.get(task.id) || releaseTaskAgent(task);
+        const executeDriver =
+          activeTaskDrivers.get(task.id) || releaseTaskAgent(task);
         activeTaskDrivers.delete(task.id);
         executeDriver.interruptTask(task);
         updateTask(task.id, { assignedTo: null });
@@ -1063,11 +1391,12 @@ const server = createServer(async (req, res) => {
   if (url === "/api/reorder" && method === "POST") {
     const { taskId, direction } = await parseBody(req);
     const task = getTask(taskId);
-    if (!task) return jsonResponse(res, 404, { error: "Task not found" }, origin);
+    if (!task)
+      return jsonResponse(res, 404, { error: "Task not found" }, origin);
 
     const allTasks = DB.getTasks();
-    const laneTasks = allTasks.filter(t => t.lane === task.lane);
-    const currentIndex = laneTasks.findIndex(t => t.id === task.id);
+    const laneTasks = allTasks.filter((t) => t.lane === task.lane);
+    const currentIndex = laneTasks.findIndex((t) => t.id === task.id);
     const targetIndex = currentIndex + direction;
 
     if (targetIndex >= 0 && targetIndex < laneTasks.length) {
@@ -1089,17 +1418,25 @@ const server = createServer(async (req, res) => {
     const body = await parseBody(req);
     const envPath = path.resolve(process.cwd(), ".env");
     let envContent = "";
-    const ALLOWED_ENV_KEYS = ["OPENAI_API_KEY", "GEMINI_API_KEY", "ANTHROPIC_API_KEY", "GITHUB_USER", "GITHUB_TOKEN"];
+    const ALLOWED_ENV_KEYS = [
+      "OPENAI_API_KEY",
+      "GEMINI_API_KEY",
+      "ANTHROPIC_API_KEY",
+      "GITHUB_USER",
+      "GITHUB_TOKEN",
+    ];
 
     try {
       if (fs.existsSync(envPath)) {
         envContent = fs.readFileSync(envPath, "utf-8");
       }
-    } catch (e) { }
+    } catch (e) {}
 
-    const newKeys = Object.keys(body).filter(k => ALLOWED_ENV_KEYS.includes(k));
+    const newKeys = Object.keys(body).filter((k) =>
+      ALLOWED_ENV_KEYS.includes(k),
+    );
 
-    newKeys.forEach(key => {
+    newKeys.forEach((key) => {
       const value = body[key];
       if (!value) return;
 
@@ -1121,7 +1458,12 @@ const server = createServer(async (req, res) => {
       addEvent("Variáveis de ambiente atualizadas.");
       return jsonResponse(res, 200, { ok: true }, origin);
     } catch (e) {
-      return jsonResponse(res, 500, { error: "Failed to write .env file" }, origin);
+      return jsonResponse(
+        res,
+        500,
+        { error: "Failed to write .env file" },
+        origin,
+      );
     }
   }
 
@@ -1149,10 +1491,17 @@ const server = createServer(async (req, res) => {
     const body = await parseBody(req);
     if (typeof body.enabled === "boolean") {
       orchestrationEnabled = body.enabled;
-      addEvent(`Orquestração automática ${orchestrationEnabled ? "ativada" : "desativada"}.`);
+      addEvent(
+        `Orquestração automática ${orchestrationEnabled ? "ativada" : "desativada"}.`,
+      );
       return jsonResponse(res, 200, { enabled: orchestrationEnabled }, origin);
     }
-    return jsonResponse(res, 400, { error: "Invalid body. Expected { enabled: boolean }" }, origin);
+    return jsonResponse(
+      res,
+      400,
+      { error: "Invalid body. Expected { enabled: boolean }" },
+      origin,
+    );
   }
 
   // POST /api/orchestrator/run (Manually trigger assignment logic)
@@ -1173,4 +1522,6 @@ const server = createServer(async (req, res) => {
   jsonResponse(res, 404, { error: "Not found" }, origin);
 });
 
-server.listen(PORT, () => console.log(`Server listening on http://localhost:${PORT}`));
+server.listen(PORT, () =>
+  console.log(`Server listening on http://localhost:${PORT}`),
+);

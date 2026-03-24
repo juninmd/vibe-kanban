@@ -5,7 +5,13 @@ import globals from "globals";
 
 export default [
   {
-    ignores: ["dist/", "node_modules/", "coverage/", "playwright-report/", "test-results/"]
+    ignores: [
+      "dist/",
+      "node_modules/",
+      "coverage/",
+      "playwright-report/",
+      "test-results/",
+    ],
   },
   {
     files: ["**/*.ts", "**/*.js", "**/*.mjs"],
@@ -15,18 +21,18 @@ export default [
       sourceType: "module",
       globals: {
         ...globals.node,
-        ...globals.browser
-      }
+        ...globals.browser,
+      },
     },
     plugins: {
-      "@typescript-eslint": tsPlugin
+      "@typescript-eslint": tsPlugin,
     },
     rules: {
       "no-unused-vars": "off",
       "@typescript-eslint/no-unused-vars": "off",
       "no-explicit-any": "off",
-      "@typescript-eslint/no-explicit-any": "off"
-    }
+      "@typescript-eslint/no-explicit-any": "off",
+    },
   },
-  eslintConfigPrettier
+  eslintConfigPrettier,
 ];

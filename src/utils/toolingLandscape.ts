@@ -19,7 +19,7 @@ const STATIC_MODELS: Record<string, string[]> = {
   opencode: ["gpt-4o", "claude-sonnet-4-20250514"],
   copilot: ["gpt-4o", "gpt-4o-mini"],
   claude: ["claude-sonnet-4-20250514", "claude-3-5-haiku-20241022"],
-  openai: ["gpt-4o", "gpt-4o-mini", "o3-mini"]
+  openai: ["gpt-4o", "gpt-4o-mini", "o3-mini"],
 };
 
 function detectModelList(tool: string): string[] {
@@ -38,7 +38,7 @@ function detectTooling(): DetectedTool[] {
     { id: "gemini", command: "gemini" },
     { id: "opencode", command: "opencode" },
     { id: "copilot", command: "gh" },
-    { id: "claude", command: "claude" }
+    { id: "claude", command: "claude" },
   ];
 
   const cliDiscovery: DetectedTool[] = cliTools.map(({ id, command }) => {
@@ -48,7 +48,7 @@ function detectTooling(): DetectedTool[] {
       kind: "cli",
       available,
       version: available ? getCommandVersion(command) || undefined : undefined,
-      models: detectModelList(id)
+      models: detectModelList(id),
     };
   });
 
@@ -57,8 +57,8 @@ function detectTooling(): DetectedTool[] {
       id: "openai",
       kind: "api",
       available: Boolean(process.env.OPENAI_API_KEY),
-      models: detectModelList("openai")
-    }
+      models: detectModelList("openai"),
+    },
   ];
 
   return [...cliDiscovery, ...apiTools];
@@ -73,32 +73,40 @@ function detectVcsCapabilities(): VcsProviderCapability[] {
         ? "GitHub CLI detectado"
         : process.env.GITHUB_TOKEN
           ? "Token GitHub configurado"
-          : "Configure gh CLI ou GITHUB_TOKEN"
+          : "Configure gh CLI ou GITHUB_TOKEN",
     },
     {
       provider: "gitlab",
-      available: isCommandAvailable("glab") || Boolean(process.env.GITLAB_TOKEN),
+      available:
+        isCommandAvailable("glab") || Boolean(process.env.GITLAB_TOKEN),
       reason: isCommandAvailable("glab")
         ? "GitLab CLI detectado"
         : process.env.GITLAB_TOKEN
           ? "Token GitLab configurado"
-          : "Configure glab CLI ou GITLAB_TOKEN"
-    }
+          : "Configure glab CLI ou GITLAB_TOKEN",
+    },
   ];
 }
 
-function buildBusinessRecommendations(tools: DetectedTool[], vcs: VcsProviderCapability[]): string[] {
+function buildBusinessRecommendations(
+  tools: DetectedTool[],
+  vcs: VcsProviderCapability[],
+): string[] {
   const recommendations = [
     "Habilitar trilha de auditoria por tarefa para oferecer compliance enterprise no SaaS.",
-    "Adicionar métricas de lead time e throughput por agente para pricing baseado em valor entregue."
+    "Adicionar métricas de lead time e throughput por agente para pricing baseado em valor entregue.",
   ];
 
   if (!tools.some((tool) => tool.available)) {
-    recommendations.push("Nenhum provedor IA ativo: bloqueie criação de demanda até provisionamento mínimo de 1 modelo.");
+    recommendations.push(
+      "Nenhum provedor IA ativo: bloqueie criação de demanda até provisionamento mínimo de 1 modelo.",
+    );
   }
 
   if (vcs.some((provider) => !provider.available)) {
-    recommendations.push("Ative integração multi-VCS (GitHub+GitLab) para aumentar conversão em contas com stack híbrida.");
+    recommendations.push(
+      "Ative integração multi-VCS (GitHub+GitLab) para aumentar conversão em contas com stack híbrida.",
+    );
   }
 
   return recommendations;
@@ -112,6 +120,6 @@ export function getToolingLandscape() {
     detectedAt: new Date().toISOString(),
     tools,
     vcsProviders,
-    businessRecommendations: buildBusinessRecommendations(tools, vcsProviders)
+    businessRecommendations: buildBusinessRecommendations(tools, vcsProviders),
   };
 }

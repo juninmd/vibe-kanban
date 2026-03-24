@@ -41,6 +41,7 @@ node dist/cli/vibe.js --help
 ```
 
 ## Build and Deployment Instructions
+
 The project is automatically built and tested on every push to `main` and `develop`.
 Deployments are triggered on pushes to the `main` branch after passing CI checks.
 To build locally: `pnpm build`.

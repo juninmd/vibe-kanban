@@ -1,12 +1,12 @@
-import { test, describe, before, after, beforeEach } from 'node:test';
-import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
-import { setTimeout } from 'timers/promises';
-import { existsSync, rmSync } from 'node:fs';
+import { test, describe, before, after, beforeEach } from "node:test";
+import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
+import { setTimeout } from "timers/promises";
+import { existsSync, rmSync } from "node:fs";
 
-const API_URL = 'http://localhost:5174';
+const API_URL = "http://localhost:5174";
 
-describe('Orchestration API', async () => {
+describe("Orchestration API", async () => {
   let serverProcess;
 
   async function waitForServer() {
@@ -24,51 +24,57 @@ describe('Orchestration API', async () => {
 
   before(async () => {
     // Ensure we are testing the built version
-    serverProcess = spawn('node', ['dist/server.js'], {
-      stdio: 'pipe',
-      env: { ...process.env, PORT: '5174' }
+    serverProcess = spawn("node", ["dist/server.js"], {
+      stdio: "pipe",
+      env: { ...process.env, PORT: "5174" },
     });
 
     const ready = await waitForServer();
     if (!ready) {
       serverProcess.kill();
-      throw new Error('Server failed to start');
+      throw new Error("Server failed to start");
     }
   });
 
   beforeEach(async () => {
-    await fetch(`${API_URL}/api/reset`, { method: 'POST' });
+    await fetch(`${API_URL}/api/reset`, { method: "POST" });
     // Reset orchestration to enabled by default
     await fetch(`${API_URL}/api/orchestrator/config`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled: true })
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled: true }),
     });
   });
 
   after(() => {
-    const cloneDir = './test-clones';
-    if (existsSync(cloneDir)) rmSync(cloneDir, { recursive: true, force: true });
+    const cloneDir = "./test-clones";
+    if (existsSync(cloneDir))
+      rmSync(cloneDir, { recursive: true, force: true });
     if (serverProcess) serverProcess.kill();
   });
 
-  test('Default: Auto-assigns tasks after interval', async () => {
+  test("Default: Auto-assigns tasks after interval", async () => {
     // Create an agent to ensure one is available
     await fetch(`${API_URL}/api/agents`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ role: 'Tester', category: 'test', tool: 'opencode', model: 'default' })
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        role: "Tester",
+        category: "test",
+        tool: "opencode",
+        model: "default",
+      }),
     });
 
     // 1. Create a task suitable for an idle agent (e.g., 'test' category)
     const taskRes = await fetch(`${API_URL}/api/tasks`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        title: 'Auto Assign Task',
-        category: 'test',
-        priority: 'media'
-      })
+        title: "Auto Assign Task",
+        category: "test",
+        priority: "media",
+      }),
     });
     const { task } = await taskRes.json();
 
@@ -78,39 +84,39 @@ describe('Orchestration API', async () => {
     // 3. Verify assignment
     const stateRes = await fetch(`${API_URL}/api/state`);
     const state = await stateRes.json();
-    const updatedTask = state.tasks.find(t => t.id === task.id);
+    const updatedTask = state.tasks.find((t) => t.id === task.id);
 
-    assert.ok(updatedTask, 'Task should exist');
+    assert.ok(updatedTask, "Task should exist");
     // It's possible the task finished very quickly and is in 'done' state,
     // or it's still 'in_progress'. It may also have failed the underlying CLI
     // and been put back to 'backlog' with 'interrupted: true'.
     // Either way, it proves orchestration picked it up.
     assert.ok(
       updatedTask.assignedTo ||
-      updatedTask.lane === 'done' ||
-      (updatedTask.lane === 'backlog' && updatedTask.interrupted),
-      'Task should be assigned automatically, done, or interrupted due to tool failure'
+        updatedTask.lane === "done" ||
+        (updatedTask.lane === "backlog" && updatedTask.interrupted),
+      "Task should be assigned automatically, done, or interrupted due to tool failure",
     );
   });
 
-  test('Disable Orchestration: Does not assign tasks automatically', async () => {
+  test("Disable Orchestration: Does not assign tasks automatically", async () => {
     // 1. Disable orchestration
     const configRes = await fetch(`${API_URL}/api/orchestrator/config`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled: false })
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled: false }),
     });
     assert.equal(configRes.status, 200);
 
     // 2. Create task
     const taskRes = await fetch(`${API_URL}/api/tasks`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        title: 'Manual Mode Task',
-        category: 'test',
-        priority: 'media'
-      })
+        title: "Manual Mode Task",
+        category: "test",
+        priority: "media",
+      }),
     });
     const { task } = await taskRes.json();
 
@@ -120,42 +126,51 @@ describe('Orchestration API', async () => {
     // 4. Verify NO assignment
     const stateRes = await fetch(`${API_URL}/api/state`);
     const state = await stateRes.json();
-    const updatedTask = state.tasks.find(t => t.id === task.id);
+    const updatedTask = state.tasks.find((t) => t.id === task.id);
 
-    assert.equal(updatedTask.assignedTo, null, 'Task should NOT be assigned when orchestration is disabled');
-    assert.equal(updatedTask.lane, 'backlog');
+    assert.equal(
+      updatedTask.assignedTo,
+      null,
+      "Task should NOT be assigned when orchestration is disabled",
+    );
+    assert.equal(updatedTask.lane, "backlog");
   });
 
-  test('Manual Trigger: Assigns task when triggered manually', async () => {
+  test("Manual Trigger: Assigns task when triggered manually", async () => {
     // Create an agent to ensure one is available
     await fetch(`${API_URL}/api/agents`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ role: 'Tester', category: 'test', tool: 'opencode', model: 'default' })
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        role: "Tester",
+        category: "test",
+        tool: "opencode",
+        model: "default",
+      }),
     });
 
     // 1. Disable orchestration first
     await fetch(`${API_URL}/api/orchestrator/config`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled: false })
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled: false }),
     });
 
     // 2. Create task
     const taskRes = await fetch(`${API_URL}/api/tasks`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        title: 'Trigger Task',
-        category: 'test',
-        priority: 'media'
-      })
+        title: "Trigger Task",
+        category: "test",
+        priority: "media",
+      }),
     });
     const { task } = await taskRes.json();
 
     // 3. Call manual trigger
     const runRes = await fetch(`${API_URL}/api/orchestrator/run`, {
-        method: 'POST'
+      method: "POST",
     });
     assert.equal(runRes.status, 200);
 
@@ -165,13 +180,13 @@ describe('Orchestration API', async () => {
     // 4. Verify assignment immediately
     const stateRes = await fetch(`${API_URL}/api/state`);
     const state = await stateRes.json();
-    const updatedTask = state.tasks.find(t => t.id === task.id);
+    const updatedTask = state.tasks.find((t) => t.id === task.id);
 
     assert.ok(
       updatedTask.assignedTo ||
-      updatedTask.lane === 'done' ||
-      (updatedTask.lane === 'backlog' && updatedTask.interrupted),
-      'Task should be assigned, done, or interrupted after manual trigger'
+        updatedTask.lane === "done" ||
+        (updatedTask.lane === "backlog" && updatedTask.interrupted),
+      "Task should be assigned, done, or interrupted after manual trigger",
     );
   });
 });
