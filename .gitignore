@@ -3,6 +3,13 @@ dist/
 server.log
 frontend.log
 .env
+.env.local
+.env.*.local
+*.key
+*.pem
+*.p12
+secrets/
+config/secrets.yml
 .gemini/
 venv/
 verification/

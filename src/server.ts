@@ -179,7 +179,11 @@ function jsonResponse(res: any, status: number, body: any) {
     "Content-Type": "application/json",
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type"
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Content-Security-Policy": "default-src 'self'",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Strict-Transport-Security": "max-age=31536000; includeSubDomains"
   });
   res.end(JSON.stringify(body));
 }
@@ -585,10 +589,31 @@ if (!isCommandAvailable("gemini")) {
   addEvent("Aviso: Gemini CLI não encontrado. Driver padrão definido como Gemini, mas pode falhar sem a CLI instalada.");
 }
 
+const apiRateLimits = new Map<string, number>();
+setInterval(() => {
+  apiRateLimits.clear();
+}, 60000);
+
 const server = createServer(async (req, res) => {
   const { method, url } = req as any;
 
   if (!url) return;
+
+  if (url.startsWith("/api/") && url !== "/api/events" && method !== "OPTIONS") {
+    const ip = req.socket.remoteAddress || "unknown";
+    const current = apiRateLimits.get(ip) || 0;
+    if (current >= 100) {
+      return jsonResponse(res, 429, { error: "Too many requests" });
+    }
+    apiRateLimits.set(ip, current + 1);
+
+    if (process.env.API_SECRET) {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || authHeader !== `Bearer ${process.env.API_SECRET}`) {
+        return jsonResponse(res, 401, { error: "Unauthorized" });
+      }
+    }
+  }
 
   // Serve static files
   if (method === "GET" && !url.startsWith("/api")) {
@@ -638,14 +663,27 @@ const server = createServer(async (req, res) => {
           res.end("Sorry, check with the site admin for error: " + error.code + " ..\n");
         }
       } else {
-        res.writeHead(200, { "Content-Type": contentType });
+        res.writeHead(200, {
+          "Content-Type": contentType,
+          "Content-Security-Policy": "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https:;",
+          "X-Content-Type-Options": "nosniff",
+          "X-Frame-Options": "DENY",
+          "Strict-Transport-Security": "max-age=31536000; includeSubDomains"
+        });
         res.end(content, "utf-8");
       }
     });
     return;
   }
 
-  if (method === "OPTIONS") return jsonResponse(res, 200, { ok: true });
+  if (method === "OPTIONS") {
+    res.writeHead(200, {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization"
+    });
+    return res.end();
+  }
 
   // GET /api/config/clone-dir
   if (url === "/api/config/clone-dir" && method === "GET") {
@@ -730,6 +768,12 @@ const server = createServer(async (req, res) => {
   // POST /api/agents (Create dynamic agent)
   if (url === "/api/agents" && method === "POST") {
     const body = await parseBody(req);
+
+    if (body.role && (typeof body.role !== 'string' || body.role.length > 255)) return jsonResponse(res, 400, { error: "Invalid role" });
+    if (body.model && (typeof body.model !== 'string' || body.model.length > 255)) return jsonResponse(res, 400, { error: "Invalid model" });
+    if (body.category && (typeof body.category !== 'string' || body.category.length > 255)) return jsonResponse(res, 400, { error: "Invalid category" });
+    if (body.tool && (typeof body.tool !== 'string' || body.tool.length > 255)) return jsonResponse(res, 400, { error: "Invalid tool" });
+
     const newAgent: Agent = {
       id: `agent-${Date.now()}`,
       role: body.role || "Assistente",
@@ -909,6 +953,13 @@ const server = createServer(async (req, res) => {
   // POST /api/tasks (Create task)
   if (url === "/api/tasks" && method === "POST") {
     const body = await parseBody(req);
+    if (!body.title || typeof body.title !== 'string' || body.title.length > 255) {
+      return jsonResponse(res, 400, { error: "Invalid or missing title" });
+    }
+    if (body.source && (typeof body.source !== 'string' || body.source.length > 255)) return jsonResponse(res, 400, { error: "Invalid source" });
+    if (body.category && (typeof body.category !== 'string' || body.category.length > 255)) return jsonResponse(res, 400, { error: "Invalid category" });
+    if (body.priority && (typeof body.priority !== 'string' || body.priority.length > 255)) return jsonResponse(res, 400, { error: "Invalid priority" });
+
     // Resolve workDir
     let workDir = body.workDir || null;
     if (workDir) {
