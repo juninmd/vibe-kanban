@@ -8,6 +8,7 @@ function createTexture(width: number, height: number, drawFn: (ctx: CanvasRender
     drawFn(ctx);
     const tex = new THREE.CanvasTexture(canvas);
     tex.colorSpace = THREE.SRGBColorSpace;
+    tex.flipY = false; // Impede que o Three.js inverta a CanvasTexture no eixo Y, garantindo a orientação correta do texto.
     if (filter === 'linear') {
         tex.magFilter = THREE.LinearFilter;
         tex.minFilter = THREE.LinearMipmapLinearFilter;
