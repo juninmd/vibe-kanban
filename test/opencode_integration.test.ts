@@ -62,12 +62,12 @@ describe('OpenCodeDriver Integration', () => {
   });
 
   test('ExecuteTask uses custom executable path, task.workDir, and file block output', async () => {
-    const logs = [];
+    const logs: string[] = [];
     const driver = new OpenCodeDriver(() => testDir);
     const workDir = path.join(testDir, 'custom-workdir');
     fs.mkdirSync(workDir, { recursive: true });
 
-    const task = {
+    const task: any = {
       id: 101,
       title: 'Create a simple hello world function',
       source: 'test',
@@ -80,7 +80,7 @@ describe('OpenCodeDriver Integration', () => {
       workDir
     };
 
-    const agent = {
+    const agent: any = {
       id: 'agent-opencode',
       role: 'Developer',
       model: 'default',
@@ -92,10 +92,10 @@ describe('OpenCodeDriver Integration', () => {
     };
 
     await new Promise((resolve, reject) => {
-      const ctx = {
-        onLog: (id, msg) => logs.push(msg),
+      const ctx: any = {
+        onLog: (id: number, msg: string) => logs.push(msg),
         onComplete: () => resolve(undefined),
-        onBugFound: (id, desc) => reject(new Error(desc)),
+        onBugFound: (id: number, desc: string) => reject(new Error(desc)),
         onInterrupt: () => {}
       };
 
@@ -111,10 +111,10 @@ describe('OpenCodeDriver Integration', () => {
   });
 
   test('ExecuteTask with custom model passes --model flag', async () => {
-    const logs = [];
+    const logs: string[] = [];
     const driver = new OpenCodeDriver(() => testDir);
 
-    const task = {
+    const task: any = {
       id: 102,
       title: 'Test with custom model',
       source: 'test',
@@ -126,7 +126,7 @@ describe('OpenCodeDriver Integration', () => {
       logs: []
     };
 
-    const agent = {
+    const agent: any = {
       id: 'agent-ollama',
       role: 'OllamaDev',
       model: 'ollama:llama3',
@@ -138,10 +138,10 @@ describe('OpenCodeDriver Integration', () => {
     };
 
     await new Promise((resolve, reject) => {
-      const ctx = {
-        onLog: (id, msg) => logs.push(msg),
+      const ctx: any = {
+        onLog: (id: number, msg: string) => logs.push(msg),
         onComplete: () => resolve(undefined),
-        onBugFound: (id, desc) => reject(new Error(desc)),
+        onBugFound: (id: number, desc: string) => reject(new Error(desc)),
         onInterrupt: () => {}
       };
 
@@ -165,7 +165,7 @@ describe('OpenCodeDriver Integration', () => {
         assignedTo: null,
         interrupted: false,
         logs: [],
-      },
+      } as any,
       {
         id: 'agent-opencode',
         role: 'Developer',
@@ -175,7 +175,7 @@ describe('OpenCodeDriver Integration', () => {
         assignedTask: null,
         tool: 'opencode',
         terminalId: 'term-3'
-      },
+      } as any,
       'Create hello.js'
     );
 

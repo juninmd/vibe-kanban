@@ -1,13 +1,14 @@
 import { test, describe, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { spawn, ChildProcess } from 'node:child_process';
 import { setTimeout } from 'timers/promises';
 import { existsSync, rmSync } from 'node:fs';
+import type { State, Task } from '../src/types.js';
 
 const API_URL = 'http://localhost:5174';
 
 describe('Orchestration API', async () => {
-  let serverProcess;
+  let serverProcess: ChildProcess;
 
   async function waitForServer() {
     for (let attempts = 0; attempts < 30; attempts++) {
@@ -77,8 +78,8 @@ describe('Orchestration API', async () => {
 
     // 3. Verify assignment
     const stateRes = await fetch(`${API_URL}/api/state`);
-    const state = await stateRes.json();
-    const updatedTask = state.tasks.find(t => t.id === task.id);
+    const state: State = await stateRes.json();
+    const updatedTask = state.tasks.find((t: Task) => t.id === task.id);
 
     assert.ok(updatedTask, 'Task should exist');
     // It's possible the task finished very quickly and is in 'done' state,
@@ -119,11 +120,11 @@ describe('Orchestration API', async () => {
 
     // 4. Verify NO assignment
     const stateRes = await fetch(`${API_URL}/api/state`);
-    const state = await stateRes.json();
-    const updatedTask = state.tasks.find(t => t.id === task.id);
+    const state: State = await stateRes.json();
+    const updatedTask = state.tasks.find((t: Task) => t.id === task.id);
 
-    assert.equal(updatedTask.assignedTo, null, 'Task should NOT be assigned when orchestration is disabled');
-    assert.equal(updatedTask.lane, 'backlog');
+    assert.equal(updatedTask?.assignedTo, null, 'Task should NOT be assigned when orchestration is disabled');
+    assert.equal(updatedTask?.lane, 'backlog');
   });
 
   test('Manual Trigger: Assigns task when triggered manually', async () => {
@@ -164,13 +165,13 @@ describe('Orchestration API', async () => {
 
     // 4. Verify assignment immediately
     const stateRes = await fetch(`${API_URL}/api/state`);
-    const state = await stateRes.json();
-    const updatedTask = state.tasks.find(t => t.id === task.id);
+    const state: State = await stateRes.json();
+    const updatedTask = state.tasks.find((t: Task) => t.id === task.id);
 
     assert.ok(
-      updatedTask.assignedTo ||
-      updatedTask.lane === 'done' ||
-      (updatedTask.lane === 'backlog' && updatedTask.interrupted),
+      updatedTask?.assignedTo ||
+      updatedTask?.lane === 'done' ||
+      (updatedTask?.lane === 'backlog' && updatedTask.interrupted),
       'Task should be assigned, done, or interrupted after manual trigger'
     );
   });

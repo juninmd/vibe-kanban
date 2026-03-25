@@ -12,7 +12,7 @@ describe('demandIntake', () => {
 
     assert.equal(intake.demand.provider, 'gitlab');
     assert.ok(intake.executionPlan.length >= 3);
-    assert.ok(intake.businessRequirements.some((item) => item.toLowerCase().includes('multi-tenant')));
-    assert.ok(intake.acceptanceCriteria.some((item) => item.includes('GitHub/GitLab')));
+    assert.ok(intake.businessRequirements.some((item: string) => item.toLowerCase().includes('multi-tenant')));
+    assert.ok(intake.acceptanceCriteria.some((item: string) => item.includes('GitHub/GitLab')));
   });
 });
