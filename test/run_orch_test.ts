@@ -1,12 +1,11 @@
 import type { State, Task } from '../src/types.js';
+import { setTimeout } from 'timers/promises';
 
 async function request<T = any>(path: string, options: RequestInit = {}): Promise<T> {
     const res = await fetch(`http://localhost:5174${path}`, options);
     const text = await res.text();
     return text ? JSON.parse(text) : {};
 }
-
-function wait(ms: number) { return new Promise(r => setTimeout(r, ms)); }
 
 async function run() {
     await request('/api/reset', { method: 'POST' });
@@ -15,7 +14,7 @@ async function run() {
     await request('/api/orchestrator/run', { method: 'POST' });
 
     for (let i = 0; i < 5; i++) {
-        await wait(1000);
+        await setTimeout(1000);
         const state = await request<State>('/api/state');
         const task = state.tasks.find((t: Task) => t.id === taskRes.task.id);
         if (task?.assignedTo) {

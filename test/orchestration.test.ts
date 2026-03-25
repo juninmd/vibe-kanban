@@ -1,10 +1,9 @@
 import { test, describe, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawn, ChildProcess } from 'node:child_process';
+import { ChildProcess } from 'node:child_process';
 import { setTimeout } from 'timers/promises';
-import { existsSync, rmSync } from 'node:fs';
 import type { State, Task } from '../src/types.js';
-import { waitForServer } from './test_utils.js';
+import { startTestServer, stopTestServer } from './test_utils.js';
 
 const API_URL = 'http://localhost:5174';
 
@@ -12,17 +11,7 @@ describe('Orchestration API', async () => {
   let serverProcess: ChildProcess;
 
   before(async () => {
-    // Ensure we are testing the built version
-    serverProcess = spawn('node', ['dist/server.js'], {
-      stdio: 'pipe',
-      env: { ...process.env, PORT: '5174' }
-    });
-
-    const ready = await waitForServer(API_URL);
-    if (!ready) {
-      serverProcess.kill();
-      throw new Error('Server failed to start');
-    }
+    serverProcess = await startTestServer(API_URL);
   });
 
   beforeEach(async () => {
@@ -36,9 +25,7 @@ describe('Orchestration API', async () => {
   });
 
   after(() => {
-    const cloneDir = './test-clones';
-    if (existsSync(cloneDir)) rmSync(cloneDir, { recursive: true, force: true });
-    if (serverProcess) serverProcess.kill();
+    stopTestServer(serverProcess);
   });
 
   test('Default: Auto-assigns tasks after interval', async () => {

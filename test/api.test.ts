@@ -1,9 +1,9 @@
 import { test, describe, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawn, ChildProcess } from 'node:child_process';
-import { existsSync, rmSync } from 'node:fs';
+import { ChildProcess } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import type { State, Task, Agent } from '../src/types.js';
-import { waitForServer } from './test_utils.js';
+import { startTestServer, stopTestServer } from './test_utils.js';
 
 const API_URL = 'http://localhost:5174';
 
@@ -11,16 +11,7 @@ describe('Vibe Kanban API', async () => {
   let serverProcess: ChildProcess;
 
   before(async () => {
-    serverProcess = spawn('node', ['dist/server.js'], {
-      stdio: 'pipe',
-      env: { ...process.env, PORT: '5174' }
-    });
-
-    const ready = await waitForServer(API_URL);
-    if (!ready) {
-      serverProcess.kill();
-      throw new Error('Server failed to start');
-    }
+    serverProcess = await startTestServer(API_URL);
   });
 
   beforeEach(async () => {
@@ -28,9 +19,7 @@ describe('Vibe Kanban API', async () => {
   });
 
   after(() => {
-    const cloneDir = './test-clones';
-    if (existsSync(cloneDir)) rmSync(cloneDir, { recursive: true, force: true });
-    if (serverProcess) serverProcess.kill();
+    stopTestServer(serverProcess);
   });
 
   test('GET /api/state returns valid initial state', async () => {

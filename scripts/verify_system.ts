@@ -1,10 +1,7 @@
 import type { Agent, Task, State } from '../src/types.js';
+import { setTimeout } from 'timers/promises';
 
 const API_URL = 'http://localhost:5174/api';
-
-function wait(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
 
 async function fetchJson<T = any>(url: string, options: RequestInit = {}): Promise<T> {
     try {
@@ -29,7 +26,7 @@ async function verifySystem() {
             console.log("Server is up!");
             break;
         } catch (e) {
-            await wait(1000);
+            await setTimeout(1000);
             retries--;
         }
     }
@@ -92,7 +89,7 @@ async function verifySystem() {
     console.log("Waiting for assignment...");
     let assigned = false;
     for (let i = 0; i < 15; i++) { // Wait up to 15s
-        await wait(1000);
+        await setTimeout(1000);
         try {
             const newState = await fetchJson(`${API_URL}/state`) as State;
             const task = newState.tasks.find((t: Task) => t.id === taskRes.task.id);
