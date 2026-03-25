@@ -3,7 +3,7 @@ import { setTimeout } from 'timers/promises';
 
 const API_URL = 'http://localhost:5174/api';
 
-async function fetchJson<T = any>(url: string, options: RequestInit = {}): Promise<T> {
+async function fetchJson<T>(url: string, options: RequestInit = {}): Promise<T> {
     try {
         const res = await fetch(url, options);
         const text = await res.text();
@@ -19,25 +19,28 @@ async function fetchJson<T = any>(url: string, options: RequestInit = {}): Promi
 
 async function verifySystem() {
     console.log("Waiting for server...");
-    let retries = 10;
-    while (retries > 0) {
+    let serverUp = false;
+    for (let attempts = 0; attempts < 30; attempts++) {
         try {
-            await fetchJson(`${API_URL}/state`);
-            console.log("Server is up!");
-            break;
-        } catch (e) {
-            await setTimeout(1000);
-            retries--;
+            const res = await fetch(`${API_URL}/state`);
+            if (res.ok) {
+                serverUp = true;
+                break;
+            }
+        } catch {
+            // retry
         }
+        await setTimeout(300);
     }
 
-    if (retries === 0) {
+    if (!serverUp) {
         console.error("Server failed to start.");
         process.exit(1);
     }
+    console.log("Server is up!");
 
     console.log("Verifying agents...");
-    const state = await fetchJson(`${API_URL}/state`) as State;
+    const state = await fetchJson<State>(`${API_URL}/state`);
     const agents: Agent[] = state.agents || [];
 
     // Check for specific roles
@@ -91,7 +94,7 @@ async function verifySystem() {
     for (let i = 0; i < 15; i++) { // Wait up to 15s
         await setTimeout(1000);
         try {
-            const newState = await fetchJson(`${API_URL}/state`) as State;
+            const newState = await fetchJson<State>(`${API_URL}/state`);
             const task = newState.tasks.find((t: Task) => t.id === taskRes.task.id);
             if (task && (task.assignedTo || task.interrupted)) {
                 console.log(`Task assigned to agent (or attempted and interrupted).`);

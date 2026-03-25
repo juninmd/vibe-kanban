@@ -4,6 +4,7 @@ import { OpenCodeDriver, buildOpenCodeArgs } from '../dist/drivers/OpenCodeDrive
 import { resolveOpenCodeCommand } from '../dist/utils/commandUtils.js';
 import * as fs from 'fs';
 import * as path from 'path';
+import type { Task, Agent, DriverContext } from '../src/types.js';
 
 describe('OpenCodeDriver Integration', () => {
   const testDir = './test-clones-driver';
@@ -61,17 +62,17 @@ describe('OpenCodeDriver Integration', () => {
     assert.equal(configResolved.command, path.resolve(configOnlyPath));
   });
 
-  async function runDriver(driver: OpenCodeDriver, task: any, agent: any): Promise<string[]> {
+  async function runDriver(driver: OpenCodeDriver, task: Task, agent: Agent): Promise<string[]> {
     const logs: string[] = [];
     await new Promise((resolve, reject) => {
-      const ctx: any = {
+      const ctx: Partial<DriverContext> = {
         onLog: (id: number, msg: string) => logs.push(msg),
         onComplete: () => resolve(undefined),
         onBugFound: (id: number, desc: string) => reject(new Error(desc)),
         onInterrupt: () => resolve(undefined)
       };
 
-      driver.executeTask(task, agent, ctx).catch(reject);
+      driver.executeTask(task, agent, ctx as DriverContext).catch(reject);
     });
     return logs;
   }
@@ -81,7 +82,7 @@ describe('OpenCodeDriver Integration', () => {
     const workDir = path.join(testDir, 'custom-workdir');
     fs.mkdirSync(workDir, { recursive: true });
 
-    const task: any = {
+    const task: Task = {
       id: 101,
       title: 'Create a simple hello world function',
       source: 'test',
@@ -91,10 +92,12 @@ describe('OpenCodeDriver Integration', () => {
       assignedTo: 'agent-opencode',
       interrupted: false,
       logs: [],
-      workDir
+      workDir,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
     };
 
-    const agent: any = {
+    const agent: Agent = {
       id: 'agent-opencode',
       role: 'Developer',
       model: 'default',
@@ -118,7 +121,7 @@ describe('OpenCodeDriver Integration', () => {
   test('ExecuteTask with custom model passes --model flag', async () => {
     const driver = new OpenCodeDriver(() => testDir);
 
-    const task: any = {
+    const task: Task = {
       id: 102,
       title: 'Test with custom model',
       source: 'test',
@@ -127,10 +130,12 @@ describe('OpenCodeDriver Integration', () => {
       lane: 'in_progress',
       assignedTo: 'agent-ollama',
       interrupted: false,
-      logs: []
+      logs: [],
+      createdAt: Date.now(),
+      updatedAt: Date.now()
     };
 
-    const agent: any = {
+    const agent: Agent = {
       id: 'agent-ollama',
       role: 'OllamaDev',
       model: 'ollama:llama3',
@@ -160,7 +165,9 @@ describe('OpenCodeDriver Integration', () => {
         assignedTo: null,
         interrupted: false,
         logs: [],
-      } as any,
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      } as Task,
       {
         id: 'agent-opencode',
         role: 'Developer',
@@ -170,7 +177,7 @@ describe('OpenCodeDriver Integration', () => {
         assignedTask: null,
         tool: 'opencode',
         terminalId: 'term-3'
-      } as any,
+      } as Agent,
       'Create hello.js'
     );
 
