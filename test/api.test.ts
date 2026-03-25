@@ -1,27 +1,14 @@
 import { test, describe, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, ChildProcess } from 'node:child_process';
-import { setTimeout } from 'timers/promises';
 import { existsSync, rmSync } from 'node:fs';
 import type { State, Task, Agent } from '../src/types.js';
+import { waitForServer } from './test_utils.js';
 
 const API_URL = 'http://localhost:5174';
 
 describe('Vibe Kanban API', async () => {
   let serverProcess: ChildProcess;
-
-  async function waitForServer() {
-    for (let attempts = 0; attempts < 30; attempts++) {
-      try {
-        const res = await fetch(`${API_URL}/api/state`);
-        if (res.ok) return true;
-      } catch {
-        // retry
-      }
-      await setTimeout(300);
-    }
-    return false;
-  }
 
   before(async () => {
     serverProcess = spawn('node', ['dist/server.js'], {
@@ -29,7 +16,7 @@ describe('Vibe Kanban API', async () => {
       env: { ...process.env, PORT: '5174' }
     });
 
-    const ready = await waitForServer();
+    const ready = await waitForServer(API_URL);
     if (!ready) {
       serverProcess.kill();
       throw new Error('Server failed to start');

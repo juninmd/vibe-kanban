@@ -1,4 +1,3 @@
-import { spawn } from 'child_process';
 import type { Agent, Task, State } from '../src/types.js';
 
 const API_URL = 'http://localhost:5174/api';

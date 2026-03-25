@@ -61,8 +61,22 @@ describe('OpenCodeDriver Integration', () => {
     assert.equal(configResolved.command, path.resolve(configOnlyPath));
   });
 
-  test('ExecuteTask uses custom executable path, task.workDir, and file block output', async () => {
+  async function runDriver(driver: OpenCodeDriver, task: any, agent: any): Promise<string[]> {
     const logs: string[] = [];
+    await new Promise((resolve, reject) => {
+      const ctx: any = {
+        onLog: (id: number, msg: string) => logs.push(msg),
+        onComplete: () => resolve(undefined),
+        onBugFound: (id: number, desc: string) => reject(new Error(desc)),
+        onInterrupt: () => resolve(undefined)
+      };
+
+      driver.executeTask(task, agent, ctx).catch(reject);
+    });
+    return logs;
+  }
+
+  test('ExecuteTask uses custom executable path, task.workDir, and file block output', async () => {
     const driver = new OpenCodeDriver(() => testDir);
     const workDir = path.join(testDir, 'custom-workdir');
     fs.mkdirSync(workDir, { recursive: true });
@@ -91,16 +105,7 @@ describe('OpenCodeDriver Integration', () => {
       terminalId: 'term-1'
     };
 
-    await new Promise((resolve, reject) => {
-      const ctx: any = {
-        onLog: (id: number, msg: string) => logs.push(msg),
-        onComplete: () => resolve(undefined),
-        onBugFound: (id: number, desc: string) => reject(new Error(desc)),
-        onInterrupt: () => {}
-      };
-
-      driver.executeTask(task, agent, ctx).catch(reject);
-    });
+    const logs = await runDriver(driver, task, agent);
 
     const executableLog = logs.find(l => l.includes('OpenCode executable:'));
     const runLog = logs.find(l => l.startsWith('Running:'));
@@ -111,7 +116,6 @@ describe('OpenCodeDriver Integration', () => {
   });
 
   test('ExecuteTask with custom model passes --model flag', async () => {
-    const logs: string[] = [];
     const driver = new OpenCodeDriver(() => testDir);
 
     const task: any = {
@@ -137,16 +141,7 @@ describe('OpenCodeDriver Integration', () => {
       terminalId: 'term-2'
     };
 
-    await new Promise((resolve, reject) => {
-      const ctx: any = {
-        onLog: (id: number, msg: string) => logs.push(msg),
-        onComplete: () => resolve(undefined),
-        onBugFound: (id: number, desc: string) => reject(new Error(desc)),
-        onInterrupt: () => {}
-      };
-
-      driver.executeTask(task, agent, ctx).catch(reject);
-    });
+    const logs = await runDriver(driver, task, agent);
 
     const runLog = logs.find(l => l.startsWith('Running:'));
     assert.ok(runLog, 'Should log the run command');
