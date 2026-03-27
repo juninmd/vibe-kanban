@@ -2,8 +2,7 @@ import { createServer } from "http";
 import * as fs from "fs";
 import * as path from "path";
 import * as crypto from "crypto";
-import * as util from "util";
-import { exec } from "child_process";
+import { execa } from "execa";
 import { Task, Agent, State, EventLog, LLMDriver } from "./types.js";
 import { GeminiDriver } from "./drivers/GeminiDriver.js";
 import { CopilotDriver } from "./drivers/CopilotDriver.js";
@@ -899,9 +898,8 @@ const server = createServer(async (req, res) => {
       return jsonResponse(res, 404, { error: "Task or workDir not found" });
     }
 
-    const command = process.platform === "win32" ? `explorer "${task.workDir}"` : (process.platform === "darwin" ? `open "${task.workDir}"` : `xdg-open "${task.workDir}"`);
-    const execAsync = util.promisify(exec);
-    await execAsync(command);
+    const bin = process.platform === "win32" ? "explorer" : (process.platform === "darwin" ? "open" : "xdg-open");
+    await execa(bin, [task.workDir]);
     addEvent(`Abrindo pasta da tarefa #${taskId}: ${task.workDir}`);
     return jsonResponse(res, 200, { ok: true });
   }
