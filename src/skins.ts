@@ -47,8 +47,8 @@ export function getHeadMaterials(role: string): THREE.Material[] {
         // Eyes (Minecraft style - 2x2 pixels equivalent)
         ctx.fillStyle = '#000000';
         // Simple eyes
-        ctx.fillRect(16, 36, 8, 8);
-        ctx.fillRect(40, 36, 8, 8);
+        ctx.fillRect(16, 36, 16, 16);
+        ctx.fillRect(40, 36, 16, 16);
     });
 
     const hairMat = new THREE.MeshStandardMaterial({ color: hairColor });

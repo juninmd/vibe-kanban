@@ -2,7 +2,8 @@ import { createServer } from "http";
 import * as fs from "fs";
 import * as path from "path";
 import * as crypto from "crypto";
-import { execSync, exec } from "child_process";
+import * as util from "util";
+import { exec } from "child_process";
 import { Task, Agent, State, EventLog, LLMDriver } from "./types.js";
 import { GeminiDriver } from "./drivers/GeminiDriver.js";
 import { CopilotDriver } from "./drivers/CopilotDriver.js";
@@ -899,7 +900,8 @@ const server = createServer(async (req, res) => {
     }
 
     const command = process.platform === "win32" ? `explorer "${task.workDir}"` : (process.platform === "darwin" ? `open "${task.workDir}"` : `xdg-open "${task.workDir}"`);
-    exec(command);
+    const execAsync = util.promisify(exec);
+    await execAsync(command);
     addEvent(`Abrindo pasta da tarefa #${taskId}: ${task.workDir}`);
     return jsonResponse(res, 200, { ok: true });
   }
