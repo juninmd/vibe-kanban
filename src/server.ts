@@ -413,8 +413,16 @@ const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? dri
   }, 0);
 }
 
+const MAX_CONCURRENT_TASKS = 3;
+
 function autoAssign() {
-  const backlogTasks = DB.getTasks().filter(t => t.lane === "backlog");
+  const allTasks = DB.getTasks();
+  const inProgressTasks = allTasks.filter(t => t.lane === "in_progress");
+  let availableSlots = MAX_CONCURRENT_TASKS - inProgressTasks.length;
+
+  if (availableSlots <= 0) return;
+
+  const backlogTasks = allTasks.filter(t => t.lane === "backlog");
   const priorityOrder: Record<string, number> = { "alta": 3, "media": 2, "baixa": 1 };
   backlogTasks.sort((a, b) => {
     const pA = priorityOrder[a.priority] || 0;
@@ -436,12 +444,15 @@ function autoAssign() {
     });
 
   for (const task of backlogTasks) {
+    if (availableSlots <= 0) break;
+
     // 1. If manually assigned:
     if (task.assignedTo) {
       const assignedAgent = agentsById.get(task.assignedTo);
       if (assignedAgent && assignedAgent.status === "idle") {
         startTask(task, assignedAgent).catch(console.error);
         assignedAgent.status = "working";
+        availableSlots--;
       }
       continue; // Stop here for explicitly assigned tasks (wait until agent is free)
     }
@@ -453,6 +464,7 @@ function autoAssign() {
     if (agent) {
       startTask(task, agent).catch(console.error);
       agent.status = "working";
+      availableSlots--;
     }
   }
 }
