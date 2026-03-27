@@ -416,12 +416,13 @@ const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? dri
 const MAX_CONCURRENT_TASKS = 3;
 
 function autoAssign() {
-  const inProgressTasks = DB.getTasks().filter(t => t.lane === "in_progress");
+  const allTasks = DB.getTasks();
+  const inProgressTasks = allTasks.filter(t => t.lane === "in_progress");
   let availableSlots = MAX_CONCURRENT_TASKS - inProgressTasks.length;
 
   if (availableSlots <= 0) return;
 
-  const backlogTasks = DB.getTasks().filter(t => t.lane === "backlog");
+  const backlogTasks = allTasks.filter(t => t.lane === "backlog");
   const priorityOrder: Record<string, number> = { "alta": 3, "media": 2, "baixa": 1 };
   backlogTasks.sort((a, b) => {
     const pA = priorityOrder[a.priority] || 0;
