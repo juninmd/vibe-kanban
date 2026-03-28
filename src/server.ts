@@ -500,12 +500,13 @@ Generate 2 realistic tasks. Return ONLY a JSON array: [{"title":"...","category"
   const processTasks = (raw: string) => {
     try {
       // Try to extract JSON array from mixed text
-      const arrayMatch = raw.match(/\[[\s\S]*?\]/);
-      if (!arrayMatch) {
+      const startIdx = raw.indexOf('[');
+      const endIdx = raw.lastIndexOf(']');
+      if (startIdx === -1 || endIdx === -1) {
         console.warn("PM: No JSON array found in response");
         return;
       }
-      const newTasks = JSON.parse(arrayMatch[0]);
+      const newTasks = JSON.parse(raw.substring(startIdx, endIdx + 1));
       if (!Array.isArray(newTasks)) return;
       let count = 0;
       newTasks.forEach((t: any) => {
@@ -531,41 +532,46 @@ Generate 2 realistic tasks. Return ONLY a JSON array: [{"title":"...","category"
   };
 
   try {
-    if (process.env.OPENAI_API_KEY) {
-      const res = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`
-        },
-        body: JSON.stringify({
-          model: "gpt-4o",
-          response_format: { type: "json_object" },
-          messages: [
-            { role: "system", content: "You generate JSON task arrays." },
-            { role: "user", content: prompt }
-          ]
-        })
-      });
-      const data = await res.json();
-      const content = data.choices?.[0]?.message?.content;
-      if (content) processTasks(content);
-    } else if (process.env.GEMINI_API_KEY) {
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { responseMimeType: "application/json" }
-        })
-      });
-      const data = await res.json();
-      const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (content) processTasks(content);
-    }
+    const content = await callLLM(prompt);
+    if (content) processTasks(content);
   } catch (e) {
     console.warn("PM Auto-create failed:", e);
   }
+}
+
+async function callLLM(prompt: string, systemPrompt?: string): Promise<string | undefined> {
+  if (process.env.OPENAI_API_KEY) {
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: "gpt-4o",
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: systemPrompt || "You generate JSON arrays." },
+          { role: "user", content: prompt }
+        ]
+      })
+    });
+    const data = await res.json();
+    return data.choices?.[0]?.message?.content;
+  } else if (process.env.GEMINI_API_KEY) {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        systemInstruction: systemPrompt ? { parts: [{ text: systemPrompt }] } : undefined,
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { responseMimeType: "application/json" }
+      })
+    });
+    const data = await res.json();
+    return data.candidates?.[0]?.content?.parts?.[0]?.text;
+  }
+  return undefined;
 }
 
 // PM loop (every 60 seconds)
@@ -788,8 +794,72 @@ const server = createServer(async (req, res) => {
       repoUrl: typeof body.repoUrl === "string" ? body.repoUrl : undefined
     });
 
-    addEvent(`[DemandIntake] Nova demanda enriquecida: ${body.title}`);
-    return jsonResponse(res, 200, intake);
+    addEvent(`[DemandIntake] Nova demanda recebida: ${body.title}. Planejando tarefas...`);
+
+    // call LLM to decompose demand into issues
+    const prompt = `You are a project planning agent for "Vibe Kanban 3D".
+Your job is to decompose a high-level goal into atomic, implementable issues.
+Goal Title: ${body.title}
+Goal Description: ${body.description || "N/A"}
+Repository URL: ${body.repoUrl || "N/A"}
+
+Decompose this goal into 2-8 atomic issues that can each be completed in a single AI coding session.
+Categories: "roadmap", "security", "performance", "feature", "test", "bug".
+Priorities: "alta", "media", "baixa".
+
+Return ONLY a JSON array with this structure:
+[
+  {
+    "title": "Short descriptive title",
+    "description": "Full markdown description with acceptance criteria",
+    "category": "feature",
+    "priority": "alta"
+  }
+]`;
+
+    let generatedTasks: any[] = [];
+    try {
+      const content = await callLLM(prompt, "You generate JSON task arrays.");
+      if (content) {
+        const startIdx = content.indexOf('[');
+        const endIdx = content.lastIndexOf(']');
+        if (startIdx !== -1 && endIdx !== -1) {
+          generatedTasks = JSON.parse(content.substring(startIdx, endIdx + 1));
+        }
+      }
+    } catch (e) {
+      console.warn("Demand intake LLM planning failed:", e);
+    }
+
+    const createdTasks: Task[] = [];
+    if (Array.isArray(generatedTasks)) {
+      for (const t of generatedTasks) {
+        if (t.title && t.category) {
+          const task = DB.createTask({
+            title: t.title,
+            source: "demand_intake",
+            category: t.category,
+            priority: t.priority || "media",
+            lane: "backlog",
+            assignedTo: null,
+            interrupted: false,
+            logs: [],
+            description: t.description,
+            githubRepo: typeof body.repoUrl === "string" ? body.repoUrl : undefined,
+          });
+          createdTasks.push(task);
+        }
+      }
+    }
+
+    if (createdTasks.length > 0) {
+      addEvent(`[DemandIntake] Planejamento concluído: ${createdTasks.length} tarefas criadas.`);
+      broadcastState();
+    } else {
+      addEvent(`[DemandIntake] Falha ao planejar tarefas para: ${body.title}.`);
+    }
+
+    return jsonResponse(res, 200, { ...intake, tasks: createdTasks });
   }
 
   // POST /api/agents (Create dynamic agent)
