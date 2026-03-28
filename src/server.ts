@@ -56,6 +56,16 @@ function initializeState(): State {
     DB.createTask({ title: "Analyze opencode codebase", source: "system", category: "roadmap", priority: "media", lane: "backlog", assignedTo: null, interrupted: false, logs: [], githubRepo: "https://github.com/anomalyco/opencode", description: "Analyze anomalyco/opencode" });
   }
 
+  // Self-healing: reset stuck tasks and agents
+  const tasksToRecover = existingTasks.filter(t => t.lane === "in_progress");
+  for (const task of tasksToRecover) {
+    DB.updateTask(task.id, { lane: "backlog", interrupted: true, assignedTo: null });
+  }
+  const agentsToRecover = existingAgents.filter(a => a.status !== "idle");
+  for (const agent of agentsToRecover) {
+    DB.updateAgent(agent.id, { status: "idle", assignedTask: null });
+  }
+
   return {
     tasks: DB.getTasks(),
     agents: DB.getAgents(),
