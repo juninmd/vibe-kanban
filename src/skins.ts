@@ -16,6 +16,7 @@ function createTexture(width: number, height: number, drawFn: (ctx: CanvasRender
         tex.magFilter = THREE.NearestFilter;
         tex.minFilter = THREE.NearestFilter;
     }
+    tex.needsUpdate = true;
     return tex;
 }
 
@@ -88,13 +89,15 @@ export function getBodyMaterials(role: string, modelName?: string, badgeColorFal
             ctx.textAlign = "center";
             ctx.textBaseline = "middle";
 
+            const makeFont = (size: number) => `bold ${size}px Arial, sans-serif`;
+
             let fontSize = 26;
-            ctx.font = `bold ${fontSize}px sans-serif`;
+            ctx.font = makeFont(fontSize);
 
             // Handle long text by wrapping to next line
             if (ctx.measureText(modelName).width > rectWidth - 10) {
                 fontSize = 18;
-                ctx.font = `bold ${fontSize}px sans-serif`;
+                ctx.font = makeFont(fontSize);
 
                 // naive split
                 const mid = Math.floor(modelName.length / 2);
