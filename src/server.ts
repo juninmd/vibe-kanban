@@ -500,12 +500,13 @@ Generate 2 realistic tasks. Return ONLY a JSON array: [{"title":"...","category"
   const processTasks = (raw: string) => {
     try {
       // Try to extract JSON array from mixed text
-      const arrayMatch = raw.match(/\[[\s\S]*\]/);
-      if (!arrayMatch) {
+      const startIdx = raw.indexOf('[');
+      const endIdx = raw.lastIndexOf(']');
+      if (startIdx === -1 || endIdx === -1) {
         console.warn("PM: No JSON array found in response");
         return;
       }
-      const newTasks = JSON.parse(arrayMatch[0]);
+      const newTasks = JSON.parse(raw.substring(startIdx, endIdx + 1));
       if (!Array.isArray(newTasks)) return;
       let count = 0;
       newTasks.forEach((t: any) => {
@@ -820,9 +821,10 @@ Return ONLY a JSON array with this structure:
     try {
       const content = await callLLM(prompt, "You generate JSON task arrays.");
       if (content) {
-        const arrayMatch = content.match(/\[[\s\S]*\]/);
-        if (arrayMatch) {
-          generatedTasks = JSON.parse(arrayMatch[0]);
+        const startIdx = content.indexOf('[');
+        const endIdx = content.lastIndexOf(']');
+        if (startIdx !== -1 && endIdx !== -1) {
+          generatedTasks = JSON.parse(content.substring(startIdx, endIdx + 1));
         }
       }
     } catch (e) {
