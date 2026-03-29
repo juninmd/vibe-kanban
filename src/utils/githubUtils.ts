@@ -10,7 +10,8 @@ export async function createPullRequest(
     taskTitle: string,
     githubRepo: string,
     githubToken: string,
-    githubUser: string = "vibe-agent"
+    githubUser: string = "vibe-agent",
+    additionalDescription: string = ""
 ): Promise<string> {
     const normalizedRepo = normalizeGithubRepo(githubRepo);
     const branchName = `feature/task-${taskId}`;
@@ -86,7 +87,7 @@ export async function createPullRequest(
     // Create PR via GitHub API
     const prBody = {
         title: `Task #${taskId}: ${taskTitle}`,
-        body: `Pull request gerado automaticamente pelo agente do Vibe Kanban para a tarefa #${taskId}.\n\nTítulo original: ${taskTitle}`,
+        body: `Pull request gerado automaticamente pelo agente do Vibe Kanban para a tarefa #${taskId}.\n\nTítulo original: ${taskTitle}${additionalDescription}`,
         head: branchName,
         base: currentBranch // Or default to main if unknown
     };
