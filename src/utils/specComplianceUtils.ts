@@ -1,7 +1,4 @@
-import { exec } from "child_process";
-import { promisify } from "util";
-
-const execAsync = promisify(exec);
+import { execa } from "execa";
 
 export interface SpecComplianceCriterion {
   criterion: string;
@@ -60,7 +57,7 @@ export async function getFullDiff(
   maxChars = 30_000,
 ): Promise<string> {
   try {
-    const { stdout } = await execAsync(`git diff ${baseBranch}`, { cwd });
+    const { stdout } = await execa("git", ["diff", baseBranch], { cwd });
     const diff = stdout.trim();
     if (diff.length <= maxChars) return diff;
     return `${diff.slice(0, maxChars)}\n\n[... diff truncated at ${maxChars} characters ...]`;
