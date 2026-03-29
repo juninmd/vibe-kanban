@@ -21,6 +21,8 @@ import { isEligibleForFallback } from "./utils/fallbackUtils.js";
 import { getToolingLandscape } from "./utils/toolingLandscape.js";
 import { enrichDemand } from "./utils/demandIntake.js";
 import { prepareWorktree, cleanupWorktree } from "./utils/worktreeUtils.js";
+import { extractAcceptanceCriteria, getFullDiff, buildCompliancePrompt, parseComplianceResponse, formatSpecCompliance } from "./utils/specComplianceUtils.js";
+import { callLLM } from "./utils/llmUtils.js";
 import "dotenv/config";
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 5174;
@@ -295,13 +297,101 @@ const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? dri
         // Reset fallback attempts on success
         fallbackAttempts.delete(tid);
 
+        // Proof of Work Validation Pipeline
+        let validationPassed = true;
+        let validationOutput = "";
+        const workDir = t.workDir || path.join(appConfig.cloneDir, `task-${t.id}`);
+        try {
+            addTerminalLine(t.assignedTo, tid, "system", `🔄 Executando validação Proof of Work (npm test)...`);
+            const { runProofOfWork } = await import("./utils/validationUtils.js");
+            const validationResult = await runProofOfWork(workDir);
+
+            if (!validationResult.success) {
+                validationPassed = false;
+                validationOutput = validationResult.output.substring(0, 500);
+                addTerminalLine(t.assignedTo, tid, "stderr", `❌ Validação falhou. Retornando ao agente para correção.\nSaída:\n${validationOutput}`);
+                addEvent(`Validação falhou para a tarefa #${tid}. Acionando fallback.`);
+            } else {
+                addTerminalLine(t.assignedTo, tid, "system", `✅ Validação concluída com sucesso.`);
+            }
+        } catch (e: any) {
+             addTerminalLine(t.assignedTo, tid, "stderr", `⚠️ Erro ao executar validação: ${e.message}`);
+             validationPassed = false;
+             validationOutput = e.message;
+        }
+
+        if (!validationPassed) {
+             const validationErrorDesc = `A validação (Proof of Work) falhou. Corrija os testes e tente novamente.\nDetalhes do erro:\n${validationOutput}`;
+             // Re-invoke the driver by calling the onBugFound callback logic
+             // However, since we are inside onComplete, the cleanest way to retry is to simulate an immediate failure:
+             // We will invoke the onBugFound defined on the next scope.
+             // To do this properly, we need to extract the onBugFound logic into a function.
+             // But since we can't easily capture it, let's just trigger the bug count mechanism and call runAttempt directly.
+             const count = (bugCounts.get(tid) || 0) + 1;
+             bugCounts.set(tid, count);
+             if (count > 3) {
+                 addTerminalLine(t.assignedTo, tid, "stderr", `❌ Limite de tentativas de correção de validação atingido. Finalizando com falha.`);
+                 terminateTask(tid, "done", false);
+                 return;
+             }
+
+             // Update the task logs/description to inform the agent about the validation failure
+             updateTask(tid, { logs: [...t.logs, `Validação falhou:\n${validationOutput}`] });
+             runAttempt(tool);
+             return;
+        }
+
+        // Spec Compliance Pipeline
+        let specPassed = true;
+        let prDescriptionSuffix = "";
+
+        try {
+            const criteria = extractAcceptanceCriteria(t.description || "");
+            if (criteria.length > 0) {
+                addTerminalLine(t.assignedTo, tid, "system", `🔄 Verificando conformidade com as especificações (Spec Compliance)...`);
+                // Assume main branch for baseBranch. Ideally we'd know what it branched from.
+                const diff = await getFullDiff(workDir, "main");
+                if (diff) {
+                     const prompt = buildCompliancePrompt(t.title, t.id, criteria, diff);
+                     const llmResult = await callLLM(prompt);
+                     if (llmResult) {
+                         const compliance = parseComplianceResponse(llmResult);
+                         if (compliance) {
+                             prDescriptionSuffix = "\n\n" + formatSpecCompliance(compliance);
+                             if (!compliance.passed) {
+                                 specPassed = false;
+                                 const unmet = compliance.criteria.filter(c => !c.met).map(c => `- ${c.criterion}: ${c.evidence}`).join("\n");
+                                 addTerminalLine(t.assignedTo, tid, "stderr", `❌ Falha de Spec Compliance. Retornando ao agente.\nCritérios não atendidos:\n${unmet}`);
+
+                                 const count = (bugCounts.get(tid) || 0) + 1;
+                                 bugCounts.set(tid, count);
+                                 if (count > 3) {
+                                     addTerminalLine(t.assignedTo, tid, "stderr", `❌ Limite de tentativas de correção de compliance atingido. Finalizando com falha.`);
+                                     terminateTask(tid, "done", false);
+                                     return;
+                                 }
+
+                                 updateTask(tid, { logs: [...t.logs, `Spec Compliance falhou:\n${unmet}`] });
+                                 runAttempt(tool);
+                                 return;
+                             } else {
+                                 addTerminalLine(t.assignedTo, tid, "system", `✅ Spec Compliance concluída com sucesso.`);
+                             }
+                         }
+                     }
+                }
+            }
+        } catch (e: any) {
+            addTerminalLine(t.assignedTo, tid, "stderr", `⚠️ Erro ao executar Spec Compliance: ${e.message}`);
+        }
+
         // Auto PR generation
-        if (t.githubRepo && process.env.GITHUB_TOKEN) {
+        if (validationPassed && specPassed && t.githubRepo && process.env.GITHUB_TOKEN) {
             addTerminalLine(t.assignedTo, tid, "system", `🔄 Gerando Pull Request para o repositório ${t.githubRepo}...`);
             try {
-                const workDir = t.workDir || path.join(appConfig.cloneDir, `task-${t.id}`);
+                const prFinalDescription = "\n\n## Proof of Work\n✅ npm test executado com sucesso\n" + prDescriptionSuffix;
                 const githubUser = process.env.GITHUB_USER || "vibe-agent";
-                const prResult = await createPullRequest(workDir, t.id, t.title, t.githubRepo, process.env.GITHUB_TOKEN, githubUser);
+                const prResult = await createPullRequest(workDir, t.id, t.title, t.githubRepo, process.env.GITHUB_TOKEN, githubUser, prFinalDescription);
                 addTerminalLine(t.assignedTo, tid, "system", `✅ ${prResult}`);
                 addEvent(`PR criado para Tarefa #${tid}: ${t.githubRepo}`);
             } catch (prError: any) {
@@ -547,41 +637,6 @@ Generate 2 realistic tasks. Return ONLY a JSON array: [{"title":"...","category"
   } catch (e) {
     console.warn("PM Auto-create failed:", e);
   }
-}
-
-async function callLLM(prompt: string, systemPrompt?: string): Promise<string | undefined> {
-  if (process.env.OPENAI_API_KEY) {
-    const res = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`
-      },
-      body: JSON.stringify({
-        model: "gpt-4o",
-        response_format: { type: "json_object" },
-        messages: [
-          { role: "system", content: systemPrompt || "You generate JSON arrays." },
-          { role: "user", content: prompt }
-        ]
-      })
-    });
-    const data = await res.json();
-    return data.choices?.[0]?.message?.content;
-  } else if (process.env.GEMINI_API_KEY) {
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_API_KEY}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        systemInstruction: systemPrompt ? { parts: [{ text: systemPrompt }] } : undefined,
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { responseMimeType: "application/json" }
-      })
-    });
-    const data = await res.json();
-    return data.candidates?.[0]?.content?.parts?.[0]?.text;
-  }
-  return undefined;
 }
 
 // PM loop (every 60 seconds)
