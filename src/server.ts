@@ -301,7 +301,7 @@ const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? dri
         if (t.githubRepo && process.env.GITHUB_TOKEN) {
             addTerminalLine(t.assignedTo, tid, "system", `🔄 Gerando Pull Request para o repositório ${t.githubRepo}...`);
             try {
-                const prFinalDescription = "\n\n## Proof of Work\n✅ npm test executado com sucesso\n";
+                const prFinalDescription = "";
                 const githubUser = process.env.GITHUB_USER || "vibe-agent";
                 const prResult = await createPullRequest(workDir, t.id, t.title, t.githubRepo, process.env.GITHUB_TOKEN, githubUser, prFinalDescription);
                 addTerminalLine(t.assignedTo, tid, "system", `✅ ${prResult}`);
