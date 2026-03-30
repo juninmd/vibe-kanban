@@ -3,11 +3,11 @@ import time
 import os
 
 def test_visual_alerts():
-    os.makedirs('/home/jules/verification', exist_ok=True)
+    os.makedirs('verification', exist_ok=True)
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         page = browser.new_page()
-        page.goto('http://localhost:5174/')
+        page.goto(os.environ.get('APP_URL', 'http://localhost:5174/'))
 
         # Wait for the page to load
         page.wait_for_selector('h1:has-text("Vibe Kanban")')
