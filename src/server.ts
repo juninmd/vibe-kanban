@@ -22,6 +22,7 @@ import { getToolingLandscape } from "./utils/toolingLandscape.js";
 import { enrichDemand } from "./utils/demandIntake.js";
 import { prepareWorktree, cleanupWorktree } from "./utils/worktreeUtils.js";
 import { callLLM } from "./utils/llmUtils.js";
+import { execa } from "execa";
 import "dotenv/config";
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 5174;
@@ -274,6 +275,81 @@ const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? dri
       activeTaskDrivers.set(task.id, executeDriver);
       addTerminalLine(agent.id, task.id, "system", `🤖 Provider: ${tool}`);
 
+      const handleBugFound = (tid: number, desc: string) => {
+        const nextTool = providerChain[attemptIndex + 1];
+        if (nextTool && isEligibleForProviderFallback(desc)) {
+          attemptIndex += 1;
+          addEvent(`[ProviderFallback] Tarefa #${tid} falhou com ${providerChain[attemptIndex - 1]} (${desc}). Tentando ${nextTool}.`);
+          runAttempt(nextTool);
+          return;
+        }
+
+        activeTaskDrivers.delete(tid);
+        const t = getTask(tid);
+        if (!t) return;
+
+        if (isEligibleForFallback(desc)) {
+            const attempts = (fallbackAttempts.get(tid) || 0) + 1;
+            fallbackAttempts.set(tid, attempts);
+
+            // We consider provider exhaustion to be complete when we have tried all tools in the providerChain
+            // AND have exceeded the total MAX_FALLBACK_ATTEMPTS for transient errors. This prevents infinite fallback loops.
+            const isCompleteProviderExhaustion = attempts > MAX_FALLBACK_ATTEMPTS && attemptIndex >= providerChain.length - 1;
+
+            if (!isCompleteProviderExhaustion) {
+                if (attempts <= MAX_FALLBACK_ATTEMPTS) {
+                    addEvent(`[Fallback] Erro transiente em #${tid}: ${desc}. Tentando novamente... (${attempts}/${MAX_FALLBACK_ATTEMPTS})`);
+                    if (t.assignedTo) {
+                        addTerminalLine(t.assignedTo, tid, "stderr", `⚠️ Erro transiente detectado. Acionando Fallback (${attempts}/${MAX_FALLBACK_ATTEMPTS}): ${desc}`);
+                        terminateTask(tid, "backlog", true); // Will be picked up again
+                    }
+                    return; // Stop normal bug flow
+                }
+            } else {
+                addEvent(`[Fallback] Falha na tarefa #${tid} após ${MAX_FALLBACK_ATTEMPTS} tentativas.`);
+                if (t.assignedTo) {
+                    addTerminalLine(t.assignedTo, tid, "stderr", `❌ Exaustão completa de provedores. Tarefa não pode ser concluída: ${desc}`);
+                    const currentExhaustions = (agentExhaustionCount.get(t.assignedTo) || 0) + 1;
+                    agentExhaustionCount.set(t.assignedTo, currentExhaustions);
+
+                    if (currentExhaustions >= 3) {
+                        addTerminalLine(t.assignedTo, tid, "system", `❌ Agente entrou em estado de ERRO após sucessivas exaustões.`);
+                        updateAgent(t.assignedTo, { status: "error" });
+                    }
+                }
+
+                fallbackAttempts.delete(tid); // Clean up on ultimate failure
+                terminateTask(tid, "done", false); // Unassigns and sets to done
+                return; // Stop normal bug flow
+            }
+        }
+
+        // Normal Bug Flow
+        // Rate limit: max 3 bugs per task
+        const count = (bugCounts.get(tid) || 0) + 1;
+        bugCounts.set(tid, count);
+        if (count > 3) {
+          console.warn(`Bug rate limit reached for task #${tid}`);
+          return;
+        }
+        addEvent(`BUG encontrado em #${tid}: ${desc}`);
+        if (t.assignedTo) {
+          addTerminalLine(t.assignedTo, tid, "stderr", `❌ Bug: ${desc}`);
+          terminateTask(tid, "backlog", true);
+        }
+        // Only create bug task if under limit
+        DB.createTask({
+          title: `Bug: ${desc.substring(0, 100)}`,
+          source: "system",
+          category: "bug",
+          priority: "alta",
+          lane: "backlog",
+          assignedTo: null,
+          interrupted: false,
+          logs: [],
+        });
+      };
+
       executeDriver.executeTask(updatedTask, executionAgent, {
         onLog: (tid, msg) => {
       const t = getTask(tid);
@@ -291,12 +367,25 @@ const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? dri
       activeTaskDrivers.delete(tid);
       const t = getTask(tid);
       if (t && t.assignedTo) {
+        const workDir = t.workDir || path.join(appConfig.cloneDir, `task-${t.id}`);
+
+        // Proof of Work Validation (Lisa inspired)
+        addTerminalLine(t.assignedTo, tid, "system", `⚙️ Executando Proof of Work (npm test)...`);
+        try {
+            await execa("npm", ["test"], { cwd: workDir });
+            addTerminalLine(t.assignedTo, tid, "system", `✅ Proof of Work validado com sucesso!`);
+        } catch (powError: any) {
+            const errorOutput = powError.stderr || powError.stdout || powError.message;
+            addTerminalLine(t.assignedTo, tid, "stderr", `❌ Falha no Proof of Work:\n${errorOutput}`);
+            handleBugFound(tid, `Proof of Work failed: ${errorOutput}`);
+            return; // Halt completion
+        }
+
         addTerminalLine(t.assignedTo, tid, "system", `✅ Tarefa #${tid} concluída!`);
 
         // Reset fallback attempts on success
         fallbackAttempts.delete(tid);
 
-        const workDir = t.workDir || path.join(appConfig.cloneDir, `task-${t.id}`);
         // Auto PR generation
         if (t.githubRepo && process.env.GITHUB_TOKEN) {
             addTerminalLine(t.assignedTo, tid, "system", `🔄 Gerando Pull Request para o repositório ${t.githubRepo}...`);
@@ -326,80 +415,7 @@ const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? dri
         bugCounts.delete(tid);
       }
     },
-    onBugFound: (tid, desc) => {
-      const nextTool = providerChain[attemptIndex + 1];
-      if (nextTool && isEligibleForProviderFallback(desc)) {
-        attemptIndex += 1;
-        addEvent(`[ProviderFallback] Tarefa #${tid} falhou com ${providerChain[attemptIndex - 1]} (${desc}). Tentando ${nextTool}.`);
-        runAttempt(nextTool);
-        return;
-      }
-
-      activeTaskDrivers.delete(tid);
-      const t = getTask(tid);
-      if (!t) return;
-
-      if (isEligibleForFallback(desc)) {
-          const attempts = (fallbackAttempts.get(tid) || 0) + 1;
-          fallbackAttempts.set(tid, attempts);
-
-          // We consider provider exhaustion to be complete when we have tried all tools in the providerChain
-          // AND have exceeded the total MAX_FALLBACK_ATTEMPTS for transient errors. This prevents infinite fallback loops.
-          const isCompleteProviderExhaustion = attempts > MAX_FALLBACK_ATTEMPTS && attemptIndex >= providerChain.length - 1;
-
-          if (!isCompleteProviderExhaustion) {
-              if (attempts <= MAX_FALLBACK_ATTEMPTS) {
-                  addEvent(`[Fallback] Erro transiente em #${tid}: ${desc}. Tentando novamente... (${attempts}/${MAX_FALLBACK_ATTEMPTS})`);
-                  if (t.assignedTo) {
-                      addTerminalLine(t.assignedTo, tid, "stderr", `⚠️ Erro transiente detectado. Acionando Fallback (${attempts}/${MAX_FALLBACK_ATTEMPTS}): ${desc}`);
-                      terminateTask(tid, "backlog", true); // Will be picked up again
-                  }
-                  return; // Stop normal bug flow
-              }
-          } else {
-              addEvent(`[Fallback] Falha na tarefa #${tid} após ${MAX_FALLBACK_ATTEMPTS} tentativas.`);
-              if (t.assignedTo) {
-                  addTerminalLine(t.assignedTo, tid, "stderr", `❌ Exaustão completa de provedores. Tarefa não pode ser concluída: ${desc}`);
-                  const currentExhaustions = (agentExhaustionCount.get(t.assignedTo) || 0) + 1;
-                  agentExhaustionCount.set(t.assignedTo, currentExhaustions);
-
-                  if (currentExhaustions >= 3) {
-                      addTerminalLine(t.assignedTo, tid, "system", `❌ Agente entrou em estado de ERRO após sucessivas exaustões.`);
-                      updateAgent(t.assignedTo, { status: "error" });
-                  }
-              }
-
-              fallbackAttempts.delete(tid); // Clean up on ultimate failure
-              terminateTask(tid, "done", false); // Unassigns and sets to done
-              return; // Stop normal bug flow
-          }
-      }
-
-      // Normal Bug Flow
-      // Rate limit: max 3 bugs per task
-      const count = (bugCounts.get(tid) || 0) + 1;
-      bugCounts.set(tid, count);
-      if (count > 3) {
-        console.warn(`Bug rate limit reached for task #${tid}`);
-        return;
-      }
-      addEvent(`BUG encontrado em #${tid}: ${desc}`);
-      if (t.assignedTo) {
-        addTerminalLine(t.assignedTo, tid, "stderr", `❌ Bug: ${desc}`);
-        terminateTask(tid, "backlog", true);
-      }
-      // Only create bug task if under limit
-      DB.createTask({
-        title: `Bug: ${desc.substring(0, 100)}`,
-        source: "system",
-        category: "bug",
-        priority: "alta",
-        lane: "backlog",
-        assignedTo: null,
-        interrupted: false,
-        logs: [],
-      });
-    },
+    onBugFound: handleBugFound,
     onInterrupt: (tid) => {
       const t = getTask(tid);
       if (t?.assignedTo) {
