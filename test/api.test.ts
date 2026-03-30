@@ -1,13 +1,13 @@
 import { test, describe, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 import { setTimeout } from 'timers/promises';
 import { existsSync, rmSync } from 'node:fs';
 
 const API_URL = 'http://localhost:5174';
 
 describe('Vibe Kanban API', async () => {
-  let serverProcess;
+  let serverProcess: ChildProcess;
 
   async function waitForServer() {
     for (let attempts = 0; attempts < 30; attempts++) {
