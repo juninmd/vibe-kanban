@@ -1629,7 +1629,7 @@ function createAlertIcon(type: "bug" | "perf") {
   ctx.fillStyle = "white";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText(type === "bug" ? "!" : "⚡", 64, 68);
+  ctx.fillText(type === "bug" ? "!" : "⚡", 64, 64);
 
   const tex = new THREE.CanvasTexture(canvas);
   const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
@@ -1664,11 +1664,12 @@ function updateVisualAlerts() {
       if (cardMesh) {
         const worldPos = new THREE.Vector3();
         cardMesh.getWorldPosition(worldPos);
-        sprite.position.copy(worldPos);
-        sprite.position.y += 0.6;
-        sprite.position.z += 0.2;
-        // Floating effect
-        sprite.position.y += Math.sin(Date.now() * 0.005) * 0.1;
+        // Floating effect with absolute assignment to prevent coordinate drift
+        sprite.position.set(
+          worldPos.x,
+          worldPos.y + 0.6 + Math.sin(Date.now() * 0.005) * 0.1,
+          worldPos.z + 0.2
+        );
       }
     }
   }
