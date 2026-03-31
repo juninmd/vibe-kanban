@@ -124,7 +124,7 @@ Do not output hypothetical logs. Output the actual file content needed to solve 
             this.runningTasks.set(task.id, child);
 
             const sessionTimeout = createSessionTimeout(child as unknown as import("node:child_process").ChildProcess, 5 * 60); // 5 minutes timeout
-            const errorLoopDetector = createErrorLoopDetector(child as unknown as import("node:child_process").ChildProcess, /^Error /);
+            const errorLoopDetector = createErrorLoopDetector(child as unknown as import("node:child_process").ChildProcess, /^error\b/i);
             const stallDetector = createStallDetector(child as unknown as import("node:child_process").ChildProcess, 120);
             const overseer = startOverseer(child as unknown as import("node:child_process").ChildProcess, taskDir, { enabled: true, check_interval: 30, stuck_threshold: 300 });
 
