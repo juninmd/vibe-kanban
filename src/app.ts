@@ -1663,6 +1663,7 @@ function updateVisualAlerts() {
       const cardMesh = kanbanGroup.children.find(c => c.userData.taskId === taskId);
       if (cardMesh) {
         const worldPos = new THREE.Vector3();
+        cardMesh.updateMatrixWorld(true);
         cardMesh.getWorldPosition(worldPos);
         // Floating effect with absolute assignment to prevent coordinate drift
         sprite.position.set(
