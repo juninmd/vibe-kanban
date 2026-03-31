@@ -4,7 +4,7 @@ import * as path from "path";
 import { Task, Agent, LLMDriver, DriverContext } from "../types.js";
 import { extractAndWriteFiles } from "../utils/fileUtils.js";
 import { logDebugBlock, logDebugCommand } from "./debugLogging.js";
-import { createErrorLoopDetector, createSessionTimeout, createStallDetector, STUCK_MESSAGE, TIMEOUT_MESSAGE, STALL_MESSAGE, ERROR_LOOP_MESSAGE, startOverseer } from "../utils/overseerUtils.js";
+import { createErrorLoopDetector, createSessionTimeout, createStallDetector, handleOverseerResults, startOverseer } from "../utils/overseerUtils.js";
 
 export class CommandDriver implements LLMDriver {
     name: string = "CLI Command Driver";
@@ -158,25 +158,11 @@ Do not output hypothetical logs. Output the actual file content needed to solve 
                 // Use shared file extraction utility
                 const filesCreated = extractAndWriteFiles(fullOutput, taskDir, ctx, task.id);
 
-                if (sessionTimeout.wasTimedOut()) {
-                    ctx.onLog(task.id, TIMEOUT_MESSAGE);
-                    ctx.onBugFound(task.id, TIMEOUT_MESSAGE);
-                } else if (overseer.wasKilled()) {
-                    ctx.onLog(task.id, STUCK_MESSAGE);
-                    ctx.onBugFound(task.id, STUCK_MESSAGE);
-                } else if (errorLoopDetector.wasKilled()) {
-                    ctx.onLog(task.id, ERROR_LOOP_MESSAGE);
-                    ctx.onBugFound(task.id, ERROR_LOOP_MESSAGE);
-                } else if (stallDetector.wasStalled()) {
-                    ctx.onLog(task.id, STALL_MESSAGE);
-                    ctx.onBugFound(task.id, STALL_MESSAGE);
-                } else if (code === 0) {
-                    ctx.onLog(task.id, `Process completed. Files created: ${filesCreated}`);
-                    ctx.onComplete(task.id);
-                } else {
-                    ctx.onLog(task.id, `Process exited with code ${code}`);
-                    ctx.onBugFound(task.id, `Process exited with code ${code}`);
-                }
+                handleOverseerResults(
+                    task, ctx,
+                    sessionTimeout, overseer, errorLoopDetector, stallDetector,
+                    code, filesCreated, fullOutput
+                );
             });
 
             child.on("error", (error) => {

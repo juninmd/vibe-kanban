@@ -169,6 +169,48 @@ export async function getGitSnapshot(cwd: string): Promise<string | null> {
 	}
 }
 
+export function handleOverseerResults(
+	task: import("../types.js").Task,
+	ctx: import("../types.js").DriverContext,
+	sessionTimeout: SessionTimeoutHandle,
+	overseer: OverseerHandle,
+	errorLoopDetector: ErrorLoopDetectorHandle,
+	stallDetector: StallDetectorHandle,
+	code: number | null,
+	filesCreated: number,
+	fullOutput: string
+): void {
+	if (sessionTimeout.wasTimedOut()) {
+		ctx.onLog(task.id, TIMEOUT_MESSAGE);
+		ctx.onBugFound(task.id, TIMEOUT_MESSAGE);
+	} else if (overseer.wasKilled()) {
+		ctx.onLog(task.id, STUCK_MESSAGE);
+		ctx.onBugFound(task.id, STUCK_MESSAGE);
+	} else if (errorLoopDetector.wasKilled()) {
+		ctx.onLog(task.id, ERROR_LOOP_MESSAGE);
+		ctx.onBugFound(task.id, ERROR_LOOP_MESSAGE);
+	} else if (stallDetector.wasStalled()) {
+		ctx.onLog(task.id, STALL_MESSAGE);
+		ctx.onBugFound(task.id, STALL_MESSAGE);
+	} else if (task.agentType === "plan") {
+		ctx.onLog(task.id, `[SYSTEM] PLAN finalizado com código ${code}.`);
+		if (code === 0) {
+			ctx.onLog(task.id, `[PLAN] ${fullOutput.trim()}`);
+			ctx.onComplete(task.id);
+		} else {
+			ctx.onBugFound(task.id, `Planejamento falhou com código ${code}`);
+		}
+	} else {
+		if (code === 0) {
+			ctx.onLog(task.id, `Process completed. Files created: ${filesCreated}`);
+			ctx.onComplete(task.id);
+		} else {
+			ctx.onLog(task.id, `Process exited with code ${code}`);
+			ctx.onBugFound(task.id, `Process exited with code ${code}`);
+		}
+	}
+}
+
 export function startOverseer(
 	proc: ChildProcess,
 	cwd: string,
