@@ -6,7 +6,7 @@ import * as path from "path";
 import { getProjectContext, extractAndWriteFiles } from "../utils/fileUtils.js";
 import { isCommandAvailable, getGlobalCommandPath } from "../utils/commandUtils.js";
 import { spawnWithPty, stripAnsi } from "../utils/ptyUtils.js";
-import { createErrorLoopDetector, createSessionTimeout, createStallDetector, STUCK_MESSAGE, TIMEOUT_MESSAGE, STALL_MESSAGE, ERROR_LOOP_MESSAGE, startOverseer } from "../utils/overseerUtils.js";
+import { createErrorLoopDetector, createSessionTimeout, createStallDetector, handleOverseerResults, startOverseer } from "../utils/overseerUtils.js";
 import { logDebugBlock, logDebugCommand } from "./debugLogging.js";
 
 // Gemini-specific: these prefixes appear on every failed tool call and API error
@@ -175,46 +175,17 @@ content
                fs.rmSync(tmpDir, { recursive: true, force: true });
             } catch {}
 
-            if (sessionTimeout.wasTimedOut()) {
-               ctx.onLog(task.id, TIMEOUT_MESSAGE);
-               ctx.onBugFound(task.id, TIMEOUT_MESSAGE);
-               return;
-            } else if (overseer.wasKilled()) {
-               ctx.onLog(task.id, STUCK_MESSAGE);
-               ctx.onBugFound(task.id, STUCK_MESSAGE);
-               return;
-            } else if (errorLoopDetector.wasKilled()) {
-               ctx.onLog(task.id, ERROR_LOOP_MESSAGE);
-               ctx.onBugFound(task.id, ERROR_LOOP_MESSAGE);
-               return;
-            } else if (stallDetector.wasStalled()) {
-               ctx.onLog(task.id, STALL_MESSAGE);
-               ctx.onBugFound(task.id, STALL_MESSAGE);
-               return;
-            }
-
-            if (isPlanMode) {
-               // Em modo plano, não escrevemos arquivos — apenas retornamos o JSON para os logs.
-               ctx.onLog(task.id, `[SYSTEM] Gemini PLAN finalizado com código ${code}.`);
-               if (code === 0) {
-                  ctx.onLog(task.id, `[PLAN] ${fullOutput.trim()}`);
-                  ctx.onComplete(task.id);
-               } else {
-                  ctx.onBugFound(task.id, `Planejamento falhou com código ${code}`);
-               }
-            } else {
+            let filesCreated = 0;
+            if (!isPlanMode) {
                // Fallback: Parse files if Gemini used the text format instead of tools
-               const filesCreated = extractAndWriteFiles(fullOutput, basePath, ctx, task.id);
-
-               if (code === 0) {
-                  ctx.onLog(task.id, `[SYSTEM] Gemini CLI finalizado com sucesso.`);
-                  if (filesCreated > 0) ctx.onLog(task.id, `[SYSTEM] Blocos de arquivos detectados: ${filesCreated}`);
-                  ctx.onComplete(task.id);
-               } else {
-                  ctx.onLog(task.id, `[SYSTEM] Gemini CLI encerrou com código ${code}`);
-                  ctx.onBugFound(task.id, `Execução falhou com código ${code}`);
-               }
+               filesCreated = extractAndWriteFiles(fullOutput, basePath, ctx, task.id);
             }
+
+            handleOverseerResults(
+               task, ctx,
+               sessionTimeout, overseer, errorLoopDetector, stallDetector,
+               code, filesCreated, fullOutput
+            );
          });
 
          this.runningTasks.set(task.id, proc);

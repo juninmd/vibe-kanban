@@ -4,6 +4,7 @@ import * as path from "path";
 import { Task, Agent, LLMDriver, DriverContext } from "../types.js";
 import { extractAndWriteFiles } from "../utils/fileUtils.js";
 import { logDebugBlock, logDebugCommand } from "./debugLogging.js";
+import { createErrorLoopDetector, createSessionTimeout, createStallDetector, handleOverseerResults, startOverseer } from "../utils/overseerUtils.js";
 
 export class CommandDriver implements LLMDriver {
     name: string = "CLI Command Driver";
@@ -119,26 +120,19 @@ Do not output hypothetical logs. Output the actual file content needed to solve 
         ctx.onLog(task.id, `Starting: ${command} ${args[0]} in ${taskDir}`);
 
         try {
-            // Set timeout for process to prevent hanging (like Lisa's Session Timeout)
-            const SESSION_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes max per process
-            let isTimedOut = false;
-            let timeoutHandle: NodeJS.Timeout | null = null;
-
             const child = execa(command, args, { cwd: taskDir, reject: false });
             this.runningTasks.set(task.id, child);
 
-            timeoutHandle = setTimeout(() => {
-                isTimedOut = true;
-                if (!child.killed) {
-                    child.kill();
-                    this.appendLog(task.id, `[TIMEOUT] Process killed after exceeding ${SESSION_TIMEOUT_MS / 1000}s`);
-                    ctx.onLog(task.id, `[TIMEOUT] Process killed after exceeding ${SESSION_TIMEOUT_MS / 1000}s`);
-                }
-            }, SESSION_TIMEOUT_MS);
+            const sessionTimeout = createSessionTimeout(child as unknown as import("node:child_process").ChildProcess, 5 * 60); // 5 minutes timeout
+            const errorLoopDetector = createErrorLoopDetector(child as unknown as import("node:child_process").ChildProcess, /^error\b/i);
+            const stallDetector = createStallDetector(child as unknown as import("node:child_process").ChildProcess, 120);
+            const overseer = startOverseer(child as unknown as import("node:child_process").ChildProcess, taskDir, { enabled: true, check_interval: 30, stuck_threshold: 300 });
 
             child.stdout.on("data", (data) => {
                 const text = data.toString();
                 fullOutput += text;
+                errorLoopDetector.check(text);
+                stallDetector.update();
                 const trimmed = text.trim();
                 if (trimmed) {
                     this.appendLog(task.id, trimmed);
@@ -147,35 +141,35 @@ Do not output hypothetical logs. Output the actual file content needed to solve 
             });
 
             child.stderr.on("data", (data) => {
-                const text = data.toString().trim();
-                if (text) {
-                    this.appendLog(task.id, `[STDERR] ${text}`);
-                    ctx.onLog(task.id, text);
+                const text = data.toString();
+                const textTrimmed = text.trim();
+                if (textTrimmed) {
+                    this.appendLog(task.id, `[STDERR] ${textTrimmed}`);
+                    ctx.onLog(task.id, textTrimmed);
                 }
             });
 
             child.on("close", (code) => {
                 this.runningTasks.delete(task.id);
-                if (timeoutHandle) clearTimeout(timeoutHandle);
+                sessionTimeout.stop();
+                stallDetector.stop();
+                overseer.stop();
 
                 // Use shared file extraction utility
                 const filesCreated = extractAndWriteFiles(fullOutput, taskDir, ctx, task.id);
 
-                if (isTimedOut) {
-                    ctx.onLog(task.id, `Process Timed Out.`);
-                    ctx.onBugFound(task.id, `Timeout: Request took too long.`);
-                } else if (code === 0) {
-                    ctx.onLog(task.id, `Process completed. Files created: ${filesCreated}`);
-                    ctx.onComplete(task.id);
-                } else {
-                    ctx.onLog(task.id, `Process exited with code ${code}`);
-                    ctx.onBugFound(task.id, `Process exited with code ${code}`);
-                }
+                handleOverseerResults(
+                    task, ctx,
+                    sessionTimeout, overseer, errorLoopDetector, stallDetector,
+                    code, filesCreated, fullOutput
+                );
             });
 
             child.on("error", (error) => {
                 this.runningTasks.delete(task.id);
-                if (timeoutHandle) clearTimeout(timeoutHandle);
+                sessionTimeout.stop();
+                stallDetector.stop();
+                overseer.stop();
                 ctx.onLog(task.id, `Error spawning process: ${error.message}`);
                 ctx.onBugFound(task.id, `Execution failed: ${error.message}`);
             });
