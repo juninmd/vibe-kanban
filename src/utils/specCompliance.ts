@@ -6,7 +6,6 @@ export interface SpecComplianceResult {
 }
 
 export async function verifySpecCompliance(
-    taskId: number,
     description: string,
     diff: string
 ): Promise<{ success: boolean; unmetCriteria: string[] }> {
@@ -34,7 +33,7 @@ export async function verifySpecCompliance(
 For each criterion, evaluate if the changes in the diff satisfy the requirement.
 
 Git Diff:
-${diff.substring(0, 15000)} // Truncate if too long to avoid token limits
+${diff.substring(0, 100000)} // Truncate at a higher limit (e.g., 100k chars) to leverage larger context windows
 
 Acceptance Criteria:
 ${criteria.map((c, i) => `${i + 1}. ${c}`).join('\n')}
