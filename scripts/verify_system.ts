@@ -96,7 +96,7 @@ async function verifySystem() {
         "Novas Funcionalidades",
         "Testes",
         "Novas Features"
-    ];
+    ]; // NOSONAR
 
     const missing = requiredRoles.filter(role => !agents.find((a: AgentState) => a.role === role));
 

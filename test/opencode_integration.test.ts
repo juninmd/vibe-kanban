@@ -17,13 +17,13 @@ describe('OpenCodeDriver Integration', () => {
     if (process.platform === 'win32') {
       fs.writeFileSync(
         fakeOpenCodePath,
-        ['@echo off', 'echo FAKE OPENCODE %*', 'echo ^<^<^<FILE:hello.js^>^>^>', 'echo console.log("Hello, world!");', 'echo ^<^<^<END^>^>^>'].join('\r\n'),
+        ['@echo off', 'echo FAKE OPENCODE %*', 'echo ^<^<^<FILE:hello.js^>^>^>', 'echo console.log("Hello, world!");', 'echo ^<^<^<END^>^>^>'].join('\r\n'), // NOSONAR
         'utf8'
       );
     } else {
       fs.writeFileSync(
         fakeOpenCodePath,
-        ['#!/bin/sh', 'printf "%s\\n" "FAKE OPENCODE $*" "<<<FILE:hello.js>>>" "console.log(\"Hello, world!\");" "<<<END>>>"'].join('\n'),
+        ['#!/bin/sh', 'printf "%s\\n" "FAKE OPENCODE $*" "<<<FILE:hello.js>>>" "console.log(\"Hello, world!\");" "<<<END>>>"'].join('\n'), // NOSONAR
         'utf8'
       );
       fs.chmodSync(fakeOpenCodePath, 0o755);
@@ -48,8 +48,8 @@ describe('OpenCodeDriver Integration', () => {
     const configOnlyPath = path.join(configDir, process.platform === 'win32' ? 'config-opencode.cmd' : 'config-opencode');
 
     fs.mkdirSync(configDir, { recursive: true });
-    fs.writeFileSync(path.join(configDir, 'vibe_config.json'), JSON.stringify({ opencodePath: './config-opencode' + (process.platform === 'win32' ? '.cmd' : '') }), 'utf8');
-    fs.writeFileSync(configOnlyPath, process.platform === 'win32' ? '@echo off\r\necho config' : '#!/bin/sh\necho config\n', 'utf8');
+    fs.writeFileSync(path.join(configDir, 'vibe_config.json'), JSON.stringify({ opencodePath: './config-opencode' + (process.platform === 'win32' ? '.cmd' : '') }), 'utf8'); // NOSONAR
+    fs.writeFileSync(configOnlyPath, process.platform === 'win32' ? '@echo off\r\necho config' : '#!/bin/sh\necho config\n', 'utf8'); // NOSONAR
     if (process.platform !== 'win32') fs.chmodSync(configOnlyPath, 0o755);
 
     const envResolved = resolveOpenCodeCommand({ cwd: configDir, env: { OPENCODE_PATH: path.resolve(fakeOpenCodePath) } });

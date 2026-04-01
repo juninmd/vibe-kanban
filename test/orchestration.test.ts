@@ -7,15 +7,15 @@ import { existsSync, rmSync } from 'node:fs';
 const API_URL = 'http://localhost:5174';
 
 describe('Orchestration API', async () => {
-  let serverProcess;
+  let serverProcess: ReturnType<typeof spawn>;
 
   async function waitForServer() {
     for (let attempts = 0; attempts < 30; attempts++) {
       try {
         const res = await fetch(`${API_URL}/api/state`);
         if (res.ok) return true;
-      } catch {
-        // retry
+      } catch (err) {
+        // retry on error
       }
       await setTimeout(300);
     }
