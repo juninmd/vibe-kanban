@@ -218,12 +218,12 @@ export const DB = {
 
     // Add default agents in test environment as well, so test passes
     const defaultAgents: Agent[] = [
-      { id: `agent-pm`, role: "Product Manager", model: "default", category: "roadmap", status: "idle", assignedTask: null, tool: "openai", terminalId: `term-pm` },
-      { id: `agent-sec`, role: "Segurança", model: "default", category: "security", status: "idle", assignedTask: null, tool: "gemini", terminalId: `term-sec` },
-      { id: `agent-perf`, role: "Performance", model: "default", category: "performance", status: "idle", assignedTask: null, tool: "copilot", terminalId: `term-perf` },
-      { id: `agent-func`, role: "Novas Funcionalidades", model: "default", category: "feature", status: "idle", assignedTask: null, tool: "claude", terminalId: `term-func` },
-      { id: `agent-test`, role: "Testes", model: "default", category: "test", status: "idle", assignedTask: null, tool: "opencode", terminalId: `term-test` },
-      { id: `agent-feat`, role: "Novas Features", model: "default", category: "feature", status: "idle", assignedTask: null, tool: "opencode", terminalId: `term-feat` }
+      { id: `agent-pm`, role: "Product Manager", model: "GPT-4o", category: "roadmap", status: "idle", assignedTask: null, tool: "openai", terminalId: `term-pm` },
+      { id: `agent-sec`, role: "Segurança", model: "Gemini 1.5", category: "security", status: "idle", assignedTask: null, tool: "gemini", terminalId: `term-sec` },
+      { id: `agent-perf`, role: "Performance", model: "Copilot", category: "performance", status: "idle", assignedTask: null, tool: "copilot", terminalId: `term-perf` },
+      { id: `agent-func`, role: "Novas Funcionalidades", model: "Claude 3.5", category: "feature", status: "idle", assignedTask: null, tool: "claude", terminalId: `term-func` },
+      { id: `agent-test`, role: "Testes", model: "OpenCode QA", category: "test", status: "idle", assignedTask: null, tool: "opencode", terminalId: `term-test` },
+      { id: `agent-feat`, role: "Novas Features", model: "OpenCode Dev", category: "feature", status: "idle", assignedTask: null, tool: "opencode", terminalId: `term-feat` }
     ];
     for (const agent of defaultAgents) {
       this.saveAgent(agent);
