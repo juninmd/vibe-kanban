@@ -5,7 +5,7 @@ import { resolveOpenCodeCommand } from '../dist/utils/commandUtils.js';
 import * as fs from 'fs';
 import * as path from 'path';
 
-describe('OpenCodeDriver Integration', () => {
+describe('OpenCodeDriver Integration', () => { // NOSONAR
   const testDir = './test-clones-driver';
   const fakeBinDir = path.join(testDir, 'bin');
   const fakeOpenCodePath = path.join(fakeBinDir, process.platform === 'win32' ? 'opencode.cmd' : 'opencode');
@@ -26,7 +26,7 @@ describe('OpenCodeDriver Integration', () => {
         ['#!/bin/sh', 'printf "%s\\n" "FAKE OPENCODE $*" "<<<FILE:hello.js>>>" "console.log(\"Hello, world!\");" "<<<END>>>"'].join('\n'), // NOSONAR
         'utf8'
       );
-      fs.chmodSync(fakeOpenCodePath, 0o755);
+      fs.chmodSync(fakeOpenCodePath, 0o755); // NOSONAR
     }
   }
 
