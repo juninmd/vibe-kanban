@@ -15,6 +15,7 @@ export interface Task {
   updatedAt: number;
   workDir?: string;
   baseRepoDir?: string;
+  lastError?: string;
 }
 
 export interface Agent {

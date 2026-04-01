@@ -22,6 +22,7 @@ import { getToolingLandscape } from "./utils/toolingLandscape.js";
 import { enrichDemand } from "./utils/demandIntake.js";
 import { prepareWorktree, cleanupWorktree } from "./utils/worktreeUtils.js";
 import { callLLM } from "./utils/llmUtils.js";
+import { verifySpecCompliance } from "./utils/specCompliance.js";
 import { execa } from "execa";
 import "dotenv/config";
 
@@ -337,6 +338,8 @@ const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? dri
           addTerminalLine(t.assignedTo, tid, "stderr", `❌ Bug: ${desc}`);
           terminateTask(tid, "backlog", true);
         }
+        updateTask(tid, { lastError: desc });
+
         // Only create bug task if under limit
         DB.createTask({
           title: `Bug: ${desc.substring(0, 100)}`,
@@ -379,6 +382,31 @@ const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? dri
             addTerminalLine(t.assignedTo, tid, "stderr", `❌ Falha no Proof of Work:\n${errorOutput}`);
             handleBugFound(tid, `Proof of Work failed: ${errorOutput}`);
             return; // Halt completion
+        }
+
+        // Spec Compliance Validation (Lisa inspired)
+        if (t.description && t.description.includes("- [ ]")) {
+            addTerminalLine(t.assignedTo, tid, "system", `⚙️ Verificando Spec Compliance (Critérios de Aceite)...`);
+            try {
+                const diffCmd1 = await execa("git", ["diff"], { cwd: workDir });
+                const diffCmd2 = await execa("git", ["diff", "--cached"], { cwd: workDir });
+                const diff = diffCmd1.stdout + "\n" + diffCmd2.stdout;
+
+                const compliance = await verifySpecCompliance(t.description, diff);
+
+                if (!compliance.success) {
+                    const errorMsg = `Spec Compliance failed. Unmet criteria:\n${compliance.unmetCriteria.join("\n")}`;
+                    addTerminalLine(t.assignedTo, tid, "stderr", `❌ Falha no Spec Compliance:\n${compliance.unmetCriteria.join("\n")}`);
+                    handleBugFound(tid, errorMsg);
+                    return; // Halt completion
+                }
+                addTerminalLine(t.assignedTo, tid, "system", `✅ Spec Compliance validado com sucesso!`);
+            } catch (specError: any) {
+                addTerminalLine(t.assignedTo, tid, "stderr", `❌ Erro ao verificar Spec Compliance: ${specError.message}`);
+                // Proceed normally if LLM fails, or we can fail it. For now, let's treat it as a bug.
+                handleBugFound(tid, `Spec Compliance error: ${specError.message}`);
+                return;
+            }
         }
 
         addTerminalLine(t.assignedTo, tid, "system", `✅ Tarefa #${tid} concluída!`);

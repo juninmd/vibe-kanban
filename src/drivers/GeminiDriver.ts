@@ -36,6 +36,11 @@ export class GeminiDriver implements LLMDriver {
 
       const isPlanMode = task.agentType === "plan";
 
+      let guardrails = "";
+      if (task.lastError) {
+          guardrails = `\n[GUARDRAILS]\nPREVIOUS ATTEMPT FAILED WITH ERROR:\n${task.lastError}\nEnsure you fix the issue and do not repeat the same mistake.\n`;
+      }
+
       // Prompts distintos para modo plan (somente leitura) e build (mutação)
       const prompt = isPlanMode
          ? `
@@ -51,7 +56,7 @@ TITLE: ${task.title}
 DESCRIPTION: ${task.description || "No description provided."}
 CATEGORY: ${task.category}
 PRIORITY: ${task.priority}
-
+${guardrails}
 RULES:
 1. TREAT THE FILESYSTEM AS READ-ONLY: do NOT modify, create or delete files.
 2. Do NOT call tools that write to disk or run destructive commands.
@@ -82,7 +87,7 @@ TITLE: ${task.title}
 DESCRIPTION: ${task.description || "No description provided."}
 CATEGORY: ${task.category}
 PRIORITY: ${task.priority}
-
+${guardrails}
 INSTRUCTIONS:
 1. Explore the codebase if necessary.
 2. Implement the requested changes.
