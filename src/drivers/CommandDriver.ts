@@ -44,10 +44,15 @@ export class CommandDriver implements LLMDriver {
         let args: string[] = [];
         let fullOutput = "";
 
+        let guardrails = "";
+        if (task.lastError) {
+            guardrails = `\nPREVIOUS ATTEMPT FAILED WITH ERROR:\n${task.lastError}\nEnsure you fix the issue and do not repeat the same mistake.\n`;
+        }
+
         const prompt = `Task: ${task.title}
 Description: ${task.description || ""}
 Source: ${task.source}
-
+${guardrails}
 You are an autonomous coding agent. Your goal is to complete the task by writing code.
 To create or overwrite a file, use the following format exactly:
 
