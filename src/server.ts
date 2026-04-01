@@ -392,7 +392,7 @@ const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? dri
                 const diffCmd2 = await execa("git", ["diff", "--cached"], { cwd: workDir });
                 const diff = diffCmd1.stdout + "\n" + diffCmd2.stdout;
 
-                const compliance = await verifySpecCompliance(tid, t.description, diff);
+                const compliance = await verifySpecCompliance(t.description, diff);
 
                 if (!compliance.success) {
                     const errorMsg = `Spec Compliance failed. Unmet criteria:\n${compliance.unmetCriteria.join("\n")}`;
