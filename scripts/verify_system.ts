@@ -29,7 +29,7 @@ function wait(ms: number) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-function fetchJson(url: string, options: FetchOptions = {}): Promise<any> {
+function fetchJson<T = any>(url: string, options: FetchOptions = {}): Promise<T> {
     return new Promise((resolve, reject) => {
         const parsedUrl = new URL(url);
         const reqOptions = {
