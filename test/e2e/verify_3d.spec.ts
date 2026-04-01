@@ -33,7 +33,7 @@ test('create agent and verify 3d label', async ({ page }) => {
   console.log('Tool Options:', optionTexts, optionValues);
 
   // Select a valid tool (qualquer CLI/API real disponível).
-  let toolToSelect = '';
+  let toolToSelect: string | null = '';
   for (let i = 0; i < optionValues.length; i++) {
       if (optionValues[i] && optionValues[i] !== '') {
           toolToSelect = optionValues[i];

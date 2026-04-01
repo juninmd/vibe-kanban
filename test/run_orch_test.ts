@@ -1,6 +1,21 @@
 import http from 'http';
 
-function request(path, options = {}) {
+interface RequestOptions {
+    method?: string;
+    headers?: Record<string, string>;
+    body?: any;
+}
+
+interface TaskState {
+    id: number;
+    assignedTo: string | null;
+}
+
+interface SystemState {
+    tasks: TaskState[];
+}
+
+function request(path: string, options: RequestOptions = {}): Promise<any> {
     return new Promise((resolve, reject) => {
         const req = http.request({
             hostname: 'localhost',
@@ -18,7 +33,7 @@ function request(path, options = {}) {
     });
 }
 
-function wait(ms) { return new Promise(r => setTimeout(r, ms)); }
+function wait(ms: number) { return new Promise(r => setTimeout(r, ms)); }
 
 async function run() {
     await request('/api/reset', { method: 'POST' });
@@ -28,9 +43,9 @@ async function run() {
 
     for (let i = 0; i < 5; i++) {
         await wait(1000);
-        const state = await request('/api/state');
-        const task = state.tasks.find(t => t.id === taskRes.task.id);
-        if (task.assignedTo) {
+        const state: SystemState = await request('/api/state');
+        const task = state.tasks.find((t: TaskState) => t.id === taskRes.task.id);
+        if (task && task.assignedTo) {
             console.log('Assigned!');
             return;
         }

@@ -3,11 +3,33 @@ import { spawn } from 'child_process';
 
 const API_URL = 'http://localhost:5174/api';
 
-function wait(ms) {
+interface FetchOptions {
+    method?: string;
+    headers?: Record<string, string>;
+    body?: string;
+}
+
+interface AgentState {
+    id: string;
+    role: string;
+}
+
+interface TaskState {
+    id: string;
+    assignedTo: string | null;
+    interrupted: boolean;
+}
+
+interface SystemState {
+    agents: AgentState[];
+    tasks: TaskState[];
+}
+
+function wait(ms: number) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-function fetchJson(url, options = {}) {
+function fetchJson(url: string, options: FetchOptions = {}): Promise<any> {
     return new Promise((resolve, reject) => {
         const parsedUrl = new URL(url);
         const reqOptions = {
@@ -30,7 +52,7 @@ function fetchJson(url, options = {}) {
             });
         });
 
-        req.on('error', (err) => {
+        req.on('error', (err: NodeJS.ErrnoException) => {
              // Suppress connection refused errors during startup
              if (err.code !== 'ECONNREFUSED') console.error(err);
              reject(err);
@@ -63,8 +85,8 @@ async function verifySystem() {
     }
 
     console.log("Verifying agents...");
-    const state = await fetchJson(`${API_URL}/state`);
-    const agents = state.agents || [];
+    const state: SystemState = await fetchJson(`${API_URL}/state`);
+    const agents: AgentState[] = state.agents || [];
 
     // Check for specific roles
     const requiredRoles = [
@@ -76,7 +98,7 @@ async function verifySystem() {
         "Novas Features"
     ];
 
-    const missing = requiredRoles.filter(role => !agents.find(a => a.role === role));
+    const missing = requiredRoles.filter(role => !agents.find((a: AgentState) => a.role === role));
 
     if (missing.length > 0) {
         console.error("Missing required agents:", missing);
@@ -117,8 +139,8 @@ async function verifySystem() {
     for (let i = 0; i < 15; i++) { // Wait up to 15s
         await wait(1000);
         try {
-            const newState = await fetchJson(`${API_URL}/state`);
-            const task = newState.tasks.find(t => t.id === taskRes.task.id);
+            const newState: SystemState = await fetchJson(`${API_URL}/state`);
+            const task = newState.tasks.find((t: TaskState) => t.id === taskRes.task.id);
             if (task && (task.assignedTo || task.interrupted)) {
                 console.log(`Task assigned to agent (or attempted and interrupted).`);
                 assigned = true;
