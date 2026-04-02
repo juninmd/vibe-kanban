@@ -1,4 +1,4 @@
-import { execSync } from "child_process";
+import { execaSync } from "execa";
 import * as path from "path";
 import * as fs from "fs";
 import * as os from "os";
@@ -45,9 +45,10 @@ export function getGlobalCommandPath(command: string): string | null {
     }
 
     // Fallback to 'where' / 'which'
-    const checkCmd = isWindows ? `where ${command}` : `which ${command}`;
-    const output = execSync(checkCmd, { encoding: "utf-8", stdio: ["pipe", "pipe", "ignore"] });
-    return output.split("\n")[0].trim() || null;
+    const bin = isWindows ? "where" : "which";
+    const result = execaSync(bin, [command], { encoding: "utf8", stdio: "pipe", reject: false });
+    if (result.failed || !result.stdout) return null;
+    return result.stdout.split("\n")[0].trim() || null;
   } catch {
     return null;
   }
@@ -88,8 +89,9 @@ export function isCommandAvailable(command: string): boolean {
 export function getCommandVersion(command: string): string | null {
   try {
     const cmdPath = getGlobalCommandPath(command) || command;
-    const output = execSync(`"${cmdPath}" --version`, { encoding: "utf-8", stdio: ["pipe", "pipe", "ignore"] });
-    return output.trim() || null;
+    const result = execaSync(cmdPath, ["--version"], { encoding: "utf8", stdio: "pipe", reject: false });
+    if (result.failed || !result.stdout) return null;
+    return result.stdout.trim() || null;
   } catch {
     return null;
   }
