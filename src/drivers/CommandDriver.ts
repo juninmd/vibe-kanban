@@ -46,7 +46,10 @@ export class CommandDriver implements LLMDriver {
 
         let guardrails = "";
         if (task.lastError) {
-            guardrails = `\nPREVIOUS ATTEMPT FAILED WITH ERROR:\n${task.lastError}\nEnsure you fix the issue and do not repeat the same mistake.\n`;
+            guardrails += `\nPREVIOUS ATTEMPT FAILED WITH ERROR:\n${task.lastError}\nEnsure you fix the issue and do not repeat the same mistake.\n`;
+        }
+        if (task.siblingContext) {
+            guardrails += `\n[SIBLING TASKS CONTEXT]\n${task.siblingContext}\nEnsure you focus ONLY on your assigned task and do not duplicate work being done by others.\n`;
         }
 
         const prompt = `Task: ${task.title}
@@ -138,6 +141,12 @@ Do not output hypothetical logs. Output the actual file content needed to solve 
                 fullOutput += text;
                 errorLoopDetector.check(text);
                 stallDetector.update();
+
+                // Smart Activity Detection
+                if (/reading|analyzing|searching|grep|cat|ls|find/i.test(text)) {
+                   overseer.notifyActivity?.();
+                }
+
                 const trimmed = text.trim();
                 if (trimmed) {
                     this.appendLog(task.id, trimmed);

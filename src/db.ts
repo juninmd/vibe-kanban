@@ -60,6 +60,16 @@ try {
   db.exec(`ALTER TABLE tasks ADD COLUMN baseRepoDir TEXT`);
 } catch (e) { /* column already exists */ }
 
+// Migration: add groupId column if missing
+try {
+  db.exec(`ALTER TABLE tasks ADD COLUMN groupId TEXT`);
+} catch (e) { /* column already exists */ }
+
+// Migration: add dependencies column if missing
+try {
+  db.exec(`ALTER TABLE tasks ADD COLUMN dependencies TEXT`);
+} catch (e) { /* column already exists */ }
+
 export const DB = {
   // Tasks
   getTasks(): Task[] {
@@ -67,7 +77,8 @@ export const DB = {
     return rows.map((row: any) => ({
       ...row,
       interrupted: !!row.interrupted,
-      logs: JSON.parse(row.logs)
+      logs: JSON.parse(row.logs),
+      dependencies: row.dependencies ? JSON.parse(row.dependencies) : undefined
     }));
   },
 
@@ -77,15 +88,16 @@ export const DB = {
     return {
       ...row,
       interrupted: !!row.interrupted,
-      logs: JSON.parse(row.logs)
+      logs: JSON.parse(row.logs),
+      dependencies: row.dependencies ? JSON.parse(row.dependencies) : undefined
     };
   },
 
   createTask(task: Partial<Task>): Task {
     const now = Date.now();
     const result = db.prepare(`
-      INSERT INTO tasks (title, source, category, priority, lane, assignedTo, interrupted, logs, githubRepo, description, agentType, createdAt, updatedAt, workDir, baseRepoDir)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO tasks (title, source, category, priority, lane, assignedTo, interrupted, logs, githubRepo, description, agentType, createdAt, updatedAt, workDir, baseRepoDir, groupId, dependencies)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       task.title,
       task.source || "user",
@@ -101,7 +113,9 @@ export const DB = {
       task.createdAt || now,
       task.updatedAt || now,
       task.workDir || null,
-      task.baseRepoDir || null
+      task.baseRepoDir || null,
+      task.groupId || null,
+      task.dependencies ? JSON.stringify(task.dependencies) : null
     );
     return this.getTask(Number(result.lastInsertRowid))!;
   },
@@ -115,7 +129,8 @@ export const DB = {
       UPDATE tasks SET
         title = ?, source = ?, category = ?, priority = ?, lane = ?,
         assignedTo = ?, interrupted = ?, logs = ?, githubRepo = ?,
-        description = ?, agentType = ?, updatedAt = ?, workDir = ?, baseRepoDir = ?
+        description = ?, agentType = ?, updatedAt = ?, workDir = ?, baseRepoDir = ?,
+        groupId = ?, dependencies = ?
       WHERE id = ?
     `).run(
       updatedTask.title,
@@ -132,6 +147,8 @@ export const DB = {
       updatedTask.updatedAt,
       updatedTask.workDir || null,
       updatedTask.baseRepoDir || null,
+      updatedTask.groupId || null,
+      updatedTask.dependencies ? JSON.stringify(updatedTask.dependencies) : null,
       id
     );
   },

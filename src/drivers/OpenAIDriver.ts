@@ -25,11 +25,20 @@ export class OpenAIDriver implements LLMDriver {
 
       const projectContext = getProjectContext(basePath);
 
+      let guardrails = "";
+      if (task.lastError) {
+          guardrails += `\n[GUARDRAILS]\nPREVIOUS ATTEMPT FAILED WITH ERROR:\n${task.lastError}\nEnsure you fix the issue and do not repeat the same mistake.\n`;
+      }
+      if (task.siblingContext) {
+          guardrails += `\n[SIBLING TASKS CONTEXT]\n${task.siblingContext}\nEnsure you focus ONLY on your assigned task and do not duplicate work being done by others.\n`;
+      }
+
       const prompt = `
 Task: ${task.title}
 Description: ${task.description || "No description provided."}
 Category: ${task.category}
 Priority: ${task.priority}
+${guardrails}
 
 ${projectContext}
 

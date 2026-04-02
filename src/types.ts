@@ -16,6 +16,9 @@ export interface Task {
   workDir?: string;
   baseRepoDir?: string;
   lastError?: string;
+  groupId?: string;
+  dependencies?: number[];
+  siblingContext?: string;
 }
 
 export interface Agent {

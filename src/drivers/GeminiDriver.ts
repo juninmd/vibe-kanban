@@ -38,7 +38,10 @@ export class GeminiDriver implements LLMDriver {
 
       let guardrails = "";
       if (task.lastError) {
-          guardrails = `\n[GUARDRAILS]\nPREVIOUS ATTEMPT FAILED WITH ERROR:\n${task.lastError}\nEnsure you fix the issue and do not repeat the same mistake.\n`;
+          guardrails += `\n[GUARDRAILS]\nPREVIOUS ATTEMPT FAILED WITH ERROR:\n${task.lastError}\nEnsure you fix the issue and do not repeat the same mistake.\n`;
+      }
+      if (task.siblingContext) {
+          guardrails += `\n[SIBLING TASKS CONTEXT]\n${task.siblingContext}\nEnsure you focus ONLY on your assigned task and do not duplicate work being done by others.\n`;
       }
 
       // Prompts distintos para modo plan (somente leitura) e build (mutação)
@@ -142,6 +145,11 @@ content
             fullOutput += text;
             errorLoopDetector.check(text);
             stallDetector.update();
+
+            // Smart Activity Detection
+            if (/reading|analyzing|searching|grep|cat|ls|find/i.test(text)) {
+               overseer.notifyActivity?.();
+            }
 
             // Clean up output for the terminal view
             const lines = text.split("\n");

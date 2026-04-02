@@ -249,10 +249,23 @@ async function startTask(task: Task, agent: Agent) {
     }
   }
 
-  // 3. Update task with final directory info
+  // 3. Prepare Sibling Task Awareness / Lineage Context
+  let siblingContext = "";
+  if (task.groupId) {
+      const siblings = DB.getTasks().filter(t => t.groupId === task.groupId && t.id !== task.id);
+      if (siblings.length > 0) {
+          siblingContext = "This task is part of a larger plan. Here are the sibling tasks in this plan to help you avoid duplicating work:\n";
+          siblings.forEach(s => {
+              siblingContext += `- Task #${s.id} [${s.lane}]: ${s.title}\n`;
+          });
+      }
+  }
+
+  // 4. Update task with final directory info and sibling context
   updateTask(task.id, {
     workDir: finalWorkDir,
-    baseRepoDir: taskBaseRepoDir
+    baseRepoDir: taskBaseRepoDir,
+    siblingContext: siblingContext
   });
 
   // Refresh task object with new workDir
@@ -500,6 +513,20 @@ function autoAssign() {
 
   for (const task of backlogTasks) {
     if (availableSlots <= 0) break;
+
+    // Lineage context dependency check: ensure all dependencies are completed before assigning
+    if (task.dependencies && task.dependencies.length > 0) {
+        const unresolvedDeps = task.dependencies.filter(depId => {
+            const depTask = getTask(depId);
+            // If the task doesn't exist, we consider it resolved to prevent deadlocks.
+            // If it exists, it must be in the 'done' lane.
+            return depTask && depTask.lane !== "done";
+        });
+
+        if (unresolvedDeps.length > 0) {
+            continue; // Skip this task for now
+        }
+    }
 
     // 1. If manually assigned:
     if (task.assignedTo) {
@@ -830,10 +857,12 @@ Priorities: "alta", "media", "baixa".
 Return ONLY a JSON array with this structure:
 [
   {
+    "id": "temp-1",
     "title": "Short descriptive title",
     "description": "Full markdown description with acceptance criteria",
     "category": "feature",
-    "priority": "alta"
+    "priority": "alta",
+    "dependsOn": ["temp-2"]
   }
 ]`;
 
@@ -852,7 +881,11 @@ Return ONLY a JSON array with this structure:
     }
 
     const createdTasks: Task[] = [];
+    const idMap = new Map<string, number>();
+    const groupId = crypto.randomUUID();
+
     if (Array.isArray(generatedTasks)) {
+      // Create all tasks first to get their real IDs
       for (const t of generatedTasks) {
         if (t.title && t.category) {
           const task = DB.createTask({
@@ -866,8 +899,26 @@ Return ONLY a JSON array with this structure:
             logs: [],
             description: t.description,
             githubRepo: typeof body.repoUrl === "string" ? body.repoUrl : undefined,
+            groupId: groupId,
+            dependencies: [], // Will populate below
           });
           createdTasks.push(task);
+          if (t.id) {
+             idMap.set(t.id, task.id);
+          }
+        }
+      }
+
+      // Second pass: map temp dependencies to real DB IDs and update
+      for (let i = 0; i < createdTasks.length; i++) {
+        const genTask = generatedTasks.find(g => idMap.get(g.id) === createdTasks[i].id) || generatedTasks[i];
+        if (genTask && Array.isArray(genTask.dependsOn) && genTask.dependsOn.length > 0) {
+           const realDeps = genTask.dependsOn.map((tempId: string) => idMap.get(tempId)).filter((id: number | undefined): id is number => id !== undefined);
+           if (realDeps.length > 0) {
+              DB.updateTask(createdTasks[i].id, { dependencies: realDeps });
+              const updatedTask = DB.getTask(createdTasks[i].id);
+              if (updatedTask) createdTasks[i] = updatedTask;
+           }
         }
       }
     }

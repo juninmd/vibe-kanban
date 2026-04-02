@@ -8,13 +8,23 @@ export class ClaudeDriver implements LLMDriver {
    private runningTasks = new Map<number, any>();
 
    async executeTask(task: Task, agent: Agent, ctx: DriverContext): Promise<void> {
+      let guardrails = "";
+      if (task.lastError) {
+          guardrails += `\n[GUARDRAILS]\nPREVIOUS ATTEMPT FAILED WITH ERROR:\n${task.lastError}\nEnsure you fix the issue and do not repeat the same mistake.\n`;
+      }
+      if (task.siblingContext) {
+          guardrails += `\n[SIBLING TASKS CONTEXT]\n${task.siblingContext}\nEnsure you focus ONLY on your assigned task and do not duplicate work being done by others.\n`;
+      }
+
+      const promptContext = `${task.title}\n${task.description || ""}\n${guardrails}`;
+
       const cmd = "claude";
-      const args = ["prompt", task.title, "--model", agent.model];
+      const args = ["prompt", promptContext, "--model", agent.model];
       logDebugBlock(
          ctx,
          task.id,
          "AGENT PROMPT",
-         `TITLE: ${task.title}\nDESCRIPTION: ${task.description || "No description provided."}`,
+         promptContext,
       );
       logDebugCommand(ctx, task.id, cmd, ["prompt", "<prompt>", "--model", agent.model]);
       ctx.onLog(task.id, `Running: ${cmd} ${args.join(" ")}`);

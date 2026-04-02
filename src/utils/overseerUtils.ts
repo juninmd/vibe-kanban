@@ -69,7 +69,7 @@ export function createErrorLoopDetector(
 		},
 		wasKilled() {
 			return killed;
-		},
+		}
 	};
 }
 
@@ -155,6 +155,7 @@ export interface OverseerConfig {
 export interface OverseerHandle {
 	stop(): void;
 	wasKilled(): boolean;
+	notifyActivity?(): void;
 }
 
 export async function getGitSnapshot(cwd: string): Promise<string | null> {
@@ -281,5 +282,8 @@ export function startOverseer(
 		wasKilled() {
 			return killed;
 		},
+		notifyActivity() {
+			lastChangeTime = Date.now();
+		}
 	};
 }

@@ -13,8 +13,16 @@ export class CopilotDriver implements LLMDriver {
          throw new Error("GitHub CLI ('gh') not found. Please install it: https://cli.github.com/");
       }
 
+      let guardrails = "";
+      if (task.lastError) {
+          guardrails += `\n[GUARDRAILS]\nPREVIOUS ATTEMPT FAILED WITH ERROR:\n${task.lastError}\nEnsure you fix the issue and do not repeat the same mistake.\n`;
+      }
+      if (task.siblingContext) {
+          guardrails += `\n[SIBLING TASKS CONTEXT]\n${task.siblingContext}\nEnsure you focus ONLY on your assigned task and do not duplicate work being done by others.\n`;
+      }
+
       const cmd = "gh";
-      const promptContext = `[Role: ${agent.role}] ${task.title}`;
+      const promptContext = `[Role: ${agent.role}] ${task.title}\n${task.description || ""}\n${guardrails}`;
       const args = ["copilot", "suggest", promptContext, "--target", "nodejs"];
       logDebugBlock(ctx, task.id, "AGENT PROMPT", promptContext);
       logDebugCommand(ctx, task.id, cmd, ["copilot", "suggest", "<prompt>", "--target", "nodejs"]);
