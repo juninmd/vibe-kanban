@@ -1,30 +1,7 @@
 import { Agent, Task, State } from '../src/types.js';
+import { fetchJson, wait } from '../test/test_helpers.js';
 
 const API_URL = 'http://localhost:5174/api';
-
-function wait(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-interface FetchOptions extends Omit<RequestInit, 'body'> {
-    body?: string;
-}
-
-async function fetchJson<T = any>(url: string, options: FetchOptions = {}): Promise<T> {
-    try {
-        const res = await fetch(url, {
-            method: options.method || 'GET',
-            headers: options.headers || {},
-            body: options.body ? options.body : undefined
-        });
-        const text = await res.text();
-        return text ? JSON.parse(text) : {} as T;
-    } catch (err: any) {
-        // Suppress connection refused errors during startup
-        if (err.cause?.code !== 'ECONNREFUSED' && err.code !== 'ECONNREFUSED') console.error(err);
-        throw err;
-    }
-}
 
 async function verifySystem() {
     console.log("Waiting for server...");
@@ -122,7 +99,7 @@ async function verifySystem() {
     process.exit(0);
 }
 
-verifySystem().catch((err: unknown) => {
+await verifySystem().catch((err: unknown) => {
     console.error(err);
     process.exit(1);
 });

@@ -44,6 +44,16 @@ describe('OpenCodeDriver Integration', () => {
     if (fs.existsSync(testDir)) fs.rmSync(testDir, { recursive: true, force: true });
   });
 
+  function createTestCtx(logsArr: string[], resolveCb: (value: unknown) => void, rejectCb: (reason?: any) => void): DriverContext {
+    return {
+      onLog: (id: number, msg: string) => { logsArr.push(msg); },
+      onComplete: () => { resolveCb(undefined); },
+      onBugFound: (id: number, desc: string) => { rejectCb(new Error(desc)); },
+      onInterrupt: () => {},
+      memory: { get: () => null, set: () => {}, getAll: () => ({}), clear: () => {} }
+    };
+  }
+
   test('resolveOpenCodeCommand prefers OPENCODE_PATH and then vibe_config.json', () => {
     const configDir = path.join(testDir, 'config-resolution');
     const configOnlyPath = path.join(configDir, process.platform === 'win32' ? 'config-opencode.cmd' : 'config-opencode');
@@ -95,14 +105,7 @@ describe('OpenCodeDriver Integration', () => {
     };
 
     await new Promise((resolve, reject) => {
-      const ctx: DriverContext = {
-        onLog: (id: number, msg: string) => logs.push(msg),
-        onComplete: () => resolve(undefined),
-        onBugFound: (id: number, desc: string) => reject(new Error(desc)),
-        onInterrupt: () => {},
-        memory: { get: () => null, set: () => {}, getAll: () => ({}), clear: () => {} }
-      };
-
+      const ctx = createTestCtx(logs, resolve, reject);
       driver.executeTask(task, agent, ctx).catch(reject);
     });
 
@@ -144,14 +147,7 @@ describe('OpenCodeDriver Integration', () => {
     };
 
     await new Promise((resolve, reject) => {
-      const ctx: DriverContext = {
-        onLog: (id: number, msg: string) => logs.push(msg),
-        onComplete: () => resolve(undefined),
-        onBugFound: (id: number, desc: string) => reject(new Error(desc)),
-        onInterrupt: () => {},
-        memory: { get: () => null, set: () => {}, getAll: () => ({}), clear: () => {} }
-      };
-
+      const ctx = createTestCtx(logs, resolve, reject);
       driver.executeTask(task, agent, ctx).catch(reject);
     });
 
