@@ -517,7 +517,7 @@ function autoAssign() {
     // Lineage context dependency check: ensure all dependencies are completed before assigning
     if (task.dependencies && task.dependencies.length > 0) {
         const unresolvedDeps = task.dependencies.filter(depId => {
-            const depTask = getTask(depId);
+            const depTask = allTasks.find(t => t.id === depId);
             // If the task doesn't exist, we consider it resolved to prevent deadlocks.
             // If it exists, it must be in the 'done' lane.
             return depTask && depTask.lane !== "done";
