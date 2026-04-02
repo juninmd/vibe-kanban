@@ -1,15 +1,16 @@
 import { test, describe, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { spawn, ChildProcess } from 'node:child_process';
 import { setTimeout } from 'timers/promises';
 import { existsSync, rmSync } from 'node:fs';
+import { State, Task } from '../src/types.js';
 
 const API_URL = 'http://localhost:5174';
 
 describe('Orchestration API', async () => {
-  let serverProcess;
+  let serverProcess: ChildProcess;
 
-  async function waitForServer() {
+  async function waitForServer(): Promise<boolean> {
     for (let attempts = 0; attempts < 30; attempts++) {
       try {
         const res = await fetch(`${API_URL}/api/state`);
@@ -70,15 +71,15 @@ describe('Orchestration API', async () => {
         priority: 'media'
       })
     });
-    const { task } = await taskRes.json();
+    const { task } = await taskRes.json() as { task: Task };
 
     // 2. Wait > 3000ms (interval is 3000ms)
     await setTimeout(8000);
 
     // 3. Verify assignment
     const stateRes = await fetch(`${API_URL}/api/state`);
-    const state = await stateRes.json();
-    const updatedTask = state.tasks.find(t => t.id === task.id);
+    const state = await stateRes.json() as State;
+    const updatedTask = state.tasks.find((t: Task) => t.id === task.id);
 
     assert.ok(updatedTask, 'Task should exist');
     // It's possible the task finished very quickly and is in 'done' state,
@@ -112,16 +113,17 @@ describe('Orchestration API', async () => {
         priority: 'media'
       })
     });
-    const { task } = await taskRes.json();
+    const { task } = await taskRes.json() as { task: Task };
 
     // 3. Wait > 3000ms
     await setTimeout(5000);
 
     // 4. Verify NO assignment
     const stateRes = await fetch(`${API_URL}/api/state`);
-    const state = await stateRes.json();
-    const updatedTask = state.tasks.find(t => t.id === task.id);
+    const state = await stateRes.json() as State;
+    const updatedTask = state.tasks.find((t: Task) => t.id === task.id);
 
+    assert.ok(updatedTask, 'Task should exist');
     assert.equal(updatedTask.assignedTo, null, 'Task should NOT be assigned when orchestration is disabled');
     assert.equal(updatedTask.lane, 'backlog');
   });
@@ -151,7 +153,7 @@ describe('Orchestration API', async () => {
         priority: 'media'
       })
     });
-    const { task } = await taskRes.json();
+    const { task } = await taskRes.json() as { task: Task };
 
     // 3. Call manual trigger
     const runRes = await fetch(`${API_URL}/api/orchestrator/run`, {
@@ -164,9 +166,10 @@ describe('Orchestration API', async () => {
 
     // 4. Verify assignment immediately
     const stateRes = await fetch(`${API_URL}/api/state`);
-    const state = await stateRes.json();
-    const updatedTask = state.tasks.find(t => t.id === task.id);
+    const state = await stateRes.json() as State;
+    const updatedTask = state.tasks.find((t: Task) => t.id === task.id);
 
+    assert.ok(updatedTask, 'Task should exist');
     assert.ok(
       updatedTask.assignedTo ||
       updatedTask.lane === 'done' ||

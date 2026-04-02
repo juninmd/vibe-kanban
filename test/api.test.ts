@@ -1,15 +1,16 @@
 import { test, describe, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { spawn, ChildProcess } from 'node:child_process';
 import { setTimeout } from 'timers/promises';
 import { existsSync, rmSync } from 'node:fs';
+import { State, Task, Agent } from '../src/types.js';
 
 const API_URL = 'http://localhost:5174';
 
 describe('Vibe Kanban API', async () => {
-  let serverProcess;
+  let serverProcess: ChildProcess;
 
-  async function waitForServer() {
+  async function waitForServer(): Promise<boolean> {
     for (let attempts = 0; attempts < 30; attempts++) {
       try {
         const res = await fetch(`${API_URL}/api/state`);
@@ -48,7 +49,7 @@ describe('Vibe Kanban API', async () => {
   test('GET /api/state returns valid initial state', async () => {
     const res = await fetch(`${API_URL}/api/state`);
     assert.equal(res.status, 200);
-    const data = await res.json();
+    const data = await res.json() as State;
 
     assert.ok(Array.isArray(data.tasks));
     assert.ok(Array.isArray(data.agents));
@@ -69,11 +70,11 @@ describe('Vibe Kanban API', async () => {
     });
 
     assert.equal(res.status, 201);
-    const data = await res.json();
+    const data = await res.json() as { task: Task };
     assert.equal(data.task.title, 'Test Task');
     assert.equal(data.task.lane, 'backlog');
 
-    const state = await (await fetch(`${API_URL}/api/state`)).json();
+    const state = await (await fetch(`${API_URL}/api/state`)).json() as State;
     assert.equal(state.tasks.length, 1);
     assert.equal(state.tasks[0].githubRepo, 'acme/vibe');
   });
@@ -86,24 +87,26 @@ describe('Vibe Kanban API', async () => {
       body: JSON.stringify({ role: 'Performance', category: 'performance', tool: 'copilot', model: 'default' })
     });
     const agentsRes = await fetch(`${API_URL}/api/state`);
-    const state = await agentsRes.json();
+    const state = await agentsRes.json() as State;
     const perfAgent = state.agents.find(a => a.category === 'performance');
+
+    assert.ok(perfAgent, 'Performance agent should exist');
 
     const taskRes = await fetch(`${API_URL}/api/tasks`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ title: 'Perf Task', category: 'performance' })
     });
-    const { task } = await taskRes.json();
+    const { task } = await taskRes.json() as { task: Task };
 
     const assignRes = await fetch(`${API_URL}/api/assign`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ taskId: task.id, agentId: perfAgent.id })
+      body: JSON.stringify({ taskId: task.id, agentId: perfAgent!.id })
     });
 
     assert.equal(assignRes.status, 200);
-    const payload = await assignRes.json();
+    const payload = await assignRes.json() as { task: Task, agent: Agent };
     assert.equal(payload.task.lane, 'in_progress');
     assert.ok(payload.task.assignedTo);
     assert.equal(payload.agent.status, 'working');
@@ -115,7 +118,7 @@ describe('Vibe Kanban API', async () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ title: 'Roadmap task', category: 'roadmap' })
     });
-    const { task } = await taskRes.json();
+    const { task } = await taskRes.json() as { task: Task };
 
     const moveRes = await fetch(`${API_URL}/api/move`, {
       method: 'POST',
@@ -124,7 +127,7 @@ describe('Vibe Kanban API', async () => {
     });
 
     assert.equal(moveRes.status, 200);
-    const moved = await moveRes.json();
+    const moved = await moveRes.json() as { task: Task };
     assert.equal(moved.task.lane, 'review');
   });
 
@@ -139,7 +142,7 @@ describe('Vibe Kanban API', async () => {
     assert.equal(res.status, 200);
 
     const stateRes = await fetch(`${API_URL}/api/state`);
-    const state = await stateRes.json();
+    const state = await stateRes.json() as State;
     assert.equal(state.tasks.length, 0);
   });
 
@@ -151,7 +154,7 @@ describe('Vibe Kanban API', async () => {
     });
 
     assert.equal(res.status, 200);
-    const data = await res.json();
+    const data = await res.json() as { cloneDir: string };
     const expectedPath = 'test-clones'.replace(/\\/g, '/') + '/';
     const actualPath = data.cloneDir.replace(/\\/g, '/');
     assert.equal(actualPath, expectedPath);
@@ -166,8 +169,10 @@ describe('Vibe Kanban API', async () => {
       body: JSON.stringify({ role: 'Product Manager', category: 'roadmap', tool: 'openai', model: 'default' })
     });
     const agentsRes = await fetch(`${API_URL}/api/state`);
-    const state = await agentsRes.json();
+    const state = await agentsRes.json() as State;
     const pmAgent = state.agents.find(a => a.category === 'roadmap');
+
+    assert.ok(pmAgent, 'PM Agent should exist');
 
     // 1. Create task
     const taskRes = await fetch(`${API_URL}/api/tasks`, {
@@ -175,17 +180,17 @@ describe('Vibe Kanban API', async () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ title: 'Task to assign', source: 'test', category: 'roadmap' })
     });
-    const taskData = await taskRes.json();
+    const taskData = await taskRes.json() as { task: Task };
     const taskId = taskData.task.id;
 
     // 2. Assign task
     const assignRes = await fetch(`${API_URL}/api/assign`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ taskId, agentId: pmAgent.id })
+      body: JSON.stringify({ taskId, agentId: pmAgent!.id })
     });
     assert.strictEqual(assignRes.status, 200);
-    const assignData = await assignRes.json();
+    const assignData = await assignRes.json() as { task: Task, agent: Agent };
     assert.strictEqual(assignData.task.assignedTo, assignData.agent.id);
     assert.strictEqual(assignData.task.lane, 'in_progress');
   });
@@ -204,7 +209,7 @@ describe('Vibe Kanban API', async () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ title: 'Task Done', source: 'test', category: 'roadmap' })
     });
-    const taskData = await taskRes.json();
+    const taskData = await taskRes.json() as { task: Task };
     await fetch(`${API_URL}/api/move`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -219,7 +224,7 @@ describe('Vibe Kanban API', async () => {
 
     // 4. Verify state
     const stateRes = await fetch(`${API_URL}/api/state`);
-    const state = await stateRes.json();
+    const state = await stateRes.json() as State;
     const backlogTask = state.tasks.find(t => t.title === 'Task Backlog');
     const doneTask = state.tasks.find(t => t.title === 'Task Done');
 
@@ -237,7 +242,7 @@ describe('Vibe Kanban API', async () => {
   test('GET /api/tooling/landscape returns tooling and vcs insights', async () => {
     const res = await fetch(`${API_URL}/api/tooling/landscape`);
     assert.equal(res.status, 200);
-    const data = await res.json();
+    const data = await res.json() as any;
 
     assert.equal(typeof data.detectedAt, 'string');
     assert.ok(Array.isArray(data.tools));

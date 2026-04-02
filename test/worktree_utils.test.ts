@@ -1,6 +1,6 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeGithubRepo, getGithubRepoName, buildGithubRemoteUrl } from '../dist/utils/worktreeUtils.js';
+import { normalizeGithubRepo, getGithubRepoName, buildGithubRemoteUrl } from '../src/utils/worktreeUtils.js';
 
 describe('worktreeUtils', () => {
   test('normalizes GitHub URLs and preserves repo naming', () => {
