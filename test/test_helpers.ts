@@ -23,10 +23,15 @@ export interface FetchOptions extends Omit<RequestInit, 'body'> {
 
 export async function fetchJson<T = any>(url: string, options: FetchOptions = {}): Promise<T> {
     try {
+        let bodyPayload: string | undefined;
+        if (options.body) {
+            bodyPayload = typeof options.body === 'string' ? options.body : JSON.stringify(options.body);
+        }
+
         const res = await fetch(url, {
             method: options.method || 'GET',
             headers: options.headers || {},
-            body: options.body ? (typeof options.body === 'string' ? options.body : JSON.stringify(options.body)) : undefined
+            body: bodyPayload
         });
         const text = await res.text();
         return text ? JSON.parse(text) : {} as T;

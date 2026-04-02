@@ -12,7 +12,7 @@ async function run(): Promise<void> {
     for (let i = 0; i < 5; i++) {
         await wait(1000);
         const state: State = await fetchJson(`${API_URL}/api/state`);
-        const task = state.tasks.find((t: Task) => taskRes.task && t.id === taskRes.task.id);
+        const task = state.tasks.find((t: Task) => t.id === taskRes.task?.id);
         if (task && task.assignedTo) {
             console.log('Assigned!');
             return;

@@ -44,13 +44,43 @@ describe('OpenCodeDriver Integration', () => {
     if (fs.existsSync(testDir)) fs.rmSync(testDir, { recursive: true, force: true });
   });
 
-  function createTestCtx(logsArr: string[], resolveCb: (value: unknown) => void, rejectCb: (reason?: any) => void): DriverContext {
+  function createTestCtx(logsArr: string[], resolveCb: (value: unknown) => void, rejectCb: (reason?: Error) => void): DriverContext {
     return {
       onLog: (id: number, msg: string) => { logsArr.push(msg); },
       onComplete: () => { resolveCb(undefined); },
       onBugFound: (id: number, desc: string) => { rejectCb(new Error(desc)); },
       onInterrupt: () => {},
       memory: { get: () => null, set: () => {}, getAll: () => ({}), clear: () => {} }
+    };
+  }
+
+  function createMockTask(id: number, title: string, assignedTo: string, workDir?: string): Task {
+    return {
+      id,
+      title,
+      source: 'test',
+      category: 'feature',
+      priority: 'media',
+      lane: 'in_progress',
+      assignedTo,
+      interrupted: false,
+      logs: [],
+      workDir,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
+  }
+
+  function createMockAgent(id: string, role: string, model: string, assignedTask: number): Agent {
+    return {
+      id,
+      role,
+      model,
+      category: 'test',
+      status: 'working',
+      assignedTask,
+      tool: 'opencode',
+      terminalId: `term-${id}`
     };
   }
 
@@ -78,31 +108,8 @@ describe('OpenCodeDriver Integration', () => {
     const workDir = path.join(testDir, 'custom-workdir');
     fs.mkdirSync(workDir, { recursive: true });
 
-    const task: Task = {
-      id: 101,
-      title: 'Create a simple hello world function',
-      source: 'test',
-      category: 'feature',
-      priority: 'media',
-      lane: 'in_progress',
-      assignedTo: 'agent-opencode',
-      interrupted: false,
-      logs: [],
-      workDir,
-      createdAt: Date.now(),
-      updatedAt: Date.now()
-    };
-
-    const agent: Agent = {
-      id: 'agent-opencode',
-      role: 'Developer',
-      model: 'default',
-      category: 'test',
-      status: 'working',
-      assignedTask: 101,
-      tool: 'opencode',
-      terminalId: 'term-1'
-    };
+    const task = createMockTask(101, 'Create a simple hello world function', 'agent-opencode', workDir);
+    const agent = createMockAgent('agent-opencode', 'Developer', 'default', 101);
 
     await new Promise((resolve, reject) => {
       const ctx = createTestCtx(logs, resolve, reject);
@@ -121,30 +128,8 @@ describe('OpenCodeDriver Integration', () => {
     const logs: string[] = [];
     const driver = new OpenCodeDriver(() => testDir);
 
-    const task: Task = {
-      id: 102,
-      title: 'Test with custom model',
-      source: 'test',
-      category: 'test',
-      priority: 'media',
-      lane: 'in_progress',
-      assignedTo: 'agent-ollama',
-      interrupted: false,
-      logs: [],
-      createdAt: Date.now(),
-      updatedAt: Date.now()
-    };
-
-    const agent: Agent = {
-      id: 'agent-ollama',
-      role: 'OllamaDev',
-      model: 'ollama:llama3',
-      category: 'test',
-      status: 'working',
-      assignedTask: 102,
-      tool: 'opencode',
-      terminalId: 'term-2'
-    };
+    const task = createMockTask(102, 'Test with custom model', 'agent-ollama');
+    const agent = createMockAgent('agent-ollama', 'OllamaDev', 'ollama:llama3', 102);
 
     await new Promise((resolve, reject) => {
       const ctx = createTestCtx(logs, resolve, reject);
@@ -158,29 +143,8 @@ describe('OpenCodeDriver Integration', () => {
 
   test('buildOpenCodeArgs skips bare model names that OpenCode cannot resolve', () => {
     const args = buildOpenCodeArgs(
-      {
-        id: 103,
-        title: 'Real CLI compatibility check',
-        source: 'test',
-        category: 'feature',
-        priority: 'media',
-        lane: 'backlog',
-        assignedTo: null,
-        interrupted: false,
-        logs: [],
-        createdAt: Date.now(),
-        updatedAt: Date.now()
-      },
-      {
-        id: 'agent-opencode',
-        role: 'Developer',
-        model: 'gpt-4o',
-        category: 'feature',
-        status: 'idle',
-        assignedTask: null,
-        tool: 'opencode',
-        terminalId: 'term-3'
-      },
+      createMockTask(103, 'Real CLI compatibility check', ''),
+      createMockAgent('agent-opencode', 'Developer', 'gpt-4o', 103),
       'Create hello.js'
     );
 
