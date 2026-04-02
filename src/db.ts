@@ -69,24 +69,24 @@ try {
 export const DB = {
   // Tasks
   getTasks(): Task[] {
-    const rows = db.prepare("SELECT * FROM tasks ORDER BY createdAt DESC").all();
-    return rows.map((row: any) => ({
+    const rows = db.prepare("SELECT * FROM tasks ORDER BY createdAt DESC").all() as Record<string, any>[];
+    return rows.map((row) => ({
       ...row,
       interrupted: !!row.interrupted,
       logs: JSON.parse(row.logs),
       dependencies: JSON.parse(row.dependencies || '[]')
-    }));
+    })) as Task[];
   },
 
   getTask(id: number): Task | undefined {
-    const row = db.prepare("SELECT * FROM tasks WHERE id = ?").get(id) as any;
+    const row = db.prepare("SELECT * FROM tasks WHERE id = ?").get(id) as Record<string, any> | undefined;
     if (!row) return undefined;
     return {
       ...row,
       interrupted: !!row.interrupted,
       logs: JSON.parse(row.logs),
       dependencies: JSON.parse(row.dependencies || '[]')
-    };
+    } as Task;
   },
 
   createTask(task: Partial<Task>): Task {

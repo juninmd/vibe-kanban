@@ -502,15 +502,14 @@ function autoAssign() {
       idleAgentsByCategory.set(agent.category, bucket);
     });
 
+  const doneTaskIds = new Set(allTasks.filter(t => t.lane === "done").map(t => t.id));
+
   for (const task of backlogTasks) {
     if (availableSlots <= 0) break;
 
     // Check dependencies (Lineage Context)
     if (task.dependencies && task.dependencies.length > 0) {
-      const unfulfilled = task.dependencies.some(depId => {
-        const depTask = allTasks.find(t => t.id === depId);
-        return !depTask || depTask.lane !== "done";
-      });
+      const unfulfilled = task.dependencies.some(depId => !doneTaskIds.has(depId));
       if (unfulfilled) {
         continue; // Skip this task as dependencies are not met yet
       }
@@ -898,8 +897,8 @@ Return ONLY a JSON array with this structure:
             .map((idx: number) => createdTasks[idx].id);
 
           if (dbDeps.length > 0) {
-            DB.updateTask(createdTasks[i].id, { dependencies: dbDeps });
             createdTasks[i].dependencies = dbDeps; // Update local reference too
+            DB.updateTask(createdTasks[i].id, createdTasks[i]);
           }
         }
       }
