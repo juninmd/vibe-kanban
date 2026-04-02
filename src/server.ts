@@ -352,6 +352,15 @@ const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? dri
         });
       };
 
+      // Compute sibling context
+      if (updatedTask.groupId) {
+        const allTasks = DB.getTasks();
+        const siblingTasks = allTasks.filter(t => t.groupId === updatedTask.groupId && t.id !== updatedTask.id);
+        if (siblingTasks.length > 0) {
+          updatedTask.siblingContext = siblingTasks.map(t => `- Task #${t.id}: ${t.title} [Status: ${t.lane}]`).join("\\n");
+        }
+      }
+
       executeDriver.executeTask(updatedTask, executionAgent, {
         onLog: (tid, msg) => {
       const t = getTask(tid);
@@ -725,7 +734,7 @@ const server = createServer(async (req, res) => {
     if (process.env.NODE_ENV !== "test") {
       const ip = req.socket.remoteAddress || "unknown";
       const current = apiRateLimits.get(ip) || 0;
-      if (current >= 1000) {
+      if (current >= 100) {
         return jsonResponse(res, 429, { error: "Too many requests" });
       }
       apiRateLimits.set(ip, current + 1);
@@ -848,6 +857,10 @@ Return ONLY a JSON array with this structure:
     "description": "Full markdown description with acceptance criteria",
     "category": "feature",
     "priority": "alta",
+    "acceptanceCriteria": ["Criterion 1", "Criterion 2"],
+    "relevantFiles": ["src/main.ts"],
+    "dependsOn": ["Task title or description of dependency"],
+    "verifyCommand": "npm test",
     "dependencies": [0] // Optional array of zero-based index of sibling tasks that must be completed first
   }
 ]`;
@@ -869,8 +882,16 @@ Return ONLY a JSON array with this structure:
     const createdTasks: Task[] = [];
     if (Array.isArray(generatedTasks)) {
       // First pass: Create tasks
+      const groupId = `group-${Date.now()}`;
       for (const t of generatedTasks) {
         if (t.title && t.category) {
+          const fullDescription = `${t.description || ""}
+
+${t.acceptanceCriteria && t.acceptanceCriteria.length ? `### Acceptance Criteria:\n${t.acceptanceCriteria.map((c: string) => `- [ ] ${c}`).join("\n")}` : ""}
+${t.relevantFiles && t.relevantFiles.length ? `### Relevant Files:\n${t.relevantFiles.map((f: string) => `- ${f}`).join("\n")}` : ""}
+${t.dependsOn && t.dependsOn.length ? `### Depends On:\n${t.dependsOn.map((d: string) => `- ${d}`).join("\n")}` : ""}
+${t.verifyCommand ? `### Verify Command:\n\`${t.verifyCommand}\`` : ""}`;
+
           const task = DB.createTask({
             title: t.title,
             source: "demand_intake",
@@ -880,9 +901,10 @@ Return ONLY a JSON array with this structure:
             assignedTo: null,
             interrupted: false,
             logs: [],
-            description: t.description,
+            description: fullDescription,
             githubRepo: typeof body.repoUrl === "string" ? body.repoUrl : undefined,
             dependencies: [], // Initialize empty
+            groupId: groupId
           });
           createdTasks.push(task);
         }
