@@ -819,32 +819,57 @@ const server = createServer(async (req, res) => {
     // call LLM to decompose demand into issues
     const prompt = `You are a project planning agent for "Vibe Kanban 3D".
 Your job is to decompose a high-level goal into atomic, implementable issues.
+
+Always respond in the same language the user wrote their goal in.
+
+## Goal
+
 Goal Title: ${body.title}
 Goal Description: ${body.description || "N/A"}
 Repository URL: ${body.repoUrl || "N/A"}
 
-Decompose this goal into 2-8 atomic issues that can each be completed in a single AI coding session.
-Categories: "roadmap", "security", "performance", "feature", "test", "bug".
-Priorities: "alta", "media", "baixa".
+## Instructions
 
-Return ONLY a JSON array with this structure:
-[
-  {
-    "title": "Short descriptive title",
-    "description": "Full markdown description with acceptance criteria",
-    "category": "feature",
-    "priority": "alta"
-  }
-]`;
+Analyze the goal and the codebase context above. Decompose the goal into **2-8 atomic issues** that can each be completed in a single AI coding session (under 1 hour of agent work).
+
+For each issue, provide:
+- **title**: Short, descriptive title (imperative: "Add X", "Fix Y", "Create Z")
+- **description**: Full markdown description with context, approach, and acceptance criteria.
+- **acceptanceCriteria**: Array of the checklist items as plain strings
+- **relevantFiles**: Array of file paths in the codebase that will be modified or created
+- **order**: Integer (1-based) — execution order based on dependencies
+- **dependsOn**: Array of order numbers this issue depends on (empty if independent)
+- **verifyCommand**: A shell command that validates the issue is complete (e.g., \`npm test\`, \`npx tsc --noEmit\`, \`curl localhost:3000/health\`)
+- **doneCriteria**: What success looks like when the verify command runs (e.g., "All tests pass", "Returns 200 OK")
+- **category**: "roadmap", "security", "performance", "feature", "test", or "bug".
+- **priority**: "alta", "media", or "baixa".
+
+## Rules
+
+1. Each issue MUST be self-contained and completable in a single session
+2. Each issue MUST have at least 2 acceptance criteria
+3. Each issue MUST reference specific file paths (existing or to be created)
+4. Issues MUST include test expectations in their acceptance criteria
+5. Order issues so dependencies come first (lower order = executes first)
+6. Use clear, specific titles — not vague ("Improve X" is bad, "Add rate limit middleware to /api/users" is good)
+7. Each issue SHOULD include a verifyCommand that can programmatically validate completion
+8. Output ONLY valid JSON — no markdown code fences, no explanation text
+
+## Output Format
+
+Respond with ONLY this JSON structure (no wrapping, no markdown):
+
+{"issues":[{"title":"...","description":"...","acceptanceCriteria":["..."],"relevantFiles":["..."],"order":1,"dependsOn":[],"verifyCommand":"...","doneCriteria":"...","category":"feature","priority":"alta"}]}`;
 
     let generatedTasks: any[] = [];
     try {
       const content = await callLLM(prompt, "You generate JSON task arrays.");
       if (content) {
-        const startIdx = content.indexOf('[');
-        const endIdx = content.lastIndexOf(']');
+        const startIdx = content.indexOf('{');
+        const endIdx = content.lastIndexOf('}');
         if (startIdx !== -1 && endIdx !== -1) {
-          generatedTasks = JSON.parse(content.substring(startIdx, endIdx + 1));
+          const parsed = JSON.parse(content.substring(startIdx, endIdx + 1));
+          generatedTasks = parsed.issues || [];
         }
       }
     } catch (e) {
@@ -855,6 +880,31 @@ Return ONLY a JSON array with this structure:
     if (Array.isArray(generatedTasks)) {
       for (const t of generatedTasks) {
         if (t.title && t.category) {
+          let enrichedDescription = t.description || "";
+
+          if (Array.isArray(t.acceptanceCriteria) && t.acceptanceCriteria.length > 0) {
+            enrichedDescription += "\n\n### Acceptance Criteria\n";
+            t.acceptanceCriteria.forEach((criteria: string) => {
+              enrichedDescription += `- [ ] ${criteria}\n`;
+            });
+          }
+
+          if (Array.isArray(t.relevantFiles) && t.relevantFiles.length > 0) {
+            enrichedDescription += `\n**Relevant Files:** ${t.relevantFiles.join(", ")}\n`;
+          }
+
+          if (Array.isArray(t.dependsOn) && t.dependsOn.length > 0) {
+            enrichedDescription += `\n**Depends On:** ${t.dependsOn.join(", ")}\n`;
+          }
+
+          if (t.verifyCommand) {
+            enrichedDescription += `\n**Verify Command:** \`${t.verifyCommand}\`\n`;
+          }
+
+          if (t.doneCriteria) {
+            enrichedDescription += `\n**Done Criteria:** ${t.doneCriteria}\n`;
+          }
+
           const task = DB.createTask({
             title: t.title,
             source: "demand_intake",
@@ -864,7 +914,7 @@ Return ONLY a JSON array with this structure:
             assignedTo: null,
             interrupted: false,
             logs: [],
-            description: t.description,
+            description: enrichedDescription,
             githubRepo: typeof body.repoUrl === "string" ? body.repoUrl : undefined,
           });
           createdTasks.push(task);
