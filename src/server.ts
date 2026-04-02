@@ -989,7 +989,7 @@ Return ONLY a JSON array with this structure:
     }
 
     const bin = process.platform === "win32" ? "explorer" : (process.platform === "darwin" ? "open" : "xdg-open");
-    execa(bin, [task.workDir]).catch(console.error);
+execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${err.message}`));
     addEvent(`Abrindo pasta da tarefa #${taskId}: ${task.workDir}`);
     return jsonResponse(res, 200, { ok: true });
   }
