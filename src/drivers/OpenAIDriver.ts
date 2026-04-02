@@ -31,6 +31,9 @@ Description: ${task.description || "No description provided."}
 Category: ${task.category}
 Priority: ${task.priority}
 
+${task.siblingContext ? `RELATED SIBLING TASKS CONTEXT:\n${task.siblingContext}\n` : ""}
+${task.lastError ? `PREVIOUS ATTEMPT FAILED WITH ERROR:\n${task.lastError}\nEnsure you fix the issue and do not repeat the same mistake.\n` : ""}
+
 ${projectContext}
 
 You are an autonomous coding agent. Your goal is to complete the task by writing code.

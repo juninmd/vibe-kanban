@@ -56,6 +56,7 @@ TITLE: ${task.title}
 DESCRIPTION: ${task.description || "No description provided."}
 CATEGORY: ${task.category}
 PRIORITY: ${task.priority}
+${task.siblingContext ? `RELATED SIBLING TASKS CONTEXT:\n${task.siblingContext}\n` : ""}
 ${guardrails}
 RULES:
 1. TREAT THE FILESYSTEM AS READ-ONLY: do NOT modify, create or delete files.

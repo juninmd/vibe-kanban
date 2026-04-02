@@ -9,12 +9,21 @@ export class ClaudeDriver implements LLMDriver {
 
    async executeTask(task: Task, agent: Agent, ctx: DriverContext): Promise<void> {
       const cmd = "claude";
-      const args = ["prompt", task.title, "--model", agent.model];
+
+      let fullPrompt = `Task: ${task.title}\nDescription: ${task.description || ""}`;
+      if (task.siblingContext) {
+          fullPrompt += `\nRELATED SIBLING TASKS CONTEXT:\n${task.siblingContext}`;
+      }
+      if (task.lastError) {
+          fullPrompt += `\nPREVIOUS ATTEMPT FAILED WITH ERROR:\n${task.lastError}\nEnsure you fix the issue and do not repeat the same mistake.`;
+      }
+
+      const args = ["prompt", fullPrompt, "--model", agent.model];
       logDebugBlock(
          ctx,
          task.id,
          "AGENT PROMPT",
-         `TITLE: ${task.title}\nDESCRIPTION: ${task.description || "No description provided."}`,
+         fullPrompt,
       );
       logDebugCommand(ctx, task.id, cmd, ["prompt", "<prompt>", "--model", agent.model]);
       ctx.onLog(task.id, `Running: ${cmd} ${args.join(" ")}`);

@@ -14,7 +14,14 @@ export class CopilotDriver implements LLMDriver {
       }
 
       const cmd = "gh";
-      const promptContext = `[Role: ${agent.role}] ${task.title}`;
+      let promptContext = `[Role: ${agent.role}] ${task.title}`;
+      if (task.siblingContext) {
+         promptContext += `\nRELATED SIBLING TASKS CONTEXT:\n${task.siblingContext}`;
+      }
+      if (task.lastError) {
+         promptContext += `\nPREVIOUS ATTEMPT FAILED WITH ERROR:\n${task.lastError}`;
+      }
+
       const args = ["copilot", "suggest", promptContext, "--target", "nodejs"];
       logDebugBlock(ctx, task.id, "AGENT PROMPT", promptContext);
       logDebugCommand(ctx, task.id, cmd, ["copilot", "suggest", "<prompt>", "--target", "nodejs"]);

@@ -355,9 +355,9 @@ const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? dri
       // Compute sibling context
       if (updatedTask.groupId) {
         const allTasks = DB.getTasks();
-        const siblingTasks = allTasks.filter(t => t.groupId === updatedTask.groupId && t.id !== updatedTask.id);
+        const siblingTasks = allTasks.filter(sibling => sibling.groupId === updatedTask.groupId && sibling.id !== updatedTask.id);
         if (siblingTasks.length > 0) {
-          updatedTask.siblingContext = siblingTasks.map(t => `- Task #${t.id}: ${t.title} [Status: ${t.lane}]`).join("\n");
+          updatedTask.siblingContext = siblingTasks.map(sibling => `- Task #${sibling.id}: ${sibling.title} [Status: ${sibling.lane}]`).join("\n");
         }
       }
 
@@ -734,7 +734,7 @@ const server = createServer(async (req, res) => {
     if (process.env.NODE_ENV !== "test") {
       const ip = req.socket.remoteAddress || "unknown";
       const current = apiRateLimits.get(ip) || 0;
-      if (current >= 100) {
+      if (current >= 1000) {
         return jsonResponse(res, 429, { error: "Too many requests" });
       }
       apiRateLimits.set(ip, current + 1);
@@ -882,26 +882,34 @@ Return ONLY a JSON array with this structure:
     const createdTasks: Task[] = [];
     if (Array.isArray(generatedTasks)) {
       // First pass: Create tasks
-      const groupId = `group-${crypto.randomUUID()}`;
-      for (const t of generatedTasks) {
-        if (t.title && t.category) {
-          const fullDescription = `${t.description || ""}
+      const groupId = `group-${Date.now()}`;
 
-${t.acceptanceCriteria && t.acceptanceCriteria.length ? `### Acceptance Criteria:\n${t.acceptanceCriteria.map((c: string) => `- [ ] ${c}`).join("\n")}` : ""}
-${t.relevantFiles && t.relevantFiles.length ? `### Relevant Files:\n${t.relevantFiles.map((f: string) => `- ${f}`).join("\n")}` : ""}
-${t.dependsOn && t.dependsOn.length ? `### Depends On:\n${t.dependsOn.map((d: string) => `- ${d}`).join("\n")}` : ""}
-${t.verifyCommand ? `### Verify Command:\n\`${t.verifyCommand}\`` : ""}`;
+      const formatList = (title: string, items: string[], prefix = "- ") => {
+        if (!items || items.length === 0) return "";
+        return `### ${title}:\n${items.map(item => `${prefix}${item}`).join("\n")}\n\n`;
+      };
+
+      for (const taskDef of generatedTasks) {
+        if (taskDef.title && taskDef.category) {
+          let fullDescription = `${taskDef.description || ""}\n\n`;
+          fullDescription += formatList("Acceptance Criteria", taskDef.acceptanceCriteria, "- [ ] ");
+          fullDescription += formatList("Relevant Files", taskDef.relevantFiles);
+          fullDescription += formatList("Depends On", taskDef.dependsOn);
+
+          if (taskDef.verifyCommand) {
+            fullDescription += `### Verify Command:\n\`${taskDef.verifyCommand}\`\n\n`;
+          }
 
           const task = DB.createTask({
-            title: t.title,
+            title: taskDef.title,
             source: "demand_intake",
-            category: t.category,
-            priority: t.priority || "media",
+            category: taskDef.category,
+            priority: taskDef.priority || "media",
             lane: "backlog",
             assignedTo: null,
             interrupted: false,
             logs: [],
-            description: fullDescription,
+            description: fullDescription.trim(),
             githubRepo: typeof body.repoUrl === "string" ? body.repoUrl : undefined,
             dependencies: [], // Initialize empty
             groupId: groupId

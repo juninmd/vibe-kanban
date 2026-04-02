@@ -82,6 +82,9 @@ DESCRIPTION: ${task.description || "No description provided."}
 CATEGORY: ${task.category}
 PRIORITY: ${task.priority}
 
+${task.siblingContext ? `RELATED SIBLING TASKS CONTEXT:\n${task.siblingContext}\n` : ""}
+${task.lastError ? `PREVIOUS ATTEMPT FAILED WITH ERROR:\n${task.lastError}\nEnsure you fix the issue and do not repeat the same mistake.\n` : ""}
+
 INSTRUCTIONS:
 1. Explore the codebase if necessary.
 2. Implement the requested changes.
