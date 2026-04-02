@@ -372,15 +372,19 @@ const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? dri
         const workDir = t.workDir || path.join(appConfig.cloneDir, `task-${t.id}`);
 
         // Proof of Work Validation (Lisa inspired)
-        addTerminalLine(t.assignedTo, tid, "system", `⚙️ Executando Proof of Work (npm test)...`);
-        try {
-            await execa("npm", ["test"], { cwd: workDir });
-            addTerminalLine(t.assignedTo, tid, "system", `✅ Proof of Work validado com sucesso!`);
-        } catch (powError: any) {
-            const errorOutput = powError.stderr || powError.stdout || powError.message;
-            addTerminalLine(t.assignedTo, tid, "stderr", `❌ Falha no Proof of Work:\n${errorOutput}`);
-            handleBugFound(tid, `Proof of Work failed: ${errorOutput}`);
-            return; // Halt completion
+        const powCommands = (appConfig as any).proof_of_work?.commands || [{ name: "test", run: "npm test" }];
+
+        for (const cmd of powCommands) {
+            addTerminalLine(t.assignedTo, tid, "system", `⚙️ Executando Proof of Work (${cmd.name || cmd.run})...`);
+            try {
+                await execa(cmd.run, { cwd: workDir, shell: true });
+                addTerminalLine(t.assignedTo, tid, "system", `✅ Proof of Work (${cmd.name || cmd.run}) validado com sucesso!`);
+            } catch (powError: any) {
+                const errorOutput = powError.stderr || powError.stdout || powError.message;
+                addTerminalLine(t.assignedTo, tid, "stderr", `❌ Falha no Proof of Work (${cmd.name || cmd.run}):\n${errorOutput}`);
+                handleBugFound(tid, `Proof of Work (${cmd.name || cmd.run}) failed: ${errorOutput}`);
+                return; // Halt completion
+            }
         }
 
         // Spec Compliance Validation (Lisa inspired)
@@ -498,8 +502,18 @@ function autoAssign() {
       idleAgentsByCategory.set(agent.category, bucket);
     });
 
+  const doneTaskIds = new Set(allTasks.filter(t => t.lane === "done").map(t => t.id));
+
   for (const task of backlogTasks) {
     if (availableSlots <= 0) break;
+
+    // Check dependencies (Lineage Context)
+    if (task.dependencies && task.dependencies.length > 0) {
+      const unfulfilled = task.dependencies.some(depId => !doneTaskIds.has(depId));
+      if (unfulfilled) {
+        continue; // Skip this task as dependencies are not met yet
+      }
+    }
 
     // 1. If manually assigned:
     if (task.assignedTo) {
@@ -833,7 +847,8 @@ Return ONLY a JSON array with this structure:
     "title": "Short descriptive title",
     "description": "Full markdown description with acceptance criteria",
     "category": "feature",
-    "priority": "alta"
+    "priority": "alta",
+    "dependencies": [0] // Optional array of zero-based index of sibling tasks that must be completed first
   }
 ]`;
 
@@ -853,6 +868,7 @@ Return ONLY a JSON array with this structure:
 
     const createdTasks: Task[] = [];
     if (Array.isArray(generatedTasks)) {
+      // First pass: Create tasks
       for (const t of generatedTasks) {
         if (t.title && t.category) {
           const task = DB.createTask({
@@ -866,8 +882,24 @@ Return ONLY a JSON array with this structure:
             logs: [],
             description: t.description,
             githubRepo: typeof body.repoUrl === "string" ? body.repoUrl : undefined,
+            dependencies: [], // Initialize empty
           });
           createdTasks.push(task);
+        }
+      }
+
+      // Second pass: Map local index dependencies to database IDs
+      for (let i = 0; i < generatedTasks.length; i++) {
+        const localDeps = generatedTasks[i].dependencies;
+        if (Array.isArray(localDeps) && localDeps.length > 0 && i < createdTasks.length) {
+          const dbDeps = localDeps
+            .filter((idx: any) => typeof idx === 'number' && idx >= 0 && idx < createdTasks.length)
+            .map((idx: number) => createdTasks[idx].id);
+
+          if (dbDeps.length > 0) {
+            createdTasks[i].dependencies = dbDeps; // Update local reference too
+            DB.updateTask(createdTasks[i].id, createdTasks[i]);
+          }
         }
       }
     }

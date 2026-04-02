@@ -20,7 +20,8 @@ db.exec(`
     agentType TEXT,
     createdAt INTEGER NOT NULL,
     updatedAt INTEGER NOT NULL,
-    workDir TEXT
+    workDir TEXT,
+    dependencies TEXT DEFAULT '[]'
   );
 
   CREATE TABLE IF NOT EXISTS agents (
@@ -60,32 +61,39 @@ try {
   db.exec(`ALTER TABLE tasks ADD COLUMN baseRepoDir TEXT`);
 } catch (e) { /* column already exists */ }
 
+// Migration: add dependencies column if missing
+try {
+  db.exec(`ALTER TABLE tasks ADD COLUMN dependencies TEXT DEFAULT '[]'`);
+} catch (e) { /* column already exists */ }
+
 export const DB = {
   // Tasks
   getTasks(): Task[] {
-    const rows = db.prepare("SELECT * FROM tasks ORDER BY createdAt DESC").all();
-    return rows.map((row: any) => ({
+    const rows = db.prepare("SELECT * FROM tasks ORDER BY createdAt DESC").all() as Record<string, any>[];
+    return rows.map((row) => ({
       ...row,
       interrupted: !!row.interrupted,
-      logs: JSON.parse(row.logs)
-    }));
+      logs: JSON.parse(row.logs),
+      dependencies: JSON.parse(row.dependencies || '[]')
+    })) as Task[];
   },
 
   getTask(id: number): Task | undefined {
-    const row = db.prepare("SELECT * FROM tasks WHERE id = ?").get(id) as any;
+    const row = db.prepare("SELECT * FROM tasks WHERE id = ?").get(id) as Record<string, any> | undefined;
     if (!row) return undefined;
     return {
       ...row,
       interrupted: !!row.interrupted,
-      logs: JSON.parse(row.logs)
-    };
+      logs: JSON.parse(row.logs),
+      dependencies: JSON.parse(row.dependencies || '[]')
+    } as Task;
   },
 
   createTask(task: Partial<Task>): Task {
     const now = Date.now();
     const result = db.prepare(`
-      INSERT INTO tasks (title, source, category, priority, lane, assignedTo, interrupted, logs, githubRepo, description, agentType, createdAt, updatedAt, workDir, baseRepoDir)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO tasks (title, source, category, priority, lane, assignedTo, interrupted, logs, githubRepo, description, agentType, createdAt, updatedAt, workDir, baseRepoDir, dependencies)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       task.title,
       task.source || "user",
@@ -101,7 +109,8 @@ export const DB = {
       task.createdAt || now,
       task.updatedAt || now,
       task.workDir || null,
-      task.baseRepoDir || null
+      task.baseRepoDir || null,
+      JSON.stringify(task.dependencies || [])
     );
     return this.getTask(Number(result.lastInsertRowid))!;
   },
@@ -115,7 +124,7 @@ export const DB = {
       UPDATE tasks SET
         title = ?, source = ?, category = ?, priority = ?, lane = ?,
         assignedTo = ?, interrupted = ?, logs = ?, githubRepo = ?,
-        description = ?, agentType = ?, updatedAt = ?, workDir = ?, baseRepoDir = ?
+        description = ?, agentType = ?, updatedAt = ?, workDir = ?, baseRepoDir = ?, dependencies = ?
       WHERE id = ?
     `).run(
       updatedTask.title,
@@ -132,6 +141,7 @@ export const DB = {
       updatedTask.updatedAt,
       updatedTask.workDir || null,
       updatedTask.baseRepoDir || null,
+      JSON.stringify(updatedTask.dependencies || []),
       id
     );
   },
