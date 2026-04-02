@@ -1,7 +1,7 @@
 # 🗺️ ROADMAP.md - Vibe Kanban Evolution
 
 ## 🌟 Vision & Goals
-To provide a modern, high-performance Kanban board with 3D visualization, CLI integration, and built-in automation to supercharge engineering team productivity. Our goal is to bridge the gap between developer-friendly CLI tooling and immersive, at-a-glance 3D project management, all backed by reliable SQLite persistence and AI-driven automation.
+To provide a modern, high-performance Kanban board with 3D visualization, CLI integration, and built-in orchestration to supercharge engineering team productivity. Our goal is to bridge the gap between developer-friendly CLI tooling and immersive, at-a-glance 3D project management, all backed by reliable SQLite persistence and AI-driven automation.
 
 ## 📊 Current Status
 **Phase: Stabilization & UI Refinement (Phase 3)**
