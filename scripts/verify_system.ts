@@ -34,7 +34,7 @@ async function verifySystem() {
             await fetchJson(`${API_URL}/state`);
             console.log("Server is up!");
             break;
-        } catch (e) {
+        } catch (err: unknown) {
             await wait(1000);
             retries--;
         }
@@ -59,7 +59,7 @@ async function verifySystem() {
         "Novas Features"
     ];
 
-    const missing = requiredRoles.filter(role => !agents.find((a: Agent) => a.role === role));
+    const missing = requiredRoles.filter((role: string) => !agents.find((a: Agent) => a.role === role));
 
     if (missing.length > 0) {
         console.error("Missing required agents:", missing);
@@ -76,15 +76,15 @@ async function verifySystem() {
         priority: "media"
     };
 
-    let taskRes: { task?: Task };
+    let taskRes: { task?: Task } | undefined;
     try {
         taskRes = await fetchJson<{ task: Task }>(`${API_URL}/tasks`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(taskData)
         });
-    } catch (e) {
-        console.error("Failed to create task:", e);
+    } catch (err: unknown) {
+        console.error("Failed to create task:", err);
         process.exit(1);
     }
 
@@ -92,7 +92,8 @@ async function verifySystem() {
         console.error("Invalid task response:", taskRes);
         process.exit(1);
     }
-    console.log(`Task created: #${taskRes.task.id}`);
+    const createdTaskId = taskRes.task.id;
+    console.log(`Task created: #${createdTaskId}`);
 
     // Wait for assignment
     console.log("Waiting for assignment...");
@@ -101,14 +102,14 @@ async function verifySystem() {
         await wait(1000);
         try {
             const newState = await fetchJson<State>(`${API_URL}/state`);
-            const task = newState.tasks.find((t: Task) => taskRes.task && t.id === taskRes.task.id);
+            const task = newState.tasks.find((t: Task) => t.id === createdTaskId);
             if (task && (task.assignedTo || task.interrupted)) {
                 console.log(`Task assigned to agent (or attempted and interrupted).`);
                 assigned = true;
                 break;
             }
-        } catch (e) {
-            console.error("Error polling state:", e);
+        } catch (err: unknown) {
+            console.error("Error polling state:", err);
         }
     }
 
@@ -121,4 +122,7 @@ async function verifySystem() {
     process.exit(0);
 }
 
-verifySystem();
+verifySystem().catch((err: unknown) => {
+    console.error(err);
+    process.exit(1);
+});

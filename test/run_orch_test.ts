@@ -32,4 +32,8 @@ async function run(): Promise<void> {
     }
     console.log('Not assigned');
 }
-run();
+
+run().catch((err: unknown) => {
+    console.error(err);
+    process.exit(1);
+});

@@ -1,27 +1,14 @@
 import { test, describe, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, ChildProcess } from 'node:child_process';
-import { setTimeout } from 'timers/promises';
 import { existsSync, rmSync } from 'node:fs';
 import { State, Task, Agent } from '../src/types.js';
+import { waitForServer } from './test_helpers.js';
 
 const API_URL = 'http://localhost:5174';
 
 describe('Vibe Kanban API', async () => {
   let serverProcess: ChildProcess;
-
-  async function waitForServer(): Promise<boolean> {
-    for (let attempts = 0; attempts < 30; attempts++) {
-      try {
-        const res = await fetch(`${API_URL}/api/state`);
-        if (res.ok) return true;
-      } catch {
-        // retry
-      }
-      await setTimeout(300);
-    }
-    return false;
-  }
 
   before(async () => {
     serverProcess = spawn('node', ['dist/server.js'], {
@@ -29,7 +16,7 @@ describe('Vibe Kanban API', async () => {
       env: { ...process.env, PORT: '5174' }
     });
 
-    const ready = await waitForServer();
+    const ready = await waitForServer(API_URL);
     if (!ready) {
       serverProcess.kill();
       throw new Error('Server failed to start');
@@ -242,7 +229,7 @@ describe('Vibe Kanban API', async () => {
   test('GET /api/tooling/landscape returns tooling and vcs insights', async () => {
     const res = await fetch(`${API_URL}/api/tooling/landscape`);
     assert.equal(res.status, 200);
-    const data = await res.json() as any;
+    const data = await res.json() as { detectedAt: string; tools: unknown[]; vcsProviders: unknown[]; businessRecommendations: unknown[] };
 
     assert.equal(typeof data.detectedAt, 'string');
     assert.ok(Array.isArray(data.tools));
@@ -262,7 +249,7 @@ describe('Vibe Kanban API', async () => {
     });
 
     assert.equal(res.status, 200);
-    const data = await res.json();
+    const data = await res.json() as { demand: { provider: string }; businessRequirements: string[]; acceptanceCriteria: string[] };
     assert.equal(data.demand.provider, 'github');
     assert.ok(Array.isArray(data.businessRequirements));
     assert.ok(data.businessRequirements.length >= 3);

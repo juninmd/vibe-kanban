@@ -14,7 +14,7 @@ describe('toolingLandscape', () => {
     const toolIds = landscape.tools.map((tool) => tool.id);
     assert.ok(toolIds.includes('openai'));
 
-    const providers = landscape.vcsProviders.map((provider) => provider.provider);
+    const providers = landscape.vcsProviders.map((provider: { provider: string }) => provider.provider);
     assert.ok(providers.includes('github'));
     assert.ok(providers.includes('gitlab'));
   });
