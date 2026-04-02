@@ -357,7 +357,7 @@ const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? dri
         const allTasks = DB.getTasks();
         const siblingTasks = allTasks.filter(t => t.groupId === updatedTask.groupId && t.id !== updatedTask.id);
         if (siblingTasks.length > 0) {
-          updatedTask.siblingContext = siblingTasks.map(t => `- Task #${t.id}: ${t.title} [Status: ${t.lane}]`).join("\\n");
+          updatedTask.siblingContext = siblingTasks.map(t => `- Task #${t.id}: ${t.title} [Status: ${t.lane}]`).join("\n");
         }
       }
 
@@ -882,7 +882,7 @@ Return ONLY a JSON array with this structure:
     const createdTasks: Task[] = [];
     if (Array.isArray(generatedTasks)) {
       // First pass: Create tasks
-      const groupId = `group-${Date.now()}`;
+      const groupId = `group-${crypto.randomUUID()}`;
       for (const t of generatedTasks) {
         if (t.title && t.category) {
           const fullDescription = `${t.description || ""}
