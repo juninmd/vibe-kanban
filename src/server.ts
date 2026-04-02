@@ -834,7 +834,7 @@ Analyze the goal and the codebase context above. Decompose the goal into **2-8 a
 
 For each issue, provide:
 - **title**: Short, descriptive title (imperative: "Add X", "Fix Y", "Create Z")
-- **description**: Full markdown description with context, approach, and acceptance criteria.
+- **description**: Full markdown description with context and approach.
 - **acceptanceCriteria**: Array of the checklist items as plain strings
 - **relevantFiles**: Array of file paths in the codebase that will be modified or created
 - **order**: Integer (1-based) — execution order based on dependencies
@@ -863,7 +863,7 @@ Respond with ONLY this JSON structure (no wrapping, no markdown):
 
     let generatedTasks: any[] = [];
     try {
-      const content = await callLLM(prompt, "You generate JSON task arrays.");
+      const content = await callLLM(prompt, "You generate JSON task objects.");
       if (content) {
         const startIdx = content.indexOf('{');
         const endIdx = content.lastIndexOf('}');
