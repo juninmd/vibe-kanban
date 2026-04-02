@@ -2,7 +2,7 @@ import { Task, Agent, LLMDriver, DriverContext } from "../types.js";
 import { spawn } from "child_process";
 import { isCommandAvailable } from "../utils/commandUtils.js";
 import { logDebugBlock, logDebugCommand } from "./debugLogging.js";
-import { createStallDetector, STALL_MESSAGE } from "../utils/overseerUtils.js";
+import { createErrorLoopDetector, createSessionTimeout, createStallDetector, handleOverseerResults, startOverseer } from "../utils/overseerUtils.js";
 
 export class CopilotDriver implements LLMDriver {
    name: string = "Copilot CLI";
@@ -22,6 +22,9 @@ export class CopilotDriver implements LLMDriver {
 
       const child = spawn(cmd, args, { shell: true });
       const stallDetector = createStallDetector(child, 120);
+      const sessionTimeout = createSessionTimeout(child, 600);
+      const errorLoopDetector = createErrorLoopDetector(child, /error/i, 25);
+      const overseer = startOverseer(child, task.workDir || ".", { enabled: true, check_interval: 30, stuck_threshold: 300 });
 
       child.stdout.on("data", (data) => {
          stallDetector.update();
@@ -30,6 +33,7 @@ export class CopilotDriver implements LLMDriver {
 
       child.stderr.on("data", (data) => {
          const msg = data.toString();
+         errorLoopDetector.check(msg);
          ctx.onBugFound(task.id, msg);
       });
 
@@ -39,15 +43,21 @@ export class CopilotDriver implements LLMDriver {
 
       child.on("close", (code) => {
          stallDetector.stop();
+         sessionTimeout.stop();
+         overseer.stop();
+         this.runningTasks.delete(task.id);
 
-         if (stallDetector.wasStalled()) {
-            ctx.onLog(task.id, STALL_MESSAGE);
-            ctx.onBugFound(task.id, STALL_MESSAGE);
-         } else if (code === 0) {
-            ctx.onComplete(task.id);
-         } else {
-            ctx.onBugFound(task.id, `Copilot CLI exited with code ${code}`);
-         }
+         handleOverseerResults(
+            task,
+            ctx,
+            sessionTimeout,
+            overseer,
+            errorLoopDetector,
+            stallDetector,
+            code,
+            0,
+            ""
+         );
       });
 
       this.runningTasks.set(task.id, child);
