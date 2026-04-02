@@ -1,40 +1,45 @@
 # 🗺️ ROADMAP.md - Vibe Kanban Evolution
 
 ## 🌟 Vision & Goals
-To provide a modern, high-performance Kanban board with 3D visualization, CLI integration, and built-in automation to supercharge engineering team productivity. Our goal is to bridge the gap between developer-friendly CLI tooling and immersive, at-a-glance 3D project management, all backed by reliable SQLite persistence.
+To provide a modern, high-performance Kanban board with 3D visualization, CLI integration, and built-in orchestration to supercharge engineering team productivity. Our goal is to bridge the gap between developer-friendly CLI tooling and immersive, at-a-glance 3D project management, all backed by reliable SQLite persistence and AI-driven automation.
 
 ## 📊 Current Status
-**Phase: Visualization & Automation (Phase 2)**
-The core Kanban functionalities (SQLite persistence, Node.js API, basic CLI) are complete and stable. We are actively expanding the 3D visualization scene (Three.js), refining our CLI orchestration, and strengthening our CI/CD pipeline infrastructure to ensure reliability at scale. The project is currently addressing stability and fallback mechanisms for AI provider exhaustion.
+**Phase: Stabilization & UI Refinement (Phase 3)**
+The core Kanban functionalities (SQLite persistence, Node.js API, basic CLI) and the foundation of the 3D visualization scene are complete. However, the current focus must urgently shift to stabilizing the project's infrastructure. We are facing critical CI pipeline failures that block reliable continuous integration. Concurrently, there is a backlog of user requests for UI/UX enhancements that will significantly improve the usability of the 2D and 3D Kanban interfaces.
 
 ## 📅 Quarterly Roadmap
 
-### Q1: Stability & CI/CD Excellence
-**Focus: Establishing a rock-solid foundation for continuous delivery and system resilience.**
+### Q1: Infrastructure Stability & Quality Assurance
+**Focus: Resolving critical pipeline blockers to establish a rock-solid foundation for continuous delivery.**
 - **High Priority (Bugs/Critical):**
-  - Fix failing CI pipelines (Issues: #CI pipeline failing - please fix)
-  - Implement GitHub Actions CI/CD Pipeline (Issue: #Implement GitHub Actions CI/CD Pipeline, #Setup CI/CD pipeline and toolset)
+  - Fix failing CI pipelines. This is currently blocking reliable merges and is the top priority.
+    - [Issue #146: CI pipeline failing - please fix](https://github.com/juninmd/vibe-kanban/issues/146)
+    - [Issue #127: CI pipeline failing - please fix](https://github.com/juninmd/vibe-kanban/issues/127)
+    - [Issue #115: CI pipeline failing - please fix](https://github.com/juninmd/vibe-kanban/issues/115)
+    - [Issue #113: CI pipeline failing - please fix](https://github.com/juninmd/vibe-kanban/issues/113)
 - **Medium Priority:**
-  - Implement Stall Detector and Provider Exhaustion Fallback (Issue: #feat: Implement Stall Detector and Provider Exhaustion Fallback)
+  - Implement automated E2E retry mechanisms to mitigate flaky Playwright tests affecting the CI pipeline.
 - **Low Priority:**
-  - General tech debt cleanup in test suites.
+  - General tech debt cleanup in test suites and repository structure.
 
-### Q2: 3D Visualization & Agent Dynamics
-**Focus: Enhancing the immersive 3D experience and dynamic agent interactions.**
+### Q2: UI/UX Refinement & Usability Enhancements
+**Focus: Improving the daily user experience based on community feedback.**
 - **High Priority:**
-  - Dynamic 3D Agent Skin Recreation based on assigned LLM models (Issue: #Dynamic 3D Agent Skin Recreation)
+  - Address core UI/UX improvement suggestions to enhance accessibility, navigation, and visual clarity in both the 2D fullscreen and 3D views.
+    - [Issue #165: UI/UX Improvement Suggestions](https://github.com/juninmd/vibe-kanban/issues/165)
+    - [Issue #145: UI/UX Improvement Suggestions](https://github.com/juninmd/vibe-kanban/issues/145)
+    - [Issue #133: UI/UX Improvement Suggestions](https://github.com/juninmd/vibe-kanban/issues/133)
 - **Medium Priority:**
-  - Complete the Three.js board visualization and task card models.
-  - Finalize local Kubernetes (Kind) development scripts.
+  - Dynamic 3D Agent Skin Recreation based on assigned LLM models to provide immediate visual context in the 3D scene.
 - **Low Priority:**
-  - Increase Playwright E2E test coverage for 3D interactions.
+  - Improve the visual design of the Task Cards in the 3D environment for better legibility.
 
 ### Q3: Collaboration & Orchestration
 **Focus: Scaling the platform for multi-user, real-time collaboration.**
 - **High Priority:**
-  - Implement WebSocket for real-time synchronization for collaborative boards (replacing current SSE).
+  - Implement WebSocket for real-time synchronization for collaborative boards (replacing current SSE implementation).
 - **Medium Priority:**
-  - Expand `vibe` CLI with advanced orchestration commands.
+  - Implement Stall Detector and Provider Exhaustion Fallback for resilient AI agent orchestration.
   - Integration with external backlogs (GitHub/Jira/Linear).
 - **Low Priority:**
   - Simulating agent movement in 3D space with pathfinding (replacing simple interpolation).
@@ -42,10 +47,9 @@ The core Kanban functionalities (SQLite persistence, Node.js API, basic CLI) are
 ### Q4: Expansion & v1.0 Release
 **Focus: Polish, extensibility, and official v1.0 launch.**
 - **High Priority:**
-  - v1.0 Release Stabilization.
+  - v1.0 Release Stabilization and Security Audits.
 - **Medium Priority:**
   - Plugin System: Allow custom visualization themes and CLI extensions.
-  - Automated task movement based on Kubernetes event triggers.
 - **Low Priority:**
   - Lightweight mobile companion app for task tracking.
 
@@ -53,26 +57,26 @@ The core Kanban functionalities (SQLite persistence, Node.js API, basic CLI) are
 
 ## 🔍 Feature Details
 
-### 1. Robust CI/CD Pipeline Implementation
-- **User Value:** Ensures code quality, prevents regressions, and automates deployments, leading to faster and more reliable releases.
-- **Technical Approach:** Setup GitHub Actions workflows to run ESLint, TypeScript compilation, Node.js native test runner, and Playwright E2E tests on every PR.
-- **Success Criteria:** All open PRs require passing checks before merging. Zero manual intervention required for testing.
-- **Estimated Effort:** Medium
+### 1. Robust CI/CD Pipeline Remediation
+- **User Value:** Ensures code quality, prevents regressions, and automates deployments. Developers can trust the mainline branch and contribute without fear of hidden breakages.
+- **Technical Approach:** Investigate the root cause of the current GitHub Actions failures (Issues #146, #127, #115, #113). This likely involves fixing broken test suites, resolving dependency conflicts, or correcting the Playwright E2E environment setup.
+- **Success Criteria:** All CI pipeline checks pass consistently on `main` and all open PRs. Zero manual intervention required for testing.
+- **Estimated Effort:** Large
 
-### 2. Stall Detector and Provider Exhaustion Fallback
-- **User Value:** Prevents the system from hanging indefinitely when an AI provider fails or times out, ensuring continuous operation.
-- **Technical Approach:** Implement a timeout/stall detection mechanism in the driver orchestration logic. Track global provider health and gracefully fallback to available agents or unassign tasks when a provider is exhausted.
-- **Success Criteria:** Orchestration engine successfully reassigns tasks or marks them as 'done/interrupted' without crashing the server when an API goes offline.
+### 2. UI/UX Interface Overhaul
+- **User Value:** Provides a smoother, more intuitive experience. Reduces friction in managing tasks and observing the 3D environment, directly increasing user productivity and satisfaction.
+- **Technical Approach:** Systematically address the suggestions in Issues #165, #145, and #133. This will likely involve CSS/styling updates in `styles.css`, adjusting HTML layouts, and potentially tweaking the Three.js camera controls or lighting for better visibility.
+- **Success Criteria:** The requested UI improvements are implemented, resulting in a cleaner 2D interface and a more accessible 3D scene without impacting rendering performance.
 - **Estimated Effort:** Medium
 
 ### 3. Dynamic 3D Agent Skin Recreation
-- **User Value:** Provides immediate visual feedback in the 3D space regarding which AI model is currently executing a task.
-- **Technical Approach:** Dynamically update Three.js `BoxGeometry` textures to render the active LLM model name directly onto the agent's chest badge. Ensure textures are redrawn smoothly without resetting agent position.
+- **User Value:** Provides immediate visual feedback in the 3D space regarding which AI model is currently executing a task, enhancing system observability.
+- **Technical Approach:** Dynamically update Three.js `BoxGeometry` textures to render the active LLM model name directly onto the agent's chest badge. Ensure textures are redrawn smoothly.
 - **Success Criteria:** When an agent's model changes via CLI/API, their 3D avatar instantly reflects the new model name legibly on their chest.
 - **Estimated Effort:** Small
 
 ### 4. Real-time WebSocket Synchronization
-- **User Value:** Enables seamless multi-user collaboration where board updates happen instantly across all connected clients without page reloads.
+- **User Value:** Enables seamless multi-user collaboration where board updates happen instantly across all connected clients without polling lag.
 - **Technical Approach:** Migrate the current Server-Sent Events (SSE) implementation to a robust WebSocket connection for bi-directional real-time state updates.
 - **Success Criteria:** Task movements made by one user are reflected in all other active browser sessions with less than 100ms latency.
 - **Estimated Effort:** Large
@@ -80,6 +84,6 @@ The core Kanban functionalities (SQLite persistence, Node.js API, basic CLI) are
 ---
 
 ## ⚠️ Dependencies & Risks
-- **Three.js Performance:** Expanding the 3D scene and dynamic textures must be monitored to ensure it doesn't degrade performance on lower-end machines.
-- **Test Flakiness:** E2E Playwright tests involving 3D canvas interactions and real-time orchestrations can be inherently flaky. Investment in robust wait conditions is crucial.
-- **AI Provider Stability:** The system relies heavily on external CLIs and APIs (OpenAI, Gemini, Copilot). Rate limits and service outages are significant risks requiring robust fallback logic.
+- **Test Flakiness & CI Stability:** The current broken CI pipeline is the biggest risk to development velocity. E2E Playwright tests involving 3D canvas interactions can be inherently flaky; fixing the pipeline must address this flakiness permanently.
+- **Three.js Performance:** Implementing UI/UX changes and dynamic textures must be monitored to ensure it doesn't degrade performance on lower-end machines.
+- **AI Provider Stability:** The system relies on external CLIs and APIs. Provider exhaustion is a risk requiring robust fallback logic (planned for Q3).
