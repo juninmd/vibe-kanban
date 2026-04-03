@@ -117,6 +117,10 @@ content
          errorLoopDetector.check(text);
          stallDetector.update();
 
+         if (/reading|analyzing|searching|grep|cat|ls|find/i.test(text)) {
+             overseer.notifyActivity();
+         }
+
          ctx.onLog(task.id, text);
       });
 
