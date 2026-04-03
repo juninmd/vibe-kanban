@@ -34,6 +34,9 @@ export function getHeadMaterials(role: string): THREE.Material[] {
     const hairColor = role === 'Product Manager' ? '#e2e8f0' : '#452c1e'; // Gray for PM, Brown for others
 
     const faceTex = createTexture(64, 64, (ctx) => {
+        ctx.translate(0, 64);
+        ctx.scale(1, -1);
+
         // Skin base
         ctx.fillStyle = skinColor;
         ctx.fillRect(0, 0, 64, 64);
@@ -71,6 +74,9 @@ export function getBodyMaterials(role: string, modelName?: string, badgeColorFal
     const primaryColor = "#1e293b";
 
     const frontTex = createTexture(256, 256, (ctx) => {
+        ctx.translate(0, 256);
+        ctx.scale(1, -1);
+
         // Shirt base
         ctx.fillStyle = primaryColor;
         ctx.fillRect(0, 0, 256, 256);
@@ -108,10 +114,23 @@ export function getBodyMaterials(role: string, modelName?: string, badgeColorFal
                 const line1 = modelName.substring(0, splitIdx + 1);
                 const line2 = modelName.substring(splitIdx + 1);
 
-                ctx.fillText(line1, 128, rectY + rectHeight / 2 - 8);
-                ctx.fillText(line2, 128, rectY + rectHeight / 2 + 10);
+                ctx.save();
+                ctx.translate(128, rectY + rectHeight / 2 - 8);
+                ctx.scale(1, -1);
+                ctx.fillText(line1, 0, 0);
+                ctx.restore();
+
+                ctx.save();
+                ctx.translate(128, rectY + rectHeight / 2 + 10);
+                ctx.scale(1, -1);
+                ctx.fillText(line2, 0, 0);
+                ctx.restore();
             } else {
-                ctx.fillText(modelName, 128, rectY + rectHeight / 2 + 2);
+                ctx.save();
+                ctx.translate(128, rectY + rectHeight / 2 + 2);
+                ctx.scale(1, -1);
+                ctx.fillText(modelName, 0, 0);
+                ctx.restore();
             }
         }
     }, 'linear');
