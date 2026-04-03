@@ -1,0 +1,18 @@
+name: Standard CI/CD
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  gitleaks:
+    uses: juninmd/github-actions-base/.github/workflows/gitleaks.yml@main
+  commit-lint:
+    uses: juninmd/github-actions-base/.github/workflows/commit-lint.yml@main
+  build:
+    uses: juninmd/github-actions-base/.github/workflows/node-ci.yml@main
+  release:
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    needs: [build, gitleaks]
+    uses: juninmd/github-actions-base/.github/workflows/release.yml@main
+    secrets: inherit
