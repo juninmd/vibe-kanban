@@ -1,7 +1,7 @@
 import { Task, Agent, LLMDriver, DriverContext } from "../types.js";
 import { spawn } from "child_process";
 import { logDebugBlock, logDebugCommand } from "./debugLogging.js";
-import { createStallDetector, STALL_MESSAGE } from "../utils/overseerUtils.js";
+import { createStallDetector, STALL_MESSAGE, startOverseer } from "../utils/overseerUtils.js";
 
 export class ClaudeDriver implements LLMDriver {
    name: string = "Claude Code";
@@ -21,10 +21,16 @@ export class ClaudeDriver implements LLMDriver {
 
       const child = spawn(cmd, args);
       const stallDetector = createStallDetector(child, 120);
+      const taskDir = task.workDir || process.cwd();
+      const overseer = startOverseer(child, taskDir, { enabled: true, check_interval: 30, stuck_threshold: 300 });
 
       child.stdout.on("data", (data) => {
          stallDetector.update();
-         ctx.onLog(task.id, data.toString());
+         const text = data.toString();
+         if (/reading|analyzing|searching|grep|cat|ls|find/i.test(text)) {
+            overseer.notifyActivity();
+         }
+         ctx.onLog(task.id, text);
       });
 
       child.stderr.on("data", (data) => {
@@ -46,6 +52,7 @@ export class ClaudeDriver implements LLMDriver {
 
       child.on("close", (code) => {
          stallDetector.stop();
+         overseer.stop();
          this.runningTasks.delete(task.id);
 
          if (stallDetector.wasStalled()) {
