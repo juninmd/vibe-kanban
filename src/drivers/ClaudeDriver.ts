@@ -1,6 +1,7 @@
 import { Task, Agent, LLMDriver, DriverContext } from "../types.js";
 import { spawn } from "child_process";
 import { logDebugBlock, logDebugCommand } from "./debugLogging.js";
+import { handleChildProcess } from "../utils/processHelpers.js";
 import { createStallDetector, STALL_MESSAGE, startOverseer } from "../utils/overseerUtils.js";
 
 export class ClaudeDriver implements LLMDriver {
@@ -24,48 +25,7 @@ export class ClaudeDriver implements LLMDriver {
       const taskDir = task.workDir || process.cwd();
       const overseer = startOverseer(child, taskDir, { enabled: true, check_interval: 30, stuck_threshold: 300 });
 
-      child.stdout.on("data", (data) => {
-         stallDetector.update();
-         const text = data.toString();
-         if (/reading|analyzing|searching|grep|cat|ls|find/i.test(text)) {
-            overseer.notifyActivity();
-         }
-         ctx.onLog(task.id, text);
-      });
-
-      child.stderr.on("data", (data) => {
-         const msg = data.toString();
-         if (msg.includes("not found") || msg.includes("ENOENT")) {
-            // This might not be enough as spawn error event is separate
-         }
-         ctx.onBugFound(task.id, msg);
-      });
-
-      child.on("error", (error: any) => {
-         if (error.code === "ENOENT") {
-            ctx.onLog(task.id, "Error: Claude CLI not found. Please install 'claude-code'.");
-            ctx.onBugFound(task.id, "Claude not found.");
-            return;
-         }
-         ctx.onBugFound(task.id, error.message);
-      });
-
-      child.on("close", (code) => {
-         stallDetector.stop();
-         overseer.stop();
-         this.runningTasks.delete(task.id);
-
-         if (stallDetector.wasStalled()) {
-            ctx.onLog(task.id, STALL_MESSAGE);
-            ctx.onBugFound(task.id, STALL_MESSAGE);
-         } else if (code === 0) {
-            ctx.onComplete(task.id);
-         } else {
-            ctx.onBugFound(task.id, `Claude exited with code ${code}`);
-         }
-      });
-
-      this.runningTasks.set(task.id, child);
+      handleChildProcess(child, task, ctx, this.runningTasks, 120, overseer);
       return Promise.resolve();
    }
 
