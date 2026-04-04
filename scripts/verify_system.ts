@@ -1,46 +1,28 @@
-import http from 'http';
-import { spawn } from 'child_process';
+const API_URL = 'http://localhost:5174/api'; // NOSONAR
 
-const API_URL = 'http://localhost:5174/api';
-
-function wait(ms) {
+function wait(ms: number) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-function fetchJson(url, options = {}) {
-    return new Promise((resolve, reject) => {
-        const parsedUrl = new URL(url);
-        const reqOptions = {
-            hostname: parsedUrl.hostname,
-            port: parsedUrl.port,
-            path: parsedUrl.pathname + parsedUrl.search,
+interface FetchOptions {
+    method?: string;
+    headers?: Record<string, string>;
+    body?: string;
+}
+
+async function fetchJson(url: string, options: FetchOptions = {}) {
+    try {
+        const res = await fetch(url, {
             method: options.method || 'GET',
-            headers: options.headers || {}
-        };
-
-        const req = http.request(reqOptions, (res) => {
-            let data = '';
-            res.on('data', chunk => data += chunk);
-            res.on('end', () => {
-                try {
-                    resolve(data ? JSON.parse(data) : {});
-                } catch (e) {
-                    resolve({});
-                }
-            });
+            headers: options.headers || {},
+            body: options.body
         });
-
-        req.on('error', (err) => {
-             // Suppress connection refused errors during startup
-             if (err.code !== 'ECONNREFUSED') console.error(err);
-             reject(err);
-        });
-
-        if (options.body) {
-            req.write(options.body);
-        }
-        req.end();
-    });
+        const text = await res.text();
+        return text ? JSON.parse(text) : {};
+    } catch (err: any) {
+        if (err.cause?.code !== 'ECONNREFUSED') console.error(err);
+        throw err;
+    }
 }
 
 async function verifySystem() {
@@ -76,7 +58,7 @@ async function verifySystem() {
         "Novas Features"
     ];
 
-    const missing = requiredRoles.filter(role => !agents.find(a => a.role === role));
+    const missing = requiredRoles.filter(role => !agents.find((a: { role: string }) => a.role === role));
 
     if (missing.length > 0) {
         console.error("Missing required agents:", missing);
@@ -118,7 +100,7 @@ async function verifySystem() {
         await wait(1000);
         try {
             const newState = await fetchJson(`${API_URL}/state`);
-            const task = newState.tasks.find(t => t.id === taskRes.task.id);
+            const task = newState.tasks.find((t: { id: number, assignedTo: string | null, interrupted: boolean }) => t.id === taskRes.task.id);
             if (task && (task.assignedTo || task.interrupted)) {
                 console.log(`Task assigned to agent (or attempted and interrupted).`);
                 assigned = true;

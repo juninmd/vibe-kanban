@@ -1,39 +1,15 @@
 import { test, describe, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { ChildProcess } from 'node:child_process';
 import { setTimeout } from 'timers/promises';
 import { existsSync, rmSync } from 'node:fs';
-
-const API_URL = 'http://localhost:5174';
+import { API_URL, startTestServer } from './utils/testServer.ts';
 
 describe('Orchestration API', async () => {
-  let serverProcess;
-
-  async function waitForServer() {
-    for (let attempts = 0; attempts < 30; attempts++) {
-      try {
-        const res = await fetch(`${API_URL}/api/state`);
-        if (res.ok) return true;
-      } catch {
-        // retry
-      }
-      await setTimeout(300);
-    }
-    return false;
-  }
+  let serverProcess: ChildProcess;
 
   before(async () => {
-    // Ensure we are testing the built version
-    serverProcess = spawn('node', ['dist/server.js'], {
-      stdio: 'pipe',
-      env: { ...process.env, PORT: '5174' }
-    });
-
-    const ready = await waitForServer();
-    if (!ready) {
-      serverProcess.kill();
-      throw new Error('Server failed to start');
-    }
+    serverProcess = await startTestServer();
   });
 
   beforeEach(async () => {
@@ -78,7 +54,7 @@ describe('Orchestration API', async () => {
     // 3. Verify assignment
     const stateRes = await fetch(`${API_URL}/api/state`);
     const state = await stateRes.json();
-    const updatedTask = state.tasks.find(t => t.id === task.id);
+    const updatedTask = state.tasks.find((t: { id: number; assignedTo: string | null; lane: string; interrupted: boolean }) => t.id === task.id);
 
     assert.ok(updatedTask, 'Task should exist');
     // It's possible the task finished very quickly and is in 'done' state,
@@ -120,7 +96,7 @@ describe('Orchestration API', async () => {
     // 4. Verify NO assignment
     const stateRes = await fetch(`${API_URL}/api/state`);
     const state = await stateRes.json();
-    const updatedTask = state.tasks.find(t => t.id === task.id);
+    const updatedTask = state.tasks.find((t: { id: number; assignedTo: string | null; lane: string }) => t.id === task.id);
 
     assert.equal(updatedTask.assignedTo, null, 'Task should NOT be assigned when orchestration is disabled');
     assert.equal(updatedTask.lane, 'backlog');
@@ -165,7 +141,7 @@ describe('Orchestration API', async () => {
     // 4. Verify assignment immediately
     const stateRes = await fetch(`${API_URL}/api/state`);
     const state = await stateRes.json();
-    const updatedTask = state.tasks.find(t => t.id === task.id);
+    const updatedTask = state.tasks.find((t: { id: number; assignedTo: string | null; lane: string; interrupted: boolean }) => t.id === task.id);
 
     assert.ok(
       updatedTask.assignedTo ||

@@ -1,38 +1,14 @@
 import { test, describe, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
-import { setTimeout } from 'timers/promises';
+import { ChildProcess } from 'node:child_process';
 import { existsSync, rmSync } from 'node:fs';
-
-const API_URL = 'http://localhost:5174';
+import { API_URL, startTestServer } from './utils/testServer.ts';
 
 describe('Vibe Kanban API', async () => {
-  let serverProcess;
-
-  async function waitForServer() {
-    for (let attempts = 0; attempts < 30; attempts++) {
-      try {
-        const res = await fetch(`${API_URL}/api/state`);
-        if (res.ok) return true;
-      } catch {
-        // retry
-      }
-      await setTimeout(300);
-    }
-    return false;
-  }
+  let serverProcess: ChildProcess;
 
   before(async () => {
-    serverProcess = spawn('node', ['dist/server.js'], {
-      stdio: 'pipe',
-      env: { ...process.env, PORT: '5174' }
-    });
-
-    const ready = await waitForServer();
-    if (!ready) {
-      serverProcess.kill();
-      throw new Error('Server failed to start');
-    }
+    serverProcess = await startTestServer();
   });
 
   beforeEach(async () => {
@@ -87,7 +63,7 @@ describe('Vibe Kanban API', async () => {
     });
     const agentsRes = await fetch(`${API_URL}/api/state`);
     const state = await agentsRes.json();
-    const perfAgent = state.agents.find(a => a.category === 'performance');
+    const perfAgent = state.agents.find((a: { category: string, id: string }) => a.category === 'performance');
 
     const taskRes = await fetch(`${API_URL}/api/tasks`, {
       method: 'POST',
@@ -167,7 +143,7 @@ describe('Vibe Kanban API', async () => {
     });
     const agentsRes = await fetch(`${API_URL}/api/state`);
     const state = await agentsRes.json();
-    const pmAgent = state.agents.find(a => a.category === 'roadmap');
+    const pmAgent = state.agents.find((a: { category: string, id: string }) => a.category === 'roadmap');
 
     // 1. Create task
     const taskRes = await fetch(`${API_URL}/api/tasks`, {
@@ -220,8 +196,8 @@ describe('Vibe Kanban API', async () => {
     // 4. Verify state
     const stateRes = await fetch(`${API_URL}/api/state`);
     const state = await stateRes.json();
-    const backlogTask = state.tasks.find(t => t.title === 'Task Backlog');
-    const doneTask = state.tasks.find(t => t.title === 'Task Done');
+    const backlogTask = state.tasks.find((t: { title: string }) => t.title === 'Task Backlog');
+    const doneTask = state.tasks.find((t: { title: string }) => t.title === 'Task Done');
 
     assert.ok(backlogTask, 'Backlog task should remain');
     assert.ok(!doneTask, 'Done task should be deleted');
@@ -261,6 +237,6 @@ describe('Vibe Kanban API', async () => {
     assert.equal(data.demand.provider, 'github');
     assert.ok(Array.isArray(data.businessRequirements));
     assert.ok(data.businessRequirements.length >= 3);
-    assert.ok(data.acceptanceCriteria.some((item) => item.includes('PR/MR')));
+    assert.ok(data.acceptanceCriteria.some((item: string) => item.includes('PR/MR')));
   });
 });

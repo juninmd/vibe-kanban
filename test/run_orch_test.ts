@@ -1,24 +1,20 @@
-import http from 'http';
+function wait(ms: number) { return new Promise(r => setTimeout(r, ms)); }
 
-function request(path, options = {}) {
-    return new Promise((resolve, reject) => {
-        const req = http.request({
-            hostname: 'localhost',
-            port: 5174,
-            path: path,
-            method: options.method || 'GET',
-            headers: options.headers || {}
-        }, res => {
-            let data = '';
-            res.on('data', chunk => data += chunk);
-            res.on('end', () => resolve(JSON.parse(data)));
-        });
-        if (options.body) req.write(JSON.stringify(options.body));
-        req.end();
-    });
+interface RequestOptions {
+    method?: string;
+    headers?: Record<string, string>;
+    body?: any;
 }
 
-function wait(ms) { return new Promise(r => setTimeout(r, ms)); }
+async function request(path: string, options: RequestOptions = {}) {
+    const url = `http://localhost:5174${path}`; // NOSONAR
+    const res = await fetch(url, {
+        method: options.method || 'GET',
+        headers: options.headers || {},
+        body: options.body ? JSON.stringify(options.body) : undefined
+    });
+    return res.json();
+}
 
 async function run() {
     await request('/api/reset', { method: 'POST' });
@@ -29,7 +25,7 @@ async function run() {
     for (let i = 0; i < 5; i++) {
         await wait(1000);
         const state = await request('/api/state');
-        const task = state.tasks.find(t => t.id === taskRes.task.id);
+        const task = state.tasks.find((t: { id: number; assignedTo: string | null }) => t.id === taskRes.task.id);
         if (task.assignedTo) {
             console.log('Assigned!');
             return;
