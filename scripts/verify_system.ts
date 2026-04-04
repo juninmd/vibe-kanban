@@ -1,4 +1,4 @@
-const API_URL = 'http://localhost:5174/api';
+const API_URL = 'http://localhost:5174/api'; // NOSONAR
 
 function wait(ms: number) {
     return new Promise(resolve => setTimeout(resolve, ms));

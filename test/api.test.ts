@@ -4,7 +4,7 @@ import { spawn, ChildProcess } from 'node:child_process';
 import { setTimeout } from 'timers/promises';
 import { existsSync, rmSync } from 'node:fs';
 
-const API_URL = 'http://localhost:5174';
+const API_URL = 'http://localhost:5174'; // NOSONAR
 
 describe('Vibe Kanban API', async () => {
   let serverProcess: ChildProcess;
@@ -23,7 +23,7 @@ describe('Vibe Kanban API', async () => {
   }
 
   before(async () => {
-    serverProcess = spawn('node', ['dist/server.js'], {
+    serverProcess = spawn('node', ['dist/server.js'], { // NOSONAR
       stdio: 'pipe',
       env: { ...process.env, PORT: '5174' }
     });

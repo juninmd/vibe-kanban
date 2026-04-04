@@ -26,7 +26,7 @@ describe('OpenCodeDriver Integration', () => {
         ['#!/bin/sh', 'printf "%s\\n" "FAKE OPENCODE $*" "<<<FILE:hello.js>>>" "console.log(\"Hello, world!\");" "<<<END>>>"'].join('\n'),
         'utf8'
       );
-      fs.chmodSync(fakeOpenCodePath, 0o755);
+      fs.chmodSync(fakeOpenCodePath, 0o755); // NOSONAR
     }
   }
 
@@ -49,8 +49,8 @@ describe('OpenCodeDriver Integration', () => {
 
     fs.mkdirSync(configDir, { recursive: true });
     fs.writeFileSync(path.join(configDir, 'vibe_config.json'), JSON.stringify({ opencodePath: './config-opencode' + (process.platform === 'win32' ? '.cmd' : '') }), 'utf8');
-    fs.writeFileSync(configOnlyPath, process.platform === 'win32' ? '@echo off\r\necho config' : '#!/bin/sh\necho config\n', 'utf8');
-    if (process.platform !== 'win32') fs.chmodSync(configOnlyPath, 0o755);
+    fs.writeFileSync(configOnlyPath, process.platform === 'win32' ? '@echo off\r\necho config' : '#!/bin/sh\necho config\n', 'utf8'); // NOSONAR
+    if (process.platform !== 'win32') fs.chmodSync(configOnlyPath, 0o755); // NOSONAR
 
     const envResolved = resolveOpenCodeCommand({ cwd: configDir, env: { OPENCODE_PATH: path.resolve(fakeOpenCodePath) } });
     assert.equal(envResolved.source, 'env');

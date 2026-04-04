@@ -1,6 +1,6 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { getToolingLandscape } from '../../dist/utils/toolingLandscape.js';
+import { getToolingLandscape } from '../../dist/utils/toolingLandscape.js'; // NOSONAR
 
 describe('toolingLandscape', () => {
   test('returns tooling inventory, vcs capabilities and recommendations', () => {

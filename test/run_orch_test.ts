@@ -7,7 +7,7 @@ interface RequestOptions {
 }
 
 async function request(path: string, options: RequestOptions = {}) {
-    const url = `http://localhost:5174${path}`;
+    const url = `http://localhost:5174${path}`; // NOSONAR
     const res = await fetch(url, {
         method: options.method || 'GET',
         headers: options.headers || {},
