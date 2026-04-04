@@ -1,3 +1,6 @@
+import { playTone, playSuccessSound, playErrorSound, playClickSound } from "./utils/ui/sound.js";
+import { showToast } from "./utils/ui/toast.js";
+import { els } from "./utils/ui/dom.js";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
@@ -67,118 +70,13 @@ const STATE_DEBOUNCE_MS = 100; // Debounce state updates to prevent UI freeze
 let activeTaskDetailsId: number | null = null;
 let activeTaskLogKeys = new Set<string>();
 
-const els = {
-  createTaskBtn: document.getElementById("createTaskBtn") as HTMLButtonElement,
-  form: document.getElementById("taskForm") as HTMLFormElement,
-  source: document.getElementById("taskSource") as HTMLSelectElement,
-  title: document.getElementById("taskTitle") as HTMLInputElement,
-  category: document.getElementById("taskCategory") as HTMLSelectElement,
-  priority: document.getElementById("taskPriority") as HTMLSelectElement,
-  githubRepo: document.getElementById("taskGithubRepo") as HTMLInputElement,
-  description: document.getElementById("taskDescription") as HTMLTextAreaElement,
-  agentType: document.getElementById("taskAgentType") as HTMLSelectElement,
-  agentAssign: document.getElementById("taskAgentAssign") as HTMLSelectElement,
-  agentModel: document.getElementById("taskAgentModel") as HTMLSelectElement,
-  driverSelect: document.getElementById("driverSelect") as HTMLSelectElement,
-  kanban: document.getElementById("kanbanBoard") as HTMLElement,
-  agentsList: document.getElementById("agentsList") as HTMLElement,
-  eventLog: document.getElementById("eventLog") as HTMLElement,
-  view3d: document.getElementById("view3d") as HTMLElement,
-  view2d: document.getElementById("view2d") as HTMLElement,
-  toggleViewBtn: document.getElementById("toggleViewBtn") as HTMLButtonElement,
-  fullscreenBtn: document.getElementById("fullscreenBtn") as HTMLButtonElement,
-  resetDataBtn: document.getElementById("resetDataBtn") as HTMLButtonElement,
-  clearDoneBtn: document.getElementById("clearDoneBtn") as HTMLButtonElement,
-  taskCreateModal: document.getElementById("taskCreateModal") as HTMLDialogElement,
-  closeTaskCreateBtn: document.getElementById("closeTaskCreateBtn") as HTMLButtonElement,
-  cancelTaskBtn: document.getElementById("cancelTaskBtn") as HTMLButtonElement,
-  createAgentBtn: document.getElementById("createAgentBtn") as HTMLButtonElement,
-  settingsBtn: document.getElementById("settingsBtn") as HTMLButtonElement,
-  agentModal: document.getElementById("agentModal") as HTMLDialogElement,
-  agentForm: document.getElementById("agentForm") as HTMLFormElement,
-  cancelAgentBtn: document.getElementById("cancelAgentBtn") as HTMLButtonElement,
-  agentTool: document.getElementById("agentTool") as HTMLSelectElement,
-  agentModelDropdown: document.getElementById("agentModel") as HTMLSelectElement,
-  settingsModal: document.getElementById("settingsModal") as HTMLDialogElement,
-  settingsForm: document.getElementById("settingsForm") as HTMLFormElement,
-  cancelSettingsBtn: document.getElementById("cancelSettingsBtn") as HTMLButtonElement,
-  configCloneDir: document.getElementById("configCloneDir") as HTMLInputElement,
-  envOpenAI: document.getElementById("envOpenAI") as HTMLInputElement,
-  envGemini: document.getElementById("envGemini") as HTMLInputElement,
-  envAnthropic: document.getElementById("envAnthropic") as HTMLInputElement,
-  envGithubUser: document.getElementById("envGithubUser") as HTMLInputElement,
-  envGithub: document.getElementById("envGithub") as HTMLInputElement,
-  // Stats
-  statPending: document.getElementById("statPending") as HTMLElement,
-  statDone: document.getElementById("statDone") as HTMLElement,
-  statAgents: document.getElementById("statAgents") as HTMLElement,
-  headerStats: document.getElementById("headerStats") as HTMLElement,
-  toastContainer: document.getElementById("toast-container") as HTMLElement,
-  agentEditId: document.getElementById("agentEditId") as HTMLInputElement,
-  agentRole: document.getElementById("agentRole") as HTMLInputElement,
-  agentCategory: document.getElementById("agentCategory") as HTMLSelectElement,
-  agentModalTitle: document.getElementById("agentModalTitle") as HTMLElement,
-  agentSubmitBtn: document.getElementById("agentSubmitBtn") as HTMLButtonElement,
-  agentColorBadge: document.getElementById("agentColorBadge") as HTMLElement,
-  // New Terminal UI
-  terminalsLayer: document.getElementById("terminalsLayer") as HTMLElement,
-  terminalsContainer: document.getElementById("terminalsContainer") as HTMLElement,
-  terminalsTabs: document.getElementById("terminalsTabs") as HTMLElement,
-  terminalsContent: document.getElementById("terminalsContent") as HTMLElement,
-  closeAllTerminalsBtn: document.getElementById("closeAllTerminalsBtn") as HTMLButtonElement,
-  // Task Details Modal
-  taskDetailsModal: document.getElementById("taskDetailsModal") as HTMLDialogElement,
-  taskDetailsTitle: document.getElementById("taskDetailsTitle") as HTMLElement,
-  taskDetailsDescription: document.getElementById("taskDetailsDescription") as HTMLElement,
-  taskDetailsRepo: document.getElementById("taskDetailsRepo") as HTMLAnchorElement,
-  taskDetailsStatus: document.getElementById("taskDetailsStatus") as HTMLElement,
-  taskDetailsAgent: document.getElementById("taskDetailsAgent") as HTMLElement,
-  taskDetailsMeta: document.getElementById("taskDetailsMeta") as HTMLElement,
-  taskHistoryStatus: document.getElementById("taskHistoryStatus") as HTMLElement,
-  taskHistoryContent: document.getElementById("taskHistoryContent") as HTMLElement,
-  taskOpenFolderBtn: document.getElementById("taskOpenFolderBtn") as HTMLButtonElement,
-  closeTaskDetailsBtn: document.getElementById("closeTaskDetailsBtn") as HTMLButtonElement,
-  // Command Palette
-  commandPalette: document.getElementById("commandPalette") as HTMLDialogElement,
-  commandInput: document.getElementById("commandInput") as HTMLInputElement,
-  commandSuggestions: document.getElementById("commandSuggestions") as HTMLElement,
-  // Magic Add
-  magicTaskInput: document.getElementById("magicTaskInput") as HTMLTextAreaElement,
-  magicTaskBtn: document.getElementById("magicTaskBtn") as HTMLButtonElement,
-};
 
 // --- Toast System ---
-function showToast(message: string, type: "success" | "error" | "info" = "info") {
-  const toast = document.createElement("div");
-  toast.className = `toast ${type}`;
-  toast.textContent = message;
-  els.toastContainer?.appendChild(toast);
-  setTimeout(() => {
-    toast.style.animation = "fadeOut 0.5s forwards";
-    setTimeout(() => toast.remove(), 500);
-  }, 3000);
-}
+
 
 // --- Sound System ---
 const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-function playTone(freq: number, type: OscillatorType, dur: number, vol: number) {
-  try {
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    osc.type = type;
-    osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-    gain.gain.setValueAtTime(vol, audioCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + dur);
-    osc.start(audioCtx.currentTime);
-    osc.stop(audioCtx.currentTime + dur);
-  } catch (e) { }
-}
 
-function playSuccessSound() { playTone(880, "sine", 0.3, 0.2); playTone(1100, "sine", 0.4, 0.1); }
-function playErrorSound() { playTone(220, "sawtooth", 0.4, 0.3); }
-function playClickSound() { playTone(1200, "triangle", 0.05, 0.05); }
 
 // --- Dashboard Logic ---
 function updateDashboard() {

@@ -1,3 +1,4 @@
+import { buildSystemPrompt } from "../utils/promptUtils.js";
 import { Task, Agent, LLMDriver, DriverContext } from "../types.js";
 import { spawn, type ChildProcess } from "child_process";
 import * as fs from "fs";
@@ -5,6 +6,7 @@ import * as path from "path";
 import { resolveOpenCodeCommand } from "../utils/commandUtils.js";
 import { stripAnsi } from "../utils/ptyUtils.js";
 import { createErrorLoopDetector, createSessionTimeout, createStallDetector, handleOverseerResults, startOverseer } from "../utils/overseerUtils.js";
+import { extractAndWriteFiles } from "../utils/fileUtils.js";
 import { logDebugBlock, logDebugCommand } from "./debugLogging.js";
 
 const OPENCODE_ERROR_PATTERN = /^Error /;
@@ -70,29 +72,7 @@ export class OpenCodeDriver implements LLMDriver {
          throw new Error(MISSING_OPENCODE_MESSAGE);
       }
 
-      const prompt = `
-[SYSTEM: AUTONOMOUS MODE]
-You are an autonomous coding agent integrated into a Kanban board called "Vibe Kanban".
-You are acting as the agent role: "${agent.role}".
-Your goal is to complete the following task in this workspace.
-
-TASK ID: #${task.id}
-TITLE: ${task.title}
-DESCRIPTION: ${task.description || "No description provided."}
-CATEGORY: ${task.category}
-PRIORITY: ${task.priority}
-
-INSTRUCTIONS:
-1. Explore the codebase if necessary.
-2. Implement the requested changes.
-3. Run tests or checks when appropriate.
-4. When finished, provide a brief summary of what you did.
-
-If you don't have tool access, use this format to create/update files:
-<<<FILE:filename.ext>>>
-content
-<<<END>>>
-`;
+      const prompt = buildSystemPrompt(task, agent);
 
    const args = buildOpenCodeArgs(task, agent, prompt);
    const visibleArgs = args.slice(0, -1).join(" ") || "run";
@@ -149,27 +129,7 @@ content
          overseer.stop();
          this.runningTasks.delete(task.id);
 
-         // Parse files
-         const fileRegex = /<<<FILE:(.+?)>>>([\s\S]+?)<<<END>>>/g;
-         let match;
-         let filesCreated = 0;
-         while ((match = fileRegex.exec(fullOutput)) !== null) {
-            const filename = match[1].trim();
-            let content = match[2];
-            if (content.startsWith("\n")) content = content.substring(1);
-
-            try {
-                const filePath = path.join(taskDir, filename);
-                const fileDir = path.dirname(filePath);
-                if (!fs.existsSync(fileDir)) fs.mkdirSync(fileDir, { recursive: true });
-
-                fs.writeFileSync(filePath, content);
-                ctx.onLog(task.id, `[FILE] Wrote ${filename}`);
-                filesCreated++;
-            } catch(e: any) {
-                 ctx.onLog(task.id, `[ERROR] Failed to write ${filename}: ${e.message}`);
-            }
-         }
+         const filesCreated = extractAndWriteFiles(fullOutput, taskDir, ctx, task.id);
 
          handleOverseerResults(
             task, ctx,
