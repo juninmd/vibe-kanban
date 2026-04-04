@@ -786,7 +786,7 @@ const server = createServer(async (req, res) => {
     // 1) Tentar descoberta dinâmica via driver (CLI/API reais)
     if (tool && drivers[tool] && typeof drivers[tool].listModels === "function") {
       try {
-        models = await drivers[tool].listModels();
+        models = await drivers[tool].listModels!();
       } catch (e) {
         console.warn(`listModels failed for tool ${tool}:`, e);
       }
