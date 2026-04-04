@@ -7,6 +7,7 @@
     "watch": "tsc -w",
     "start": "node dist/server.js",
     "pretest": "pnpm build",
+    "typecheck": "tsc --noEmit",
     "test": "tsx --test test/unit/*.test.ts && tsx --test test/api.test.ts && tsx --test test/orchestration.test.ts && tsx --test test/opencode_integration.test.ts && tsx --test test/worktree_utils.test.ts",
     "test:e2e": "playwright test",
     "test:all": "pnpm test && pnpm test:e2e",
