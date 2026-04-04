@@ -2,7 +2,7 @@ import { ChildProcess } from "child_process";
 import { Task, DriverContext } from "../types.js";
 import { createStallDetector, STALL_MESSAGE } from "./overseerUtils.js";
 
-export function handleChildProcess(child: ChildProcess, task: Task, ctx: DriverContext, runningTasks: Map<number, any>, timeoutSeconds = 120, overseer?: any) {
+export function handleChildProcess(child: ChildProcess, task: Task, ctx: DriverContext, runningTasks: Map<number, ChildProcess>, timeoutSeconds = 120, overseer?: any) {
     const stallDetector = createStallDetector(child, timeoutSeconds);
 
     child.stdout?.on("data", (data) => {
