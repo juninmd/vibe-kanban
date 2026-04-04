@@ -116,19 +116,16 @@ export function getBodyMaterials(role: string, modelName?: string, badgeColorFal
 
                 ctx.save();
                 ctx.translate(128, rectY + rectHeight / 2 - 8);
-                ctx.scale(1, -1);
                 ctx.fillText(line1, 0, 0);
                 ctx.restore();
 
                 ctx.save();
                 ctx.translate(128, rectY + rectHeight / 2 + 10);
-                ctx.scale(1, -1);
                 ctx.fillText(line2, 0, 0);
                 ctx.restore();
             } else {
                 ctx.save();
                 ctx.translate(128, rectY + rectHeight / 2 + 2);
-                ctx.scale(1, -1);
                 ctx.fillText(modelName, 0, 0);
                 ctx.restore();
             }
