@@ -845,9 +845,13 @@ Return ONLY a JSON array with this structure:
 [
   {
     "title": "Short descriptive title",
-    "description": "Full markdown description with acceptance criteria",
+    "description": "General description of the task",
     "category": "feature",
     "priority": "alta",
+    "acceptanceCriteria": ["criterion 1", "criterion 2"],
+    "relevantFiles": ["path/to/file1", "path/to/file2"],
+    "dependsOn": ["Short description of what this depends on"],
+    "verifyCommand": "pnpm test",
     "dependencies": [0] // Optional array of zero-based index of sibling tasks that must be completed first
   }
 ]`;
@@ -871,6 +875,20 @@ Return ONLY a JSON array with this structure:
       // First pass: Create tasks
       for (const t of generatedTasks) {
         if (t.title && t.category) {
+          let finalDescription = t.description || "";
+          if (t.acceptanceCriteria && Array.isArray(t.acceptanceCriteria)) {
+            finalDescription += "\n\n### Acceptance Criteria\n" + t.acceptanceCriteria.map((c: string) => `- [ ] ${c}`).join("\n");
+          }
+          if (t.relevantFiles && Array.isArray(t.relevantFiles)) {
+            finalDescription += "\n\n### Relevant Files\n" + t.relevantFiles.map((f: string) => `- ${f}`).join("\n");
+          }
+          if (t.dependsOn && Array.isArray(t.dependsOn)) {
+            finalDescription += "\n\n### Depends On\n" + t.dependsOn.map((d: string) => `- ${d}`).join("\n");
+          }
+          if (t.verifyCommand) {
+            finalDescription += `\n\n### Verify Command\n\`${t.verifyCommand}\``;
+          }
+
           const task = DB.createTask({
             title: t.title,
             source: "demand_intake",
@@ -880,7 +898,7 @@ Return ONLY a JSON array with this structure:
             assignedTo: null,
             interrupted: false,
             logs: [],
-            description: t.description,
+            description: finalDescription,
             githubRepo: typeof body.repoUrl === "string" ? body.repoUrl : undefined,
             dependencies: [], // Initialize empty
           });
