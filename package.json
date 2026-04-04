@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "build": "tsc",
-    "typecheck": "tsc --noEmit",
-    "watch": "tsc -w",
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.build.json --noEmit",
+    "watch": "tsc -p tsconfig.build.json -w",
     "start": "node dist/server.js",
     "pretest": "pnpm build",
     "test": "node --test test/unit/*.test.js && node --test test/api.test.js && node --test test/orchestration.test.js && node --test test/opencode_integration.test.js && node --test test/worktree_utils.test.js",
@@ -25,6 +25,7 @@
     "@types/three": "^0.183.1",
     "commander": "^14.0.3",
     "three": "^0.183.2",
+    "tsc": "npm:typescript@^6.0.2",
     "tsx": "^4.7.1",
     "typescript": "^6.0.2"
   },
