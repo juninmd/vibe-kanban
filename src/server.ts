@@ -377,7 +377,10 @@ const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? dri
         for (const cmd of powCommands) {
             addTerminalLine(t.assignedTo, tid, "system", `⚙️ Executando Proof of Work (${cmd.name || cmd.run})...`);
             try {
-                await execa(cmd.run, { cwd: workDir, shell: true });
+                const match = cmd.run.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) || [];
+                const args = match.map((s: string) => s.replace(/^(['"])(.*)\1$/, '$2'));
+                const bin = args.shift() || "echo";
+                await execa(bin, args, { cwd: workDir });
                 addTerminalLine(t.assignedTo, tid, "system", `✅ Proof of Work (${cmd.name || cmd.run}) validado com sucesso!`);
             } catch (powError: any) {
                 const errorOutput = powError.stderr || powError.stdout || powError.message;
@@ -725,7 +728,7 @@ const server = createServer(async (req, res) => {
     if (process.env.NODE_ENV !== "test") {
       const ip = req.socket.remoteAddress || "unknown";
       const current = apiRateLimits.get(ip) || 0;
-      if (current >= 1000) {
+      if (current >= 100) {
         return jsonResponse(res, 429, { error: "Too many requests" });
       }
       apiRateLimits.set(ip, current + 1);
