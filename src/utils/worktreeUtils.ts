@@ -1,9 +1,6 @@
-import { execFile } from "child_process";
-import { promisify } from "util";
+import { execa } from "execa";
 import fs from "fs";
 import path from "path";
-
-const execFileAsync = promisify(execFile);
 
 export function normalizeGithubRepo(githubRepo: string): string {
     const trimmed = githubRepo.trim().replace(/\.git$/i, "");
@@ -56,25 +53,20 @@ export async function prepareWorktree(
     const worktreeDir = path.join(cloneDir, `worktree-${branchName.replace(/\//g, "-")}`);
 
     const runGit = async (args: string[], cwd: string, hideError: boolean = false) => {
-        try {
-            const { stdout } = await execFileAsync("git", args, { cwd });
-            return stdout.trim();
-        } catch (e: any) {
-            let safeMsg = e.message;
+        const result = await execa("git", args, { cwd, encoding: "utf8", reject: false });
+        if (result.failed) {
+            const errorMsg = result.stderr || result.stdout || "Git command failed";
+            let safeMsg = errorMsg;
             if (githubToken) {
                 safeMsg = safeMsg.replace(new RegExp(githubToken, 'g'), '***');
             }
             if (!hideError) {
                 const sanitizedError = new Error(`Git command failed: git ${args.join(" ")}\n${safeMsg}`);
-                if (e.stack && githubToken) {
-                    (sanitizedError as any).stack = e.stack.replace(new RegExp(githubToken, 'g'), '***');
-                } else {
-                    (sanitizedError as any).stack = e.stack;
-                }
                 throw sanitizedError;
             }
             return "";
         }
+        return result.stdout.trim();
     };
 
     // 1. Ensure base repository exists
@@ -141,11 +133,7 @@ export async function cleanupWorktree(
     branchName: string
 ): Promise<void> {
     const runGit = async (args: string[], cwd: string) => {
-        try {
-            await execFileAsync("git", args, { cwd });
-        } catch (e) {
-            // Ignore cleanup errors
-        }
+        await execa("git", args, { cwd, encoding: "utf8", reject: false });
     };
 
     // Force remove the worktree

@@ -1,8 +1,5 @@
-import { execFile } from "child_process";
-import { promisify } from "util";
+import { execa } from "execa";
 import { normalizeGithubRepo } from "./worktreeUtils.js";
-
-const execFileAsync = promisify(execFile);
 
 export async function createPullRequest(
     taskDir: string,
@@ -18,17 +15,14 @@ export async function createPullRequest(
     const commitMessage = `feat: ${taskTitle}`;
 
     const runGit = async (args: string[], hideError: boolean = false) => {
-        try {
-            const { stdout } = await execFileAsync("git", args, { cwd: taskDir });
-            return stdout.trim();
-        } catch (e: any) {
-            const safeMsg = e.message.replace(new RegExp(githubToken, 'g'), '***');
+        const result = await execa("git", args, { cwd: taskDir, encoding: "utf8", reject: false });
+        if (result.failed) {
+            const errorMsg = result.stderr || result.stdout || "Git command failed";
+            const safeMsg = errorMsg.replace(new RegExp(githubToken, 'g'), '***');
             const sanitizedError = new Error(safeMsg);
-            if (e.stack) {
-                (sanitizedError as any).stack = e.stack.replace(new RegExp(githubToken, 'g'), '***');
-            }
             throw sanitizedError;
         }
+        return result.stdout.trim();
     };
 
     // Configure git
