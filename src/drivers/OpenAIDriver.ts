@@ -7,7 +7,7 @@ import { logDebugBlock } from "./debugLogging.js";
 
 export class OpenAIDriver implements LLMDriver {
    name: string = "OpenAI API";
-   private runningTasks = new Map<number, any>();
+   private runningTasks = new Map<number, unknown>();
    private getCloneDir: () => string;
 
    constructor(getCloneDir: () => string) {
@@ -77,7 +77,7 @@ Do not output hypothetical logs. Output the actual file content needed to solve 
               throw new Error(`OpenAI API Error: ${res.status} ${errText}`);
           }
 
-          const data: any = await res.json();
+          const data = await res.json() as { choices?: { message?: { content?: string } }[] };
           const content = data.choices?.[0]?.message?.content || "";
 
           ctx.onLog(task.id, "Received response from OpenAI.");
@@ -91,9 +91,10 @@ Do not output hypothetical logs. Output the actual file content needed to solve 
               ctx.onComplete(task.id);
           }
 
-      } catch (e: any) {
-          ctx.onLog(task.id, `Exception: ${e.message}`);
-          ctx.onBugFound(task.id, e.message);
+      } catch (e: unknown) {
+          const errorMessage = e instanceof Error ? e.message : String(e);
+          ctx.onLog(task.id, `Exception: ${errorMessage}`);
+          ctx.onBugFound(task.id, errorMessage);
       }
    }
 
@@ -111,10 +112,10 @@ Do not output hypothetical logs. Output the actual file content needed to solve 
          if (!res.ok) {
             return [];
          }
-         const data: any = await res.json();
+         const data = await res.json() as { data?: { id: string }[] };
          const models = Array.isArray(data.data) ? data.data : [];
          return models
-            .map((m: any) => m.id as string)
+            .map((m) => m.id)
             .filter(id => typeof id === "string" && id.startsWith("gpt-"));
       } catch {
          return [];

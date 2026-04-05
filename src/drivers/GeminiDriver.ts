@@ -13,9 +13,11 @@ import { logDebugBlock, logDebugCommand } from "./debugLogging.js";
 // Gemini-specific: these prefixes appear on every failed tool call and API error
 const GEMINI_ERROR_PATTERN = /^Error (executing tool|generating content)/;
 
+import { ChildProcess } from "child_process";
+
 export class GeminiDriver implements LLMDriver {
    name: string = "Gemini CLI Driver";
-   private runningTasks = new Map<number, any>();
+   private runningTasks = new Map<number, ChildProcess>();
    private getCloneDir: () => string;
 
    constructor(getCloneDir: () => string) {
@@ -162,7 +164,7 @@ content
             }
          });
 
-         proc.on("error", (error: any) => {
+         proc.on("error", (error: Error & { code?: string }) => {
             if (error.code === "ENOENT") {
                ctx.onLog(task.id, "Error: Gemini CLI ('gemini') not found in PATH.");
                ctx.onBugFound(task.id, "Gemini CLI not found.");
@@ -195,10 +197,11 @@ content
          });
 
          this.runningTasks.set(task.id, proc);
-      } catch (e: any) {
+      } catch (e: unknown) {
          try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {}
-         ctx.onLog(task.id, `[EXCEPTION] ${e.message}`);
-         ctx.onBugFound(task.id, e.message);
+         const errorMessage = e instanceof Error ? e.message : String(e);
+         ctx.onLog(task.id, `[EXCEPTION] ${errorMessage}`);
+         ctx.onBugFound(task.id, errorMessage);
       }
 
        return Promise.resolve();
@@ -227,10 +230,10 @@ content
          if (!res.ok) {
             return [];
          }
-         const data: any = await res.json();
+         const data = await res.json() as { models?: { name: string }[] };
          const models = Array.isArray(data.models) ? data.models : [];
          return models
-            .map((m: any) => m.name as string)
+            .map((m) => m.name)
             .filter(id => typeof id === "string" && id.length > 0);
       } catch {
          return [];

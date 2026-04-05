@@ -5,9 +5,11 @@ import { logDebugBlock, logDebugCommand } from "./debugLogging.js";
 import { handleChildProcess } from "../utils/processHelpers.js";
 import { createStallDetector, STALL_MESSAGE } from "../utils/overseerUtils.js";
 
+import { ChildProcess } from "child_process";
+
 export class CopilotDriver implements LLMDriver {
    name: string = "Copilot CLI";
-   private runningTasks = new Map<number, any>();
+   private runningTasks = new Map<number, ChildProcess>();
 
    async executeTask(task: Task, agent: Agent, ctx: DriverContext): Promise<void> {
       if (!isCommandAvailable("gh")) {

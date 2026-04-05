@@ -3,7 +3,7 @@ function wait(ms: number) { return new Promise(r => setTimeout(r, ms)); }
 interface RequestOptions {
     method?: string;
     headers?: Record<string, string>;
-    body?: any;
+    body?: unknown;
 }
 
 async function request(path: string, options: RequestOptions = {}) {

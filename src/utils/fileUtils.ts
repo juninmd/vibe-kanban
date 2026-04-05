@@ -71,8 +71,9 @@ export function extractAndWriteFiles(output: string, basePath: string, ctx: Driv
            fs.writeFileSync(filePath, content);
            ctx.onLog(taskId, `[FILE] Wrote ${filename}`);
            filesCreated++;
-       } catch(e: any) {
-            ctx.onLog(taskId, `[ERROR] Failed to write ${filename}: ${e.message}`);
+       } catch(e: unknown) {
+            const errorMessage = e instanceof Error ? e.message : String(e);
+            ctx.onLog(taskId, `[ERROR] Failed to write ${filename}: ${errorMessage}`);
        }
     }
 
