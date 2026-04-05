@@ -938,8 +938,8 @@ Return ONLY a JSON array with this structure:
         const localDeps = generatedTasks[i].dependencies;
         if (Array.isArray(localDeps) && localDeps.length > 0 && i < createdTasks.length) {
           const dbDeps = localDeps
-            .filter((idx: unknown) => typeof idx === 'number' && idx >= 0 && idx < createdTasks.length)
-            .map((idx: unknown) => createdTasks[idx as number].id);
+            .filter((idx: unknown): idx is number => typeof idx === 'number' && idx >= 0 && idx < createdTasks.length)
+            .map((idx) => createdTasks[idx].id);
 
           if (dbDeps.length > 0) {
             createdTasks[i].dependencies = dbDeps; // Update local reference too
