@@ -378,7 +378,12 @@ const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? dri
             addTerminalLine(t.assignedTo, tid, "system", `⚙️ Executando Proof of Work (${cmd.name || cmd.run})...`);
             try {
                 const match = cmd.run.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) || [];
-                const args = match.map((s: string) => s.replace(/^(['"])(.*)\1$/, '$2'));
+                const args = match.map((s: string) => {
+                    if (s.length >= 2 && ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'")))) {
+                        return s.slice(1, -1);
+                    }
+                    return s;
+                });
                 const bin = args.shift() || "echo";
                 await execa(bin, args, { cwd: workDir });
                 addTerminalLine(t.assignedTo, tid, "system", `✅ Proof of Work (${cmd.name || cmd.run}) validado com sucesso!`);
