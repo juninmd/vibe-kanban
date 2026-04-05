@@ -1,6 +1,6 @@
 export function playTone(freq: number, type: OscillatorType, dur: number, vol: number) {
   try {
-    const AudioContextClass = (window.AudioContext || (window as any).webkitAudioContext) as typeof AudioContext;
+    const AudioContextClass = (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext);
     if (!AudioContextClass) return;
     const ctx = new AudioContextClass();
     const osc = ctx.createOscillator();

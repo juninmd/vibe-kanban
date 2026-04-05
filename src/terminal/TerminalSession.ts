@@ -82,7 +82,7 @@ export class TerminalSession extends EventEmitter {
 
         // Dynamic import of node-pty (native module)
         const nodePty = await import("node-pty");
-        const spawnFn = nodePty.spawn || (nodePty as any).default?.spawn;
+        const spawnFn = nodePty.spawn || (nodePty as unknown as { default?: { spawn?: typeof nodePty.spawn } }).default?.spawn;
 
         if (!spawnFn) {
             throw new Error("node-pty spawn function not found");

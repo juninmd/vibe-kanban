@@ -43,9 +43,9 @@ export interface State {
 }
 
 export interface Memory {
-  get(key: string): any;
-  set(key: string, value: any): void;
-  getAll(): Record<string, any>;
+  get(key: string): unknown;
+  set(key: string, value: unknown): void;
+  getAll(): Record<string, unknown>;
   clear(): void;
 }
 

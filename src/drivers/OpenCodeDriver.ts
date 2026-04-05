@@ -52,7 +52,7 @@ function spawnOpenCode(executable: string, args: string[], cwd: string, env: Nod
 
 export class OpenCodeDriver implements LLMDriver {
    name: string = "OpenCode AI";
-   private runningTasks = new Map<number, any>();
+   private runningTasks = new Map<number, ChildProcess>();
    private getCloneDir: () => string;
 
    constructor(getCloneDir: () => string) {
@@ -114,7 +114,7 @@ export class OpenCodeDriver implements LLMDriver {
          }
       });
 
-      proc.on("error", (error: any) => {
+      proc.on("error", (error: Error & { code?: string }) => {
          this.runningTasks.delete(task.id);
          if (error.code === "ENOENT") {
             ctx.onBugFound(task.id, MISSING_OPENCODE_MESSAGE);

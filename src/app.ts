@@ -1727,18 +1727,21 @@ function updateAgents3D() {
           (existing.laser.material as THREE.Material).dispose();
         }
         scene.remove(existing.group);
-        existing.group.traverse((child: any) => {
-          if (child.isMesh) {
-            if (child.geometry) child.geometry.dispose();
-            if (child.material) {
-              if (Array.isArray(child.material)) {
-                child.material.forEach((m: any) => {
-                  if (m.map) m.map.dispose();
+        existing.group.traverse((child: THREE.Object3D) => {
+          if ((child as THREE.Mesh).isMesh) {
+            const mesh = child as THREE.Mesh;
+            if (mesh.geometry) mesh.geometry.dispose();
+            if (mesh.material) {
+              if (Array.isArray(mesh.material)) {
+                mesh.material.forEach((m: THREE.Material) => {
+                  const materialWithMap = m as THREE.MeshBasicMaterial;
+                  if (materialWithMap.map) materialWithMap.map.dispose();
                   m.dispose();
                 });
               } else {
-                if (child.material.map) child.material.map.dispose();
-                child.material.dispose();
+                const singleMaterial = mesh.material as THREE.MeshBasicMaterial;
+                if (singleMaterial.map) singleMaterial.map.dispose();
+                singleMaterial.dispose();
               }
             }
           }

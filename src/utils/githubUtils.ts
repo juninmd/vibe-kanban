@@ -97,14 +97,14 @@ export async function createPullRequest(
     });
 
     if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = await response.json() as { errors?: { message: string }[] };
         // If PR already exists, it might return a 422
-        if (response.status === 422 && errorData.errors && errorData.errors.some((e: any) => e.message.includes("A pull request already exists"))) {
+        if (response.status === 422 && errorData.errors && errorData.errors.some(e => e.message.includes("A pull request already exists"))) {
             return `Pull Request já existe para a branch ${branchName}.`;
         }
         throw new Error(`Falha ao criar PR na API do GitHub: ${response.status} ${response.statusText} - ${JSON.stringify(errorData)}`);
     }
 
-    const prData = await response.json();
+    const prData = await response.json() as { html_url: string };
     return `Pull Request criado com sucesso: ${prData.html_url}`;
 }

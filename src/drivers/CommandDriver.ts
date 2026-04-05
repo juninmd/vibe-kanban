@@ -6,14 +6,17 @@ import { extractAndWriteFiles } from "../utils/fileUtils.js";
 import { logDebugBlock, logDebugCommand } from "./debugLogging.js";
 import { createErrorLoopDetector, createSessionTimeout, createStallDetector, handleOverseerResults, startOverseer } from "../utils/overseerUtils.js";
 
+import { ResultPromise } from "execa";
+import { TerminalManager } from "../terminal/TerminalManager.js";
+
 export class CommandDriver implements LLMDriver {
     name: string = "CLI Command Driver";
-    private runningTasks = new Map<number, any>();
+    private runningTasks = new Map<number, ResultPromise>();
     private taskLogs = new Map<number, string[]>();
     private getCloneDir: () => string;
-    private terminalManager?: any; // TerminalManager
+    private terminalManager?: TerminalManager;
 
-    constructor(getCloneDir: () => string, terminalManager?: any) {
+    constructor(getCloneDir: () => string, terminalManager?: TerminalManager) {
         this.getCloneDir = getCloneDir;
         this.terminalManager = terminalManager;
     }
@@ -78,7 +81,7 @@ Do not output hypothetical logs. Output the actual file content needed to solve 
                     await this.terminalManager.create({
                         agentId: agent.id,
                         cwd: taskDir,
-                        env: { ...process.env, ...agent.env } as any
+                        env: { ...process.env, ...agent.env } as Record<string, string>
                     });
                 }
 
@@ -96,9 +99,10 @@ Do not output hypothetical logs. Output the actual file content needed to solve 
                 // But for the sake of the Kanban transition, maybe we should?
                 // The user's request says "cada agente = terminal", implying the process IS the terminal.
                 return;
-            } catch (e: any) {
-                ctx.onLog(task.id, `PTY Error: ${e.message}`);
-                ctx.onBugFound(task.id, `PTY Execution failed: ${e.message}`);
+            } catch (e: unknown) {
+                const errorMessage = e instanceof Error ? e.message : String(e);
+                ctx.onLog(task.id, `PTY Error: ${errorMessage}`);
+                ctx.onBugFound(task.id, `PTY Execution failed: ${errorMessage}`);
                 return;
             }
         }
@@ -178,9 +182,10 @@ Do not output hypothetical logs. Output the actual file content needed to solve 
                 ctx.onLog(task.id, `Error spawning process: ${error.message}`);
                 ctx.onBugFound(task.id, `Execution failed: ${error.message}`);
             });
-        } catch (e: any) {
-            ctx.onLog(task.id, `Exception: ${e.message}`);
-            ctx.onBugFound(task.id, `Exception during execution: ${e.message}`);
+        } catch (e: unknown) {
+            const errorMessage = e instanceof Error ? e.message : String(e);
+            ctx.onLog(task.id, `Exception: ${errorMessage}`);
+            ctx.onBugFound(task.id, `Exception during execution: ${errorMessage}`);
         }
     }
 

@@ -3,10 +3,11 @@ import { spawn } from "child_process";
 import { logDebugBlock, logDebugCommand } from "./debugLogging.js";
 import { handleChildProcess } from "../utils/processHelpers.js";
 import { createStallDetector, STALL_MESSAGE, startOverseer } from "../utils/overseerUtils.js";
+import { ChildProcess } from "child_process";
 
 export class ClaudeDriver implements LLMDriver {
    name: string = "Claude Code";
-   private runningTasks = new Map<number, any>();
+   private runningTasks = new Map<number, ChildProcess>();
 
    async executeTask(task: Task, agent: Agent, ctx: DriverContext): Promise<void> {
       const cmd = "claude";

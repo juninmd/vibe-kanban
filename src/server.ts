@@ -1,4 +1,4 @@
-import { createServer } from "http";
+import { createServer, ServerResponse, IncomingMessage } from "http";
 import * as fs from "fs";
 import * as path from "path";
 import * as crypto from "crypto";
@@ -79,7 +79,7 @@ function initializeState(): State {
 initializeState();
 
 // SSE Clients
-let clients: { id: string; res: any }[] = [];
+let clients: { id: string; res: ServerResponse }[] = [];
 let broadcastScheduled = false;
 let lastBroadcastState = "";
 
@@ -186,7 +186,7 @@ function releaseTaskAgent(task: Task): LLMDriver {
 }
 
 // --- Helpers ---
-function jsonResponse(res: any, status: number, body: any, reqOrigin?: string) {
+function jsonResponse(res: ServerResponse, status: number, body: unknown, reqOrigin?: string) {
   res.writeHead(status, {
     "Content-Type": "application/json",
     "Access-Control-Allow-Origin": reqOrigin || "http://localhost:5174",
@@ -200,10 +200,10 @@ function jsonResponse(res: any, status: number, body: any, reqOrigin?: string) {
   res.end(JSON.stringify(body));
 }
 
-function parseBody(req: any): Promise<any> {
+function parseBody(req: IncomingMessage): Promise<Record<string, unknown>> {
   return new Promise((resolve) => {
     let data = "";
-    req.on("data", (chunk: any) => (data += chunk));
+    req.on("data", (chunk: Buffer | string) => (data += chunk.toString()));
     req.on("end", () => {
       try { resolve(data ? JSON.parse(data) : {}); } catch (e) { resolve({}); }
     });
@@ -236,8 +236,9 @@ async function startTask(task: Task, agent: Agent) {
       const wtInfo = await prepareWorktree(appConfig.cloneDir, task.githubRepo, branchName, process.env.GITHUB_TOKEN);
       finalWorkDir = wtInfo.worktreeDir;
       taskBaseRepoDir = wtInfo.baseRepoDir;
-    } catch (err: any) {
-      addEvent(`[Worktree Error] Falha ao preparar repositório para a Tarefa #${task.id}: ${err.message}`);
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      addEvent(`[Worktree Error] Falha ao preparar repositório para a Tarefa #${task.id}: ${errorMessage}`);
     }
   }
 
@@ -372,7 +373,8 @@ const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? dri
         const workDir = t.workDir || path.join(appConfig.cloneDir, `task-${t.id}`);
 
         // Proof of Work Validation (Lisa inspired)
-        const powCommands = (appConfig as any).proof_of_work?.commands || [{ name: "test", run: "npm test" }];
+        const powConfig = (appConfig as { proof_of_work?: { commands?: { name?: string; run: string }[] } }).proof_of_work;
+        const powCommands = powConfig?.commands || [{ name: "test", run: "npm test" }];
 
         for (const cmd of powCommands) {
             addTerminalLine(t.assignedTo, tid, "system", `⚙️ Executando Proof of Work (${cmd.name || cmd.run})...`);
@@ -387,8 +389,9 @@ const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? dri
                 const bin = args.shift() || "echo";
                 await execa(bin, args, { cwd: workDir });
                 addTerminalLine(t.assignedTo, tid, "system", `✅ Proof of Work (${cmd.name || cmd.run}) validado com sucesso!`);
-            } catch (powError: any) {
-                const errorOutput = powError.stderr || powError.stdout || powError.message;
+            } catch (powError: unknown) {
+                const errorObj = powError as { stderr?: string; stdout?: string; message?: string };
+                const errorOutput = errorObj.stderr || errorObj.stdout || errorObj.message || String(powError);
                 addTerminalLine(t.assignedTo, tid, "stderr", `❌ Falha no Proof of Work (${cmd.name || cmd.run}):\n${errorOutput}`);
                 handleBugFound(tid, `Proof of Work (${cmd.name || cmd.run}) failed: ${errorOutput}`);
                 return; // Halt completion
@@ -412,10 +415,11 @@ const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? dri
                     return; // Halt completion
                 }
                 addTerminalLine(t.assignedTo, tid, "system", `✅ Spec Compliance validado com sucesso!`);
-            } catch (specError: any) {
-                addTerminalLine(t.assignedTo, tid, "stderr", `❌ Erro ao verificar Spec Compliance: ${specError.message}`);
+            } catch (specError: unknown) {
+                const errorMessage = specError instanceof Error ? specError.message : String(specError);
+                addTerminalLine(t.assignedTo, tid, "stderr", `❌ Erro ao verificar Spec Compliance: ${errorMessage}`);
                 // Proceed normally if LLM fails, or we can fail it. For now, let's treat it as a bug.
-                handleBugFound(tid, `Spec Compliance error: ${specError.message}`);
+                handleBugFound(tid, `Spec Compliance error: ${errorMessage}`);
                 return;
             }
         }
@@ -434,8 +438,9 @@ const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? dri
                 const prResult = await createPullRequest(workDir, t.id, t.title, t.githubRepo, process.env.GITHUB_TOKEN, githubUser, prFinalDescription);
                 addTerminalLine(t.assignedTo, tid, "system", `✅ ${prResult}`);
                 addEvent(`PR criado para Tarefa #${tid}: ${t.githubRepo}`);
-            } catch (prError: any) {
-                addTerminalLine(t.assignedTo, tid, "stderr", `❌ Falha ao criar Pull Request: ${prError.message}`);
+            } catch (prError: unknown) {
+                const errorMessage = prError instanceof Error ? prError.message : String(prError);
+                addTerminalLine(t.assignedTo, tid, "stderr", `❌ Falha ao criar Pull Request: ${errorMessage}`);
                 addEvent(`Erro ao criar PR para Tarefa #${tid}.`);
             }
         }
@@ -444,8 +449,9 @@ const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? dri
             const branchName = `feature/task-${tid}`;
             try {
                 await cleanupWorktree(t.baseRepoDir, t.workDir, branchName);
-            } catch(e: any) {
-                addEvent(`Erro ao limpar worktree para a Tarefa #${tid}: ${e.message}`);
+            } catch(e: unknown) {
+                const errorMessage = e instanceof Error ? e.message : String(e);
+                addEvent(`Erro ao limpar worktree para a Tarefa #${tid}: ${errorMessage}`);
             }
         }
 
@@ -462,9 +468,10 @@ const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? dri
       }
     },
     memory: Memory.getInstance()
-      }).catch((err: any) => {
+      }).catch((err: unknown) => {
         activeTaskDrivers.delete(updatedTask.id);
-        addEvent(`Erro ao executar tarefa #${updatedTask.id}: ${err.message}`);
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        addEvent(`Erro ao executar tarefa #${updatedTask.id}: ${errorMessage}`);
         terminateTask(updatedTask.id, "backlog", true);
       });
     };
@@ -472,9 +479,10 @@ const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? dri
     try {
       const firstTool = providerChain[0] || agent.tool || "gemini";
       runAttempt(firstTool);
-    } catch (err: any) {
+    } catch (err: unknown) {
       activeTaskDrivers.delete(updatedTask.id);
-      addEvent(`Erro ao executar tarefa #${updatedTask.id}: ${err.message}`);
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      addEvent(`Erro ao executar tarefa #${updatedTask.id}: ${errorMessage}`);
       terminateTask(updatedTask.id, "backlog", true);
     }
   }, 0);
@@ -586,7 +594,7 @@ Generate 2 realistic tasks. Return ONLY a JSON array: [{"title":"...","category"
       const newTasks = JSON.parse(raw.substring(startIdx, endIdx + 1));
       if (!Array.isArray(newTasks)) return;
       let count = 0;
-      newTasks.forEach((t: any) => {
+      newTasks.forEach((t: Partial<Task>) => {
         if (t.title && t.category) {
           DB.createTask({
             title: t.title,
@@ -660,7 +668,7 @@ setInterval(() => {
 }, 60000);
 
 const server = createServer(async (req, res) => {
-  const { method, url } = req as any;
+  const { method, url } = req;
 
   if (!url) return;
 
@@ -782,7 +790,7 @@ const server = createServer(async (req, res) => {
 
   // GET /api/models?tool=xxx
   if (url.startsWith("/api/models") && method === "GET") {
-    const urlObj = new URL(url as string, `http://${req.headers?.host || "localhost"}`);
+    const urlObj = new URL(url, `http://${req.headers?.host || "localhost"}`);
     const tool = urlObj.searchParams.get("tool") || undefined;
 
     let models: string[] = [];
@@ -864,7 +872,18 @@ Return ONLY a JSON array with this structure:
   }
 ]`;
 
-    let generatedTasks: any[] = [];
+    type GeneratedTask = {
+      title?: string;
+      description?: string;
+      category?: string;
+      priority?: string;
+      acceptanceCriteria?: string[];
+      relevantFiles?: string[];
+      dependsOn?: string[];
+      verifyCommand?: string;
+      dependencies?: number[];
+    };
+    let generatedTasks: GeneratedTask[] = [];
     try {
       const content = await callLLM(prompt, "You generate JSON task arrays.");
       if (content) {
@@ -901,7 +920,7 @@ Return ONLY a JSON array with this structure:
             title: t.title,
             source: "demand_intake",
             category: t.category,
-            priority: t.priority || "media",
+            priority: (t.priority as Task["priority"]) || "media",
             lane: "backlog",
             assignedTo: null,
             interrupted: false,
@@ -919,8 +938,8 @@ Return ONLY a JSON array with this structure:
         const localDeps = generatedTasks[i].dependencies;
         if (Array.isArray(localDeps) && localDeps.length > 0 && i < createdTasks.length) {
           const dbDeps = localDeps
-            .filter((idx: any) => typeof idx === 'number' && idx >= 0 && idx < createdTasks.length)
-            .map((idx: number) => createdTasks[idx].id);
+            .filter((idx: unknown): idx is number => typeof idx === 'number' && idx >= 0 && idx < createdTasks.length)
+            .map((idx) => createdTasks[idx].id);
 
           if (dbDeps.length > 0) {
             createdTasks[i].dependencies = dbDeps; // Update local reference too
@@ -951,12 +970,12 @@ Return ONLY a JSON array with this structure:
 
     const newAgent: Agent = {
       id: `agent-${Date.now()}`,
-      role: body.role || "Assistente",
-      model: body.model || "default",
-      category: body.category || "misc",
+      role: (body.role as string) || "Assistente",
+      model: (body.model as string) || "default",
+      category: (body.category as string) || "misc",
       status: "idle",
       assignedTask: null,
-      tool: body.tool,
+      tool: body.tool as string | undefined,
       terminalId: `term-${Date.now()}`
     };
     DB.saveAgent(newAgent);
@@ -972,12 +991,12 @@ Return ONLY a JSON array with this structure:
     if (!existing) return jsonResponse(res, 404, { error: "Agent not found" });
     const body = await parseBody(req);
     const updates: Partial<Agent> = {};
-    if (body.role !== undefined) updates.role = body.role;
-    if (body.model !== undefined) updates.model = body.model;
-    if (body.category !== undefined) updates.category = body.category;
-    if (body.tool !== undefined) updates.tool = body.tool;
+    if (body.role !== undefined) updates.role = body.role as string;
+    if (body.model !== undefined) updates.model = body.model as string;
+    if (body.category !== undefined) updates.category = body.category as string;
+    if (body.tool !== undefined) updates.tool = body.tool as string;
     DB.updateAgent(agentId, updates);
-    addEvent(`Agente atualizado: ${body.role || existing.role}`);
+    addEvent(`Agente atualizado: ${(body.role as string) || existing.role}`);
     broadcastState();
     return jsonResponse(res, 200, { agent: DB.getAgent(agentId) });
   }
@@ -1087,14 +1106,15 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
     try {
       const info = await terminalManager.create({
         agentId,
-        cwd: body.cwd || appConfig.cloneDir || process.cwd(),
-        cols: body.cols || 120,
-        rows: body.rows || 30,
-        env: body.env
+        cwd: (body.cwd as string) || appConfig.cloneDir || process.cwd(),
+        cols: (body.cols as number) || 120,
+        rows: (body.rows as number) || 30,
+        env: body.env as Record<string, string> | undefined
       });
       return jsonResponse(res, 200, info);
-    } catch (e: any) {
-      return jsonResponse(res, 500, { error: e.message });
+    } catch (e: unknown) {
+      const errorMessage = e instanceof Error ? e.message : String(e);
+      return jsonResponse(res, 500, { error: errorMessage });
     }
   }
 
@@ -1103,10 +1123,11 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
     const agentId = decodeURIComponent(url.split("/api/terminals/")[1].replace("/send", ""));
     const body = await parseBody(req);
     try {
-      terminalManager.write(agentId, body.data || "");
+      terminalManager.write(agentId, (body.data as string) || "");
       return jsonResponse(res, 200, { ok: true });
-    } catch (e: any) {
-      return jsonResponse(res, 404, { error: e.message });
+    } catch (e: unknown) {
+      const errorMessage = e instanceof Error ? e.message : String(e);
+      return jsonResponse(res, 404, { error: errorMessage });
     }
   }
 
@@ -1114,7 +1135,7 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
   if (url.match(/^\/api\/terminals\/[^/]+\/resize$/) && method === "POST") {
     const agentId = decodeURIComponent(url.split("/api/terminals/")[1].replace("/resize", ""));
     const body = await parseBody(req);
-    terminalManager.resize(agentId, body.cols || 120, body.rows || 30);
+    terminalManager.resize(agentId, (body.cols as number) || 120, (body.rows as number) || 30);
     return jsonResponse(res, 200, { ok: true });
   }
 
@@ -1136,7 +1157,7 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
     if (body.priority && (typeof body.priority !== 'string' || body.priority.length > 255)) return jsonResponse(res, 400, { error: "Invalid priority" });
 
     // Resolve workDir
-    let workDir = body.workDir || null;
+    let workDir = (body.workDir as string) || null;
     if (workDir) {
       workDir = path.resolve(workDir);
       if (!fs.existsSync(workDir)) {
@@ -1145,17 +1166,17 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
     }
     const task = DB.createTask({
       title: body.title,
-      source: body.source || "user",
-      category: body.category || "misc",
-      priority: body.priority || "media",
+      source: (body.source as string) || "user",
+      category: (body.category as string) || "misc",
+      priority: (body.priority as "media" | "alta" | "baixa") || "media",
       lane: "backlog",
       assignedTo: null,
       interrupted: false,
       logs: [],
-      githubRepo: body.githubRepo,
-      description: body.description,
-      agentType: body.agentType,
-      workDir,
+      githubRepo: body.githubRepo as string | undefined,
+      description: body.description as string | undefined,
+      agentType: body.agentType as string | undefined,
+      workDir: workDir || undefined,
     });
     addEvent(`Novo card criado: ${task.title} (${task.source})`);
     return jsonResponse(res, 201, { task });
@@ -1164,7 +1185,8 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
   // POST /api/assign (Assign task to agent)
   if (url === "/api/assign" && method === "POST") {
     const body = await parseBody(req);
-    const { taskId, agentId } = body;
+    const taskId = body.taskId as number;
+    const agentId = body.agentId as string | undefined;
     const task = getTask(taskId);
     let agent = agentId ? getAgent(agentId) : null;
 
@@ -1194,7 +1216,8 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
 
   // POST /api/interrupt
   if (url === "/api/interrupt" && method === "POST") {
-    const { taskId } = await parseBody(req);
+    const body = await parseBody(req);
+    const taskId = body.taskId as number;
     const task = getTask(taskId);
     if (!task) return jsonResponse(res, 404, { error: "Task not found" });
 
@@ -1211,7 +1234,9 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
 
   // POST /api/move
   if (url === "/api/move" && method === "POST") {
-    const { taskId, lane } = await parseBody(req);
+    const body = await parseBody(req);
+    const taskId = body.taskId as number;
+    const lane = body.lane as Task["lane"];
     const task = getTask(taskId);
     if (!task) return jsonResponse(res, 404, { error: "Task not found" });
 
@@ -1230,7 +1255,9 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
 
   // POST /api/reorder (Move task up/down in priority/list)
   if (url === "/api/reorder" && method === "POST") {
-    const { taskId, direction } = await parseBody(req);
+    const body = await parseBody(req);
+    const taskId = body.taskId as number;
+    const direction = body.direction as number;
     const task = getTask(taskId);
     if (!task) return jsonResponse(res, 404, { error: "Task not found" });
 
@@ -1269,7 +1296,7 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
     const newKeys = Object.keys(body).filter(k => ALLOWED_ENV_KEYS.includes(k));
 
     newKeys.forEach(key => {
-      const value = body[key];
+      const value = body[key] as string;
       if (!value) return;
 
       process.env[key] = value;
@@ -1296,7 +1323,8 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
 
   // POST /api/config
   if (url === "/api/config" && method === "POST") {
-    const { driver } = await parseBody(req);
+    const body = await parseBody(req);
+    const driver = body.driver as string;
     if (drivers[driver]) {
       currentDriver = drivers[driver];
       addEvent(`Driver alterado para: ${currentDriver.name}`);
