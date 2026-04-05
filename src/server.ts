@@ -402,9 +402,16 @@ const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? dri
         if (t.description && t.description.includes("- [ ]")) {
             addTerminalLine(t.assignedTo, tid, "system", `⚙️ Verificando Spec Compliance (Critérios de Aceite)...`);
             try {
-                const diffCmd1 = await execa("git", ["diff"], { cwd: workDir });
-                const diffCmd2 = await execa("git", ["diff", "--cached"], { cwd: workDir });
-                const diff = diffCmd1.stdout + "\n" + diffCmd2.stdout;
+                // If HEAD~1 fails (e.g. no commits), we fallback to diff against HEAD or just unstaged/staged
+                const diffCmd = await execa("git", ["diff", "HEAD~1"], { cwd: workDir, reject: false });
+                let diff = diffCmd.stdout || "";
+
+                if (diff.trim() === "") {
+                    // Fallback to checking unstaged and staged changes together if HEAD~1 isn't resolving properly
+                    const diffCmdUnstaged = await execa("git", ["diff"], { cwd: workDir, reject: false });
+                    const diffCmdStaged = await execa("git", ["diff", "--cached"], { cwd: workDir, reject: false });
+                    diff = (diffCmdUnstaged.stdout || "") + "\n" + (diffCmdStaged.stdout || "");
+                }
 
                 const compliance = await verifySpecCompliance(t.description, diff);
 
