@@ -1734,7 +1734,8 @@ function updateAgents3D() {
             if (mesh.material) {
               if (Array.isArray(mesh.material)) {
                 mesh.material.forEach((m: THREE.Material) => {
-                  if ((m as THREE.MeshBasicMaterial).map) (m as THREE.MeshBasicMaterial).map?.dispose();
+                  const materialWithMap = m as THREE.MeshBasicMaterial;
+                  if (materialWithMap.map) materialWithMap.map.dispose();
                   m.dispose();
                 });
               } else {
