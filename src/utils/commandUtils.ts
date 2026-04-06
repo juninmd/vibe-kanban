@@ -46,7 +46,7 @@ export function getGlobalCommandPath(command: string): string | null {
 
     // Fallback to 'where' / 'which'
     const bin = isWindows ? "where" : "which";
-    const result = execaSync(bin, [command], { encoding: "utf8", stdio: "pipe", reject: false });
+    const result = execaSync(bin, [command], { encoding: "utf8", stdio: "pipe", reject: false, shell: false });
     if (result.failed || !result.stdout) return null;
     return result.stdout.split("\n")[0].trim() || null;
   } catch {
@@ -89,7 +89,7 @@ export function isCommandAvailable(command: string): boolean {
 export function getCommandVersion(command: string): string | null {
   try {
     const cmdPath = getGlobalCommandPath(command) || command;
-    const result = execaSync(cmdPath, ["--version"], { encoding: "utf8", stdio: "pipe", reject: false });
+    const result = execaSync(cmdPath, ["--version"], { encoding: "utf8", stdio: "pipe", reject: false, shell: false });
     if (result.failed || !result.stdout) return null;
     return result.stdout.trim() || null;
   } catch {
