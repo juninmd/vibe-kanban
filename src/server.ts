@@ -906,6 +906,7 @@ Return ONLY a JSON array with this structure:
 
     const createdTasks: Task[] = [];
     if (Array.isArray(generatedTasks)) {
+      const planGroupId = `plan-${Date.now()}`;
       // First pass: Create tasks
       for (const t of generatedTasks) {
         if (t.title && t.category) {
@@ -935,6 +936,7 @@ Return ONLY a JSON array with this structure:
             description: finalDescription,
             githubRepo: typeof body.repoUrl === "string" ? body.repoUrl : undefined,
             dependencies: [], // Initialize empty
+            groupId: planGroupId // Group tasks from the same plan together
           });
           createdTasks.push(task);
         }

@@ -8,6 +8,7 @@ import { getProjectContext, extractAndWriteFiles } from "../utils/fileUtils.js";
 import { isCommandAvailable, getGlobalCommandPath } from "../utils/commandUtils.js";
 import { spawnWithPty, stripAnsi } from "../utils/ptyUtils.js";
 import { createErrorLoopDetector, createSessionTimeout, createStallDetector, handleOverseerResults, startOverseer } from "../utils/overseerUtils.js";
+import { DB } from "../db.js";
 import { logDebugBlock, logDebugCommand } from "./debugLogging.js";
 
 // Gemini-specific: these prefixes appear on every failed tool call and API error
@@ -39,6 +40,19 @@ export class GeminiDriver implements LLMDriver {
 
       const isPlanMode = task.agentType === "plan";
 
+      const allTasks = DB.getTasks();
+      let lineageContext = "";
+      if (task.groupId) {
+          const siblings = allTasks.filter(t => t.groupId === task.groupId && t.id !== task.id);
+          if (siblings.length > 0) {
+              lineageContext = `\n## Parallel Work (Lineage Context)\nThe following sibling tasks may be running concurrently or have been completed. Do NOT duplicate their work:\n`;
+              siblings.forEach(sibling => {
+                  lineageContext += `- [Task #${sibling.id}] ${sibling.title} (Status: ${sibling.lane})\n`;
+              });
+              lineageContext += "\n";
+          }
+      }
+
       let guardrails = "";
       if (task.lastError) {
           guardrails = `\n[GUARDRAILS]\nPREVIOUS ATTEMPT FAILED WITH ERROR:\n${task.lastError}\nEnsure you fix the issue and do not repeat the same mistake.\n`;
@@ -59,6 +73,7 @@ TITLE: ${task.title}
 DESCRIPTION: ${task.description || "No description provided."}
 CATEGORY: ${task.category}
 PRIORITY: ${task.priority}
+${lineageContext}
 ${guardrails}
 RULES:
 1. TREAT THE FILESYSTEM AS READ-ONLY: do NOT modify, create or delete files.
@@ -90,6 +105,7 @@ TITLE: ${task.title}
 DESCRIPTION: ${task.description || "No description provided."}
 CATEGORY: ${task.category}
 PRIORITY: ${task.priority}
+${lineageContext}
 ${guardrails}
 INSTRUCTIONS:
 1. Explore the codebase if necessary.

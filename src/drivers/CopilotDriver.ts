@@ -4,6 +4,7 @@ import { isCommandAvailable } from "../utils/commandUtils.js";
 import { logDebugBlock, logDebugCommand } from "./debugLogging.js";
 import { handleChildProcess } from "../utils/processHelpers.js";
 import { createStallDetector, STALL_MESSAGE } from "../utils/overseerUtils.js";
+import { DB } from "../db.js";
 
 import { ChildProcess } from "child_process";
 
@@ -16,8 +17,21 @@ export class CopilotDriver implements LLMDriver {
          throw new Error("GitHub CLI ('gh') not found. Please install it: https://cli.github.com/");
       }
 
+      const allTasks = DB.getTasks();
+      let lineageContext = "";
+      if (task.groupId) {
+          const siblings = allTasks.filter(t => t.groupId === task.groupId && t.id !== task.id);
+          if (siblings.length > 0) {
+              lineageContext = `\n## Parallel Work (Lineage Context)\nThe following sibling tasks may be running concurrently or have been completed. Do NOT duplicate their work:\n`;
+              siblings.forEach(sibling => {
+                  lineageContext += `- [Task #${sibling.id}] ${sibling.title} (Status: ${sibling.lane})\n`;
+              });
+              lineageContext += "\n";
+          }
+      }
+
       const cmd = "gh";
-      const promptContext = `[Role: ${agent.role}] ${task.title}`;
+      const promptContext = `[Role: ${agent.role}] ${task.title}\n${lineageContext}`;
       const args = ["copilot", "suggest", promptContext, "--target", "nodejs"];
       logDebugBlock(ctx, task.id, "AGENT PROMPT", promptContext);
       logDebugCommand(ctx, task.id, cmd, ["copilot", "suggest", "<prompt>", "--target", "nodejs"]);

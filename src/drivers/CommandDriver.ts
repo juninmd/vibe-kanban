@@ -5,6 +5,7 @@ import { Task, Agent, LLMDriver, DriverContext } from "../types.js";
 import { extractAndWriteFiles } from "../utils/fileUtils.js";
 import { logDebugBlock, logDebugCommand } from "./debugLogging.js";
 import { createErrorLoopDetector, createSessionTimeout, createStallDetector, handleOverseerResults, startOverseer } from "../utils/overseerUtils.js";
+import { DB } from "../db.js";
 
 import { ResultPromise } from "execa";
 import { TerminalManager } from "../terminal/TerminalManager.js";
@@ -47,6 +48,19 @@ export class CommandDriver implements LLMDriver {
         let args: string[] = [];
         let fullOutput = "";
 
+        const allTasks = DB.getTasks();
+        let lineageContext = "";
+        if (task.groupId) {
+            const siblings = allTasks.filter(t => t.groupId === task.groupId && t.id !== task.id);
+            if (siblings.length > 0) {
+                lineageContext = `\n## Parallel Work (Lineage Context)\nThe following sibling tasks may be running concurrently or have been completed. Do NOT duplicate their work:\n`;
+                siblings.forEach(sibling => {
+                    lineageContext += `- [Task #${sibling.id}] ${sibling.title} (Status: ${sibling.lane})\n`;
+                });
+                lineageContext += "\n";
+            }
+        }
+
         let guardrails = "";
         if (task.lastError) {
             guardrails = `\nPREVIOUS ATTEMPT FAILED WITH ERROR:\n${task.lastError}\nEnsure you fix the issue and do not repeat the same mistake.\n`;
@@ -55,6 +69,7 @@ export class CommandDriver implements LLMDriver {
         const prompt = `Task: ${task.title}
 Description: ${task.description || ""}
 Source: ${task.source}
+${lineageContext}
 ${guardrails}
 You are an autonomous coding agent. Your goal is to complete the task by writing code.
 To create or overwrite a file, use the following format exactly:

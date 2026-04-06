@@ -6,6 +6,7 @@ import * as path from "path";
 import { resolveOpenCodeCommand } from "../utils/commandUtils.js";
 import { stripAnsi } from "../utils/ptyUtils.js";
 import { createErrorLoopDetector, createSessionTimeout, createStallDetector, handleOverseerResults, startOverseer } from "../utils/overseerUtils.js";
+import { DB } from "../db.js";
 import { extractAndWriteFiles } from "../utils/fileUtils.js";
 import { logDebugBlock, logDebugCommand } from "./debugLogging.js";
 
@@ -72,7 +73,8 @@ export class OpenCodeDriver implements LLMDriver {
          throw new Error(MISSING_OPENCODE_MESSAGE);
       }
 
-      const prompt = buildSystemPrompt(task, agent);
+      const allTasks = DB.getTasks();
+      const prompt = buildSystemPrompt(task, agent, allTasks);
 
    const args = buildOpenCodeArgs(task, agent, prompt);
    const visibleArgs = args.slice(0, -1).join(" ") || "run";

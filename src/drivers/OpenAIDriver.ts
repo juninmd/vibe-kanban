@@ -4,6 +4,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { getProjectContext, extractAndWriteFiles } from "../utils/fileUtils.js";
 import { logDebugBlock } from "./debugLogging.js";
+import { DB } from "../db.js";
 
 export class OpenAIDriver implements LLMDriver {
    name: string = "OpenAI API";
@@ -26,11 +27,25 @@ export class OpenAIDriver implements LLMDriver {
 
       const projectContext = getProjectContext(basePath);
 
+      const allTasks = DB.getTasks();
+      let lineageContext = "";
+      if (task.groupId) {
+          const siblings = allTasks.filter(t => t.groupId === task.groupId && t.id !== task.id);
+          if (siblings.length > 0) {
+              lineageContext = `\n## Parallel Work (Lineage Context)\nThe following sibling tasks may be running concurrently or have been completed. Do NOT duplicate their work:\n`;
+              siblings.forEach(sibling => {
+                  lineageContext += `- [Task #${sibling.id}] ${sibling.title} (Status: ${sibling.lane})\n`;
+              });
+              lineageContext += "\n";
+          }
+      }
+
       const prompt = `
 Task: ${task.title}
 Description: ${task.description || "No description provided."}
 Category: ${task.category}
 Priority: ${task.priority}
+${lineageContext}
 
 ${projectContext}
 
