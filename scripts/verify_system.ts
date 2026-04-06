@@ -19,8 +19,8 @@ async function fetchJson(url: string, options: FetchOptions = {}) {
         });
         const text = await res.text();
         return text ? JSON.parse(text) : {};
-    } catch (err: any) {
-        if (err.cause?.code !== 'ECONNREFUSED') console.error(err);
+    } catch (err: unknown) {
+        if (err instanceof Error && (err as Error & { cause?: { code?: string } }).cause?.code !== 'ECONNREFUSED') console.error(err);
         throw err;
     }
 }

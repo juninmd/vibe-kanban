@@ -65,8 +65,8 @@ async function run() {
                 description: "Create a verification file."
             })
         });
-        const taskData: any = await taskRes.json();
-        const taskId = taskData.task.id;
+        const taskData: unknown = await taskRes.json();
+        const taskId = (taskData as { task: { id: number } }).task.id;
         console.log(`Created Task #${taskId}`);
 
         // 4. Assign Task (AutoAssign runs every 3s, but let's manual assign to be faster)
@@ -75,8 +75,8 @@ async function run() {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ taskId })
         });
-        const assignData: any = await assignRes.json();
-        console.log(`Assigned Task #${taskId} to Agent ${assignData.agent.role}`);
+        const assignData: unknown = await assignRes.json();
+        console.log(`Assigned Task #${taskId} to Agent ${(assignData as { agent: { role: string } }).agent.role}`);
 
         // 5. Wait for file creation
         console.log("Waiting for agent to work...");
@@ -97,9 +97,9 @@ async function run() {
             } else {
                 // Check status
                 const stateRes = await fetch(`${API_URL}/api/state`);
-                const state: any = await stateRes.json();
-                const task = state.tasks.find((t: any) => t.id === taskId);
-                if (task.lane === "done" && !found) {
+                const state: unknown = await stateRes.json();
+                const task = (state as { tasks: { id: number; lane: string }[] }).tasks.find((t) => t.id === taskId);
+                if (task?.lane === "done" && !found) {
                      console.log("Task finished but file not found?");
                      // Maybe it wrote plan.md instead?
                      if (fs.existsSync(path.join(taskDir, "plan.md"))) {
