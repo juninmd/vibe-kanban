@@ -9,6 +9,7 @@ import { isCommandAvailable, getGlobalCommandPath } from "../utils/commandUtils.
 import { spawnWithPty, stripAnsi } from "../utils/ptyUtils.js";
 import { createErrorLoopDetector, createSessionTimeout, createStallDetector, handleOverseerResults, startOverseer } from "../utils/overseerUtils.js";
 import { DB } from "../db.js";
+import { getLineageContext } from "../utils/promptUtils.js";
 import { logDebugBlock, logDebugCommand } from "./debugLogging.js";
 
 // Gemini-specific: these prefixes appear on every failed tool call and API error
@@ -40,18 +41,8 @@ export class GeminiDriver implements LLMDriver {
 
       const isPlanMode = task.agentType === "plan";
 
-      const allTasks = DB.getTasks();
-      let lineageContext = "";
-      if (task.groupId) {
-          const siblings = allTasks.filter(t => t.groupId === task.groupId && t.id !== task.id);
-          if (siblings.length > 0) {
-              lineageContext = `\n## Parallel Work (Lineage Context)\nThe following sibling tasks may be running concurrently or have been completed. Do NOT duplicate their work:\n`;
-              siblings.forEach(sibling => {
-                  lineageContext += `- [Task #${sibling.id}] ${sibling.title} (Status: ${sibling.lane})\n`;
-              });
-              lineageContext += "\n";
-          }
-      }
+      const siblings = task.groupId ? DB.getTasksByGroupId(task.groupId).filter(t => t.id !== task.id) : [];
+      const lineageContext = getLineageContext(task, siblings);
 
       let guardrails = "";
       if (task.lastError) {
