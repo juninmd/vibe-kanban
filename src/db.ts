@@ -52,25 +52,19 @@ db.exec(`
   );
 `);
 
-// Migration: add workDir column if missing
-try {
-  db.exec(`ALTER TABLE tasks ADD COLUMN workDir TEXT`);
-} catch (e) { /* column already exists */ }
+// Migrations: add missing columns dynamically
+const migrations = [
+  "ALTER TABLE tasks ADD COLUMN workDir TEXT",
+  "ALTER TABLE tasks ADD COLUMN baseRepoDir TEXT",
+  "ALTER TABLE tasks ADD COLUMN dependencies TEXT DEFAULT '[]'",
+  "ALTER TABLE tasks ADD COLUMN groupId TEXT"
+];
 
-// Migration: add baseRepoDir column if missing
-try {
-  db.exec(`ALTER TABLE tasks ADD COLUMN baseRepoDir TEXT`);
-} catch (e) { /* column already exists */ }
-
-// Migration: add dependencies column if missing
-try {
-  db.exec(`ALTER TABLE tasks ADD COLUMN dependencies TEXT DEFAULT '[]'`);
-} catch (e) { /* column already exists */ }
-
-// Migration: add groupId column if missing
-try {
-  db.exec(`ALTER TABLE tasks ADD COLUMN groupId TEXT`);
-} catch (e) { /* column already exists */ }
+for (const migration of migrations) {
+  try {
+    db.exec(migration);
+  } catch (e) { /* column already exists */ }
+}
 
 export const DB = {
   // Tasks
