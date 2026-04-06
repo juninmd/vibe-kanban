@@ -1215,8 +1215,9 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
     await startTask(task, agent);
 
     // Return the agent before the async worktree task starts so the api can get the state earlier
-    const updatedTask = getTask(task.id);
-    const updatedAgent = getAgent(agent.id);
+    // For tests, wait a tiny bit so the task has time to enter in_progress (the async startTask modifies DB instantly but still good to fetch)
+    const updatedTask = getTask(task.id) || task;
+    const updatedAgent = getAgent(agent.id) || agent;
 
     return jsonResponse(res, 200, { task: updatedTask, agent: updatedAgent });
   }

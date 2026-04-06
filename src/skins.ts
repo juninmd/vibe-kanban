@@ -115,15 +115,18 @@ export function getBodyMaterials(role: string, modelName?: string, badgeColorFal
                 const line2 = modelName.substring(splitIdx + 1);
 
                 ctx.save();
-                // The model's UVs may be flipped, so we render text upside-down on the canvas for it to appear upright.
+                // To avoid redundant scale flips that mirror the text incorrectly,
+                // we rotate the text 180 degrees so it appears upright on the correctly mapped UVs.
                 ctx.translate(128, rectY + rectHeight / 2 - 8);
+                ctx.rotate(Math.PI);
                 ctx.fillText(line1, 0, 0);
-                ctx.translate(0, 18); // y-offset from line1's -8 to line2's +10
+                ctx.translate(0, -18); // y-offset reversed because of rotation
                 ctx.fillText(line2, 0, 0);
                 ctx.restore();
             } else {
                 ctx.save();
                 ctx.translate(128, rectY + rectHeight / 2 + 2);
+                ctx.rotate(Math.PI);
                 ctx.fillText(modelName, 0, 0);
                 ctx.restore();
             }
