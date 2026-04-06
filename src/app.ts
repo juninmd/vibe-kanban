@@ -1576,7 +1576,7 @@ function updateVisualAlerts() {
   }
 }
 
-function playAction(item: { anims?: Record<string, THREE.AnimationAction>; currentAction?: THREE.AnimationAction | null; fadeOut?: (duration: number) => void } | any, name: string, duration = 0.5) {
+function playAction(item: { anims?: Record<string, THREE.AnimationAction>; currentAction?: THREE.AnimationAction | null } | null | undefined, name: string, duration = 0.5) {
   if (!item || !item.anims) return;
   const action = item.anims[name] || item.anims["Idle"];
   if (action && item.currentAction !== action) {
@@ -1711,7 +1711,7 @@ function updateAgents3D() {
   // Check if we need to create meshes for new agents or update existing ones
   agents.forEach((agent, idx) => {
     const existing = agentMeshes.get(agent.id);
-    let oldState: { position: THREE.Vector3, rotation: THREE.Euler, target: THREE.Vector3, phase: string, phaseTimer: number } | null = null;
+    let oldState: { position: THREE.Vector3, rotation: THREE.Euler, target: THREE.Vector3, phase: "idle" | "walking_to_board" | "at_board" | "walking_to_desk" | "working" | "walking_from_desk" | "celebrating", phaseTimer: number } | null = null;
 
     if (existing) {
       if (existing.group.userData.model !== agent.model || existing.group.userData.role !== agent.role) {
@@ -1760,7 +1760,7 @@ function updateAgents3D() {
         meshData.target.copy(oldState.target);
         agentMeshes.set(agent.id, {
           ...meshData,
-          phase: oldState.phase as "idle" | "walking_to_board" | "at_board" | "walking_to_desk" | "working" | "walking_from_desk" | "celebrating",
+          phase: oldState.phase,
           phaseTimer: oldState.phaseTimer
         });
         // Let the tick logic handle resuming the right animation based on phase
