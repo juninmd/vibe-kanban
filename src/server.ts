@@ -906,7 +906,7 @@ Return ONLY a JSON array with this structure:
 
     const createdTasks: Task[] = [];
     if (Array.isArray(generatedTasks)) {
-      const planGroupId = `plan-${Date.now()}`;
+      const planGroupId = `plan-${crypto.randomUUID()}`;
       // First pass: Create tasks
       for (const t of generatedTasks) {
         if (t.title && t.category) {
