@@ -1,8 +1,5 @@
 import type { ChildProcess } from "node:child_process";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
-
-const execFileAsync = promisify(execFile);
+import { execa } from "execa";
 
 /** Grace period (ms) between SIGTERM and SIGKILL escalation. */
 const SIGKILL_GRACE_MS = 10_000;
@@ -160,7 +157,7 @@ export interface OverseerHandle {
 
 export async function getGitSnapshot(cwd: string): Promise<string | null> {
 	try {
-		const { stdout } = await execFileAsync("git", ["status", "--porcelain"], {
+		const { stdout } = await execa("git", ["status", "--porcelain"], {
 			cwd,
 			timeout: 10_000,
 		});
