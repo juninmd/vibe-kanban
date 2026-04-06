@@ -6,6 +6,7 @@ import { extractAndWriteFiles } from "../utils/fileUtils.js";
 import { logDebugBlock, logDebugCommand } from "./debugLogging.js";
 import { createErrorLoopDetector, createSessionTimeout, createStallDetector, handleOverseerResults, startOverseer } from "../utils/overseerUtils.js";
 import { DB } from "../db.js";
+import { getLineageContext } from "../utils/promptUtils.js";
 
 import { ResultPromise } from "execa";
 import { TerminalManager } from "../terminal/TerminalManager.js";
@@ -48,18 +49,8 @@ export class CommandDriver implements LLMDriver {
         let args: string[] = [];
         let fullOutput = "";
 
-        const allTasks = DB.getTasks();
-        let lineageContext = "";
-        if (task.groupId) {
-            const siblings = allTasks.filter(t => t.groupId === task.groupId && t.id !== task.id);
-            if (siblings.length > 0) {
-                lineageContext = `\n## Parallel Work (Lineage Context)\nThe following sibling tasks may be running concurrently or have been completed. Do NOT duplicate their work:\n`;
-                siblings.forEach(sibling => {
-                    lineageContext += `- [Task #${sibling.id}] ${sibling.title} (Status: ${sibling.lane})\n`;
-                });
-                lineageContext += "\n";
-            }
-        }
+        const siblings = task.groupId ? DB.getTasksByGroupId(task.groupId).filter(t => t.id !== task.id) : [];
+        const lineageContext = getLineageContext(task, siblings);
 
         let guardrails = "";
         if (task.lastError) {
