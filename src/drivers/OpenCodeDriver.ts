@@ -73,8 +73,8 @@ export class OpenCodeDriver implements LLMDriver {
          throw new Error(MISSING_OPENCODE_MESSAGE);
       }
 
-      const allTasks = DB.getTasks();
-      const prompt = buildSystemPrompt(task, agent, allTasks);
+      const siblings = task.groupId ? DB.getTasksByGroupId(task.groupId).filter(t => t.id !== task.id) : [];
+      const prompt = buildSystemPrompt(task, agent, siblings);
 
    const args = buildOpenCodeArgs(task, agent, prompt);
    const visibleArgs = args.slice(0, -1).join(" ") || "run";
