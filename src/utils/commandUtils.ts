@@ -1,4 +1,4 @@
-import { execaSync } from "execa";
+import { execa } from "execa";
 import * as path from "path";
 import * as fs from "fs";
 import * as os from "os";
@@ -44,11 +44,26 @@ export function getGlobalCommandPath(command: string): string | null {
       }
     }
 
-    // Fallback to 'where' / 'which'
-    const bin = isWindows ? "where" : "which";
-    const result = execaSync(bin, [command], { encoding: "utf8", stdio: "pipe", reject: false, shell: false });
-    if (result.failed || !result.stdout) return null;
-    return result.stdout.split("\n")[0].trim() || null;
+    // Fallback to manual PATH traversal
+    const pathDirs = (process.env.PATH || "").split(path.delimiter);
+    for (const dir of pathDirs) {
+      if (!dir) continue;
+      const exeExts = isWindows ? [".cmd", ".bat", ".exe", ""] : [""];
+      for (const ext of exeExts) {
+        const fullPath = path.join(dir, command + ext);
+        if (fs.existsSync(fullPath)) {
+          try {
+            const stat = fs.statSync(fullPath);
+            if (stat.isFile() && (isWindows || (stat.mode & 0o111))) {
+              return fullPath;
+            }
+          } catch {
+            // Ignore access errors
+          }
+        }
+      }
+    }
+    return null;
   } catch {
     return null;
   }
@@ -86,10 +101,10 @@ export function isCommandAvailable(command: string): boolean {
   return !!getGlobalCommandPath(command);
 }
 
-export function getCommandVersion(command: string): string | null {
+export async function getCommandVersion(command: string): Promise<string | null> {
   try {
     const cmdPath = getGlobalCommandPath(command) || command;
-    const result = execaSync(cmdPath, ["--version"], { encoding: "utf8", stdio: "pipe", reject: false, shell: false });
+    const result = await execa(cmdPath, ["--version"], { encoding: "utf8", stdio: "pipe", reject: false, shell: false });
     if (result.failed || !result.stdout) return null;
     return result.stdout.trim() || null;
   } catch {

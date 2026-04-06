@@ -33,7 +33,7 @@ function detectModelList(tool: string): string[] {
   return STATIC_MODELS[tool] || [];
 }
 
-function detectTooling(): DetectedTool[] {
+async function detectTooling(): Promise<DetectedTool[]> {
   const cliTools = [
     { id: "gemini", command: "gemini" },
     { id: "opencode", command: "opencode" },
@@ -41,16 +41,18 @@ function detectTooling(): DetectedTool[] {
     { id: "claude", command: "claude" }
   ];
 
-  const cliDiscovery: DetectedTool[] = cliTools.map(({ id, command }) => {
-    const available = isCommandAvailable(command);
-    return {
-      id,
-      kind: "cli",
-      available,
-      version: available ? getCommandVersion(command) || undefined : undefined,
-      models: detectModelList(id)
-    };
-  });
+  const cliDiscovery: DetectedTool[] = await Promise.all(
+    cliTools.map(async ({ id, command }) => {
+      const available = isCommandAvailable(command);
+      return {
+        id,
+        kind: "cli",
+        available,
+        version: available ? (await getCommandVersion(command)) || undefined : undefined,
+        models: detectModelList(id)
+      };
+    })
+  );
 
   const apiTools: DetectedTool[] = [
     {
@@ -104,8 +106,8 @@ function buildBusinessRecommendations(tools: DetectedTool[], vcs: VcsProviderCap
   return recommendations;
 }
 
-export function getToolingLandscape() {
-  const tools = detectTooling();
+export async function getToolingLandscape() {
+  const tools = await detectTooling();
   const vcsProviders = detectVcsCapabilities();
 
   return {

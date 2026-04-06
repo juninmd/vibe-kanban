@@ -835,7 +835,7 @@ const server = createServer(async (req, res) => {
 
   // GET /api/tooling/landscape
   if (url === "/api/tooling/landscape" && method === "GET") {
-    return jsonResponse(res, 200, getToolingLandscape());
+    return jsonResponse(res, 200, await getToolingLandscape());
   }
 
   // POST /api/demands/intake

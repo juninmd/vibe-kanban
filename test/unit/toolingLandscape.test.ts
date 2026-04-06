@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { getToolingLandscape } from '../../dist/utils/toolingLandscape.js'; // NOSONAR
 
 describe('toolingLandscape', () => {
-  test('returns tooling inventory, vcs capabilities and recommendations', () => {
-    const landscape = getToolingLandscape();
+  test('returns tooling inventory, vcs capabilities and recommendations', async () => {
+    const landscape = await getToolingLandscape();
 
     assert.equal(typeof landscape.detectedAt, 'string');
     assert.ok(Array.isArray(landscape.tools));
