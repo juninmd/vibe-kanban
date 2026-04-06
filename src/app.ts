@@ -7,6 +7,7 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { createOffice } from "./office.js";
 import { getLaneSafe, getTaskCardPosition, shouldRenderTaskIn3D } from "./kanbanMath.js";
 import { getHeadMaterials, getBodyMaterials, getLimbMaterial } from "./skins.js";
+import { State } from "./types.js";
 
 const API_URL = "";
 
@@ -15,7 +16,7 @@ type Agent = {
   role: string;
   model: string;
   category: string;
-  status: "idle" | "working";
+  status: "idle" | "working" | "error";
   assignedTask: number | null;
   tool?: string;
 };
@@ -64,7 +65,7 @@ let eventLog: EventLog[] = [];
 let previousTaskState = new Map<number, { lane: string; assignedTo: string | null }>(); // Para rastrear mudanças e detectar transições
 let renderQueued = false;
 let stateUpdateQueued = false;
-let pendingStateData: any = null;
+let pendingStateData: State | null = null;
 let lastUpdateTimestamp = 0;
 const STATE_DEBOUNCE_MS = 100; // Debounce state updates to prevent UI freeze
 let activeTaskDetailsId: number | null = null;
@@ -75,7 +76,7 @@ let activeTaskLogKeys = new Set<string>();
 
 
 // --- Sound System ---
-const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+const audioCtx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
 
 
 // --- Dashboard Logic ---
@@ -279,12 +280,12 @@ function syncActiveTaskDetails() {
 }
 
 // Confetti State
-const confettiParticles: any[] = [];
+const confettiParticles: { mesh: THREE.Points; velocities: { x: number; y: number; z: number }[]; age: number }[] = [];
 
 let isOfficeCreated = false;
 export let officeData: { padPositions: THREE.Vector3[] } = { padPositions: [] };
 
-function updateState(data: any) {
+function updateState(data: State) {
   if (!data || !Array.isArray(data.tasks) || !Array.isArray(data.agents) || !Array.isArray(data.events)) return;
 
   pendingStateData = data;
@@ -298,6 +299,7 @@ function updateState(data: any) {
   requestAnimationFrame(() => {
     const data = pendingStateData;
     stateUpdateQueued = false;
+    if (!data) return;
 
     // Detect completions for celebration
     const newTasks = data.tasks || [];
@@ -387,7 +389,7 @@ async function fetchState() {
   }
 }
 
-async function apiCall(endpoint: string, method: string, body: any) {
+async function apiCall(endpoint: string, method: string, body: unknown) {
   try {
     const res = await fetch(`${API_URL}${endpoint}`, {
       method,
@@ -783,9 +785,9 @@ async function openAgentEditModal(agent: Agent) {
   els.agentTool.innerHTML = '<option value="">Carregando...</option>';
   try {
     const res = await fetch(`${API_URL}/api/tools`);
-    const data = await res.json();
+    const data = await res.json() as { tools: { id: string; name: string }[] };
     if (data.tools && data.tools.length > 0) {
-      els.agentTool.innerHTML = '<option value="">Selecione a ferramenta</option>' + data.tools.map((t: any) => `<option value="${t.id}"${t.id === agent.tool ? ' selected' : ''}>${t.name}</option>`).join("");
+      els.agentTool.innerHTML = '<option value="">Selecione a ferramenta</option>' + data.tools.map((t) => `<option value="${t.id}"${t.id === agent.tool ? ' selected' : ''}>${t.name}</option>`).join("");
     }
   } catch (e) { console.error(e); }
   // Load models for the tool
@@ -1055,9 +1057,9 @@ els.createAgentBtn.addEventListener("click", async () => {
   els.agentTool.innerHTML = '<option value="">Carregando...</option>';
   try {
     const res = await fetch(`${API_URL}/api/tools`);
-    const data = await res.json();
+    const data = await res.json() as { tools: { id: string; name: string }[] };
     if (data.tools && data.tools.length > 0) {
-      els.agentTool.innerHTML = '<option value="">Selecione a ferramenta</option>' + data.tools.map((t: any) => `<option value="${t.id}">${t.name}</option>`).join("");
+      els.agentTool.innerHTML = '<option value="">Selecione a ferramenta</option>' + data.tools.map((t) => `<option value="${t.id}">${t.name}</option>`).join("");
     } else {
       els.agentTool.innerHTML = '<option value="">Nenhuma ferramenta CLI encontrada</option>';
     }
@@ -1431,9 +1433,9 @@ function updateKanban3D() {
 }
 
 const agentMeshes = new Map<string, {
-  group: any;
-  label?: any;
-  target: any;
+  group: THREE.Group;
+  label?: THREE.Sprite;
+  target: THREE.Vector3;
   phase: "idle" | "walking_to_board" | "at_board" | "walking_to_desk" | "working" | "walking_from_desk" | "celebrating";
   phaseTimer: number;
   color: THREE.Color;
@@ -1574,8 +1576,8 @@ function updateVisualAlerts() {
   }
 }
 
-function playAction(item: any, name: string, duration = 0.5) {
-  if (!item.anims) return;
+function playAction(item: { anims?: Record<string, THREE.AnimationAction>; currentAction?: THREE.AnimationAction | null; fadeOut?: (duration: number) => void } | any, name: string, duration = 0.5) {
+  if (!item || !item.anims) return;
   const action = item.anims[name] || item.anims["Idle"];
   if (action && item.currentAction !== action) {
     if (item.currentAction) {
@@ -1709,7 +1711,7 @@ function updateAgents3D() {
   // Check if we need to create meshes for new agents or update existing ones
   agents.forEach((agent, idx) => {
     const existing = agentMeshes.get(agent.id);
-    let oldState: any = null;
+    let oldState: { position: THREE.Vector3, rotation: THREE.Euler, target: THREE.Vector3, phase: string, phaseTimer: number } | null = null;
 
     if (existing) {
       if (existing.group.userData.model !== agent.model || existing.group.userData.role !== agent.role) {
@@ -1758,7 +1760,7 @@ function updateAgents3D() {
         meshData.target.copy(oldState.target);
         agentMeshes.set(agent.id, {
           ...meshData,
-          phase: oldState.phase,
+          phase: oldState.phase as "idle" | "walking_to_board" | "at_board" | "walking_to_desk" | "working" | "walking_from_desk" | "celebrating",
           phaseTimer: oldState.phaseTimer
         });
         // Let the tick logic handle resuming the right animation based on phase
@@ -2183,10 +2185,10 @@ window.addEventListener("keyup", (e) => {
 async function loadAvailableTools() {
   try {
     const res = await fetch(`${API_URL}/api/tools`);
-    const data = await res.json();
+    const data = await res.json() as { tools: { id: string; name: string }[] };
     if (data.tools && data.tools.length > 0) {
-      els.driverSelect.innerHTML = data.tools.map((t: any) => `<option value="${t.id}">${t.name}</option>`).join("");
-      const agentTypeOptions = '<option value="">Automático / Opcional</option>' + data.tools.map((t: any) => `<option value="${t.id}">${t.name}</option>`).join("");
+      els.driverSelect.innerHTML = data.tools.map((t) => `<option value="${t.id}">${t.name}</option>`).join("");
+      const agentTypeOptions = '<option value="">Automático / Opcional</option>' + data.tools.map((t) => `<option value="${t.id}">${t.name}</option>`).join("");
       els.agentType.innerHTML = agentTypeOptions;
     }
   } catch (e) {

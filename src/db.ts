@@ -69,23 +69,23 @@ try {
 export const DB = {
   // Tasks
   getTasks(): Task[] {
-    const rows = db.prepare("SELECT * FROM tasks ORDER BY createdAt DESC").all() as Record<string, any>[];
+    const rows = db.prepare("SELECT * FROM tasks ORDER BY createdAt DESC").all() as Record<string, unknown>[];
     return rows.map((row) => ({
       ...row,
       interrupted: !!row.interrupted,
-      logs: JSON.parse(row.logs),
-      dependencies: JSON.parse(row.dependencies || '[]')
+      logs: JSON.parse(row.logs as string),
+      dependencies: JSON.parse((row.dependencies as string) || '[]')
     })) as Task[];
   },
 
   getTask(id: number): Task | undefined {
-    const row = db.prepare("SELECT * FROM tasks WHERE id = ?").get(id) as Record<string, any> | undefined;
+    const row = db.prepare("SELECT * FROM tasks WHERE id = ?").get(id) as Record<string, unknown> | undefined;
     if (!row) return undefined;
     return {
       ...row,
       interrupted: !!row.interrupted,
-      logs: JSON.parse(row.logs),
-      dependencies: JSON.parse(row.dependencies || '[]')
+      logs: JSON.parse(row.logs as string),
+      dependencies: JSON.parse((row.dependencies as string) || '[]')
     } as Task;
   },
 
@@ -203,13 +203,13 @@ export const DB = {
   getTerminalLogs(agentId: string, limit = 200): { type: string; content: string; timestamp: number; taskId: number | null }[] {
     return db.prepare(
       "SELECT type, content, timestamp, taskId FROM terminal_logs WHERE agentId = ? ORDER BY id DESC LIMIT ?"
-    ).all(agentId, limit) as any[];
+    ).all(agentId, limit) as { type: string; content: string; timestamp: number; taskId: number | null }[];
   },
 
   getTaskTerminalLogs(taskId: number, limit = 500): { type: string; content: string; timestamp: number; agentId: string }[] {
     return db.prepare(
       "SELECT type, content, timestamp, agentId FROM terminal_logs WHERE taskId = ? ORDER BY id ASC LIMIT ?"
-    ).all(taskId, limit) as any[];
+    ).all(taskId, limit) as { type: string; content: string; timestamp: number; agentId: string }[];
   },
 
   clearTerminalLogs(agentId: string): void {
