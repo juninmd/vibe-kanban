@@ -120,7 +120,7 @@ export function getBodyMaterials(role: string, modelName?: string, badgeColorFal
                 ctx.translate(128, rectY + rectHeight / 2 - 8);
                 ctx.rotate(Math.PI);
                 ctx.fillText(line1, 0, 0);
-                ctx.translate(0, -18); // y-offset reversed because of rotation
+                ctx.translate(0, 18); // y-offset adjusted for 180-degree rotation to move line 2 below line 1
                 ctx.fillText(line2, 0, 0);
                 ctx.restore();
             } else {
