@@ -1,15 +1,13 @@
 import { Task, Agent, LLMDriver, DriverContext } from "../types.js";
-import { spawn } from "child_process";
+import { execa, type ResultPromise } from "execa";
 import { isCommandAvailable } from "../utils/commandUtils.js";
 import { logDebugBlock, logDebugCommand } from "./debugLogging.js";
 import { handleChildProcess } from "../utils/processHelpers.js";
 import { createStallDetector, startOverseer } from "../utils/overseerUtils.js";
 
-import { ChildProcess } from "child_process";
-
 export class CopilotDriver implements LLMDriver {
    name: string = "Copilot CLI";
-   private runningTasks = new Map<number, ChildProcess>();
+   private runningTasks = new Map<number, import("child_process").ChildProcess>();
 
    async executeTask(task: Task, agent: Agent, ctx: DriverContext): Promise<void> {
       if (!isCommandAvailable("gh")) {
@@ -23,11 +21,12 @@ export class CopilotDriver implements LLMDriver {
       logDebugCommand(ctx, task.id, cmd, ["copilot", "suggest", "<prompt>", "--target", "nodejs"]);
       ctx.onLog(task.id, `Running: ${cmd} ${args.join(" ")}`);
 
-      const child = spawn(cmd, args);
+      const child = execa(cmd, args, { reject: false });
       const taskDir = task.workDir || process.cwd();
-      const overseer = startOverseer(child, taskDir, { enabled: true, check_interval: 30, stuck_threshold: 300 });
+      const childProcess = child as unknown as import("child_process").ChildProcess;
+      const overseer = startOverseer(childProcess, taskDir, { enabled: true, check_interval: 30, stuck_threshold: 300 });
 
-      handleChildProcess(child, task, ctx, this.runningTasks, 120, overseer);
+      handleChildProcess(childProcess, task, ctx, this.runningTasks, 120, overseer);
       return Promise.resolve();
    }
 
