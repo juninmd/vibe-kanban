@@ -720,25 +720,25 @@ const server = createServer(async (req, res) => {
           break;
       }
 
-      fs.readFile(filePath, (error, content) => {
-        if (error) {
-          if (error.code == "ENOENT") {
-            jsonResponse(res, 404, { error: "Not found" });
-          } else {
-            res.writeHead(500);
-            res.end("Sorry, check with the site admin for error: " + error.code + " ..\n");
-          }
+      try {
+        const content = await fs.promises.readFile(filePath);
+        res.writeHead(200, {
+          "Content-Type": contentType,
+          "Content-Security-Policy": "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https:;",
+          "X-Content-Type-Options": "nosniff",
+          "X-Frame-Options": "DENY",
+          "Strict-Transport-Security": "max-age=31536000; includeSubDomains"
+        });
+        res.end(content, "utf-8");
+      } catch (error: unknown) {
+        const err = error as NodeJS.ErrnoException;
+        if (err.code == "ENOENT") {
+          jsonResponse(res, 404, { error: "Not found" });
         } else {
-          res.writeHead(200, {
-            "Content-Type": contentType,
-            "Content-Security-Policy": "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https:;",
-            "X-Content-Type-Options": "nosniff",
-            "X-Frame-Options": "DENY",
-            "Strict-Transport-Security": "max-age=31536000; includeSubDomains"
-          });
-          res.end(content, "utf-8");
+          res.writeHead(500);
+          res.end("Sorry, check with the site admin for error: " + err.code + " ..\n");
         }
-      });
+      }
       return;
     }
   }

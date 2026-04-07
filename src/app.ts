@@ -332,7 +332,7 @@ function updateState(data: State) {
       const data = createOffice(scene, agents.length);
       officeData.padPositions = data.padPositions;
       isOfficeCreated = true;
-      spawnComputers();
+      spawnComputers().catch(console.error);
     }
 
     eventLog = data.events || [];
@@ -567,13 +567,26 @@ function renderAgents() {
 }
 
 // --- Terminal UI Logic ---
-declare var Terminal: any;
-declare var FitAddon: any;
-declare var WebLinksAddon: any;
+interface TerminalInterface {
+  loadAddon(addon: unknown): void;
+  open(el: HTMLElement): void;
+  onData(cb: (d: string) => void): { dispose: () => void };
+  write(d: string): void;
+  focus(): void;
+  dispose(): void;
+}
+
+interface FitAddonInterface {
+  fit(): void;
+}
+
+declare var Terminal: { new(options: unknown): TerminalInterface };
+declare var FitAddon: { FitAddon: { new(): FitAddonInterface } };
+declare var WebLinksAddon: { WebLinksAddon: { new(): unknown } };
 
 class TerminalInstance {
-  term: any;
-  fitAddon: any;
+  term: TerminalInterface;
+  fitAddon: FitAddonInterface;
   agentId: string;
   container: HTMLDivElement;
   tab: HTMLDivElement;
@@ -1198,9 +1211,10 @@ function updateLighting() {
 let computers: THREE.Group[] = [];
 
 // Desk generation
-function spawnComputers() {
+async function spawnComputers() {
   const loader = new GLTFLoader();
-  loader.load("/models/old_computer.glb", (gltf) => {
+  try {
+    const gltf = await loader.loadAsync("/models/old_computer.glb");
     officeData.padPositions.forEach((pos) => {
       const group = new THREE.Group();
       group.position.set(pos.x, 0, pos.z - 1.2);
@@ -1221,7 +1235,7 @@ function spawnComputers() {
       scene.add(group);
       computers.push(group);
     });
-  }, undefined, (error) => {
+  } catch (error) {
     console.error("Falha ao carregar modelo old_computer.glb, usando fallback", error);
     officeData.padPositions.forEach((pos) => {
       const deskGroup = new THREE.Group();
@@ -1242,7 +1256,7 @@ function spawnComputers() {
       scene.add(deskGroup);
       computers.push(deskGroup);
     });
-  });
+  }
 }
 
 // Confetti System

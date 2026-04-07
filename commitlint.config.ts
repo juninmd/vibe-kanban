@@ -1,3 +1,5 @@
+import type { UserConfig } from '@commitlint/types';
+
 export default {
   rules: {
     'body-leading-blank': [1, 'always'],
@@ -32,4 +34,4 @@ export default {
       ]
     ]
   }
-};
+} satisfies UserConfig;
