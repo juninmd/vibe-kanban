@@ -3,7 +3,7 @@ import { execa, type ResultPromise } from "execa";
 import { isCommandAvailable } from "../utils/commandUtils.js";
 import { logDebugBlock, logDebugCommand } from "./debugLogging.js";
 import { handleChildProcess } from "../utils/processHelpers.js";
-import { createStallDetector, startOverseer } from "../utils/overseerUtils.js";
+import { startOverseer } from "../utils/overseerUtils.js";
 
 export class CopilotDriver implements LLMDriver {
    name: string = "Copilot CLI";
