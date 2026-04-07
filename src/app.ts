@@ -580,9 +580,13 @@ interface FitAddonInterface {
   fit(): void;
 }
 
-declare let Terminal: { new(options: unknown): TerminalInterface };
-declare let FitAddon: { FitAddon: { new(): FitAddonInterface } };
-declare let WebLinksAddon: { WebLinksAddon: { new(): unknown } };
+declare global {
+  interface Window {
+    Terminal: { new(options: unknown): TerminalInterface };
+    FitAddon: { FitAddon: { new(): FitAddonInterface } };
+    WebLinksAddon: { WebLinksAddon: { new(): unknown } };
+  }
+}
 
 class TerminalInstance {
   term: TerminalInterface;
@@ -607,7 +611,7 @@ class TerminalInstance {
     els.terminalsTabs.appendChild(this.tab);
 
     // Initialize xterm.js
-    this.term = new Terminal({
+    this.term = new window.Terminal({
       cursorBlink: true,
       fontSize: 14,
       fontFamily: "'Share Tech Mono', monospace",
@@ -626,9 +630,9 @@ class TerminalInstance {
       }
     });
 
-    this.fitAddon = new FitAddon.FitAddon();
+    this.fitAddon = new window.FitAddon.FitAddon();
     this.term.loadAddon(this.fitAddon);
-    this.term.loadAddon(new WebLinksAddon.WebLinksAddon());
+    this.term.loadAddon(new window.WebLinksAddon.WebLinksAddon());
 
     this.term.open(this.container);
     this.fitAddon.fit();
