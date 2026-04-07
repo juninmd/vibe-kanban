@@ -23,7 +23,7 @@ export class CopilotDriver implements LLMDriver {
       logDebugCommand(ctx, task.id, cmd, ["copilot", "suggest", "<prompt>", "--target", "nodejs"]);
       ctx.onLog(task.id, `Running: ${cmd} ${args.join(" ")}`);
 
-      const child = spawn(cmd, args, { shell: true });
+      const child = spawn(cmd, args);
       const taskDir = task.workDir || process.cwd();
       const overseer = startOverseer(child, taskDir, { enabled: true, check_interval: 30, stuck_threshold: 300 });
 
