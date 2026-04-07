@@ -580,9 +580,9 @@ interface FitAddonInterface {
   fit(): void;
 }
 
-declare var Terminal: { new(options: unknown): TerminalInterface };
-declare var FitAddon: { FitAddon: { new(): FitAddonInterface } };
-declare var WebLinksAddon: { WebLinksAddon: { new(): unknown } };
+declare let Terminal: { new(options: unknown): TerminalInterface };
+declare let FitAddon: { FitAddon: { new(): FitAddonInterface } };
+declare let WebLinksAddon: { WebLinksAddon: { new(): unknown } };
 
 class TerminalInstance {
   term: TerminalInterface;

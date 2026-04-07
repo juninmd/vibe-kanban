@@ -688,11 +688,18 @@ const server = createServer(async (req, res) => {
 
       // Prevent directory traversal
       const normalizedPath = path.normalize(filePath);
-      if (normalizedPath.startsWith("..")) {
+      // Determine the absolute root of where the server is running to safely confine paths
+      const rootDir = path.resolve(".");
+      const absolutePath = path.resolve(normalizedPath);
+
+      if (!absolutePath.startsWith(rootDir)) {
         res.writeHead(403);
         res.end("Forbidden");
         return;
       }
+
+      // Use the safe, resolved absolute path instead of just the relative one
+      filePath = absolutePath;
 
       const extname = path.extname(filePath);
       let contentType = "text/html";
