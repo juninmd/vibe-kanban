@@ -23,7 +23,7 @@ export class CopilotDriver implements LLMDriver {
       logDebugCommand(ctx, task.id, cmd, ["copilot", "suggest", "<prompt>", "--target", "nodejs"]);
       ctx.onLog(task.id, `Running: ${cmd} ${args.join(" ")}`);
 
-      const child = spawn(cmd, args, { shell: true });
+      const child = spawn(cmd, args);
       const stallDetector = createStallDetector(child, 120);
 
       handleChildProcess(child, task, ctx, this.runningTasks, 120);

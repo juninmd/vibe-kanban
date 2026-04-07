@@ -1,6 +1,7 @@
 import { buildSystemPrompt } from "../utils/promptUtils.js";
 import { Task, Agent, LLMDriver, DriverContext } from "../types.js";
-import { spawn, type ChildProcess } from "child_process";
+import type { ChildProcess } from "child_process";
+import { execa } from "execa";
 import * as fs from "fs";
 import * as path from "path";
 import { resolveOpenCodeCommand } from "../utils/commandUtils.js";
@@ -35,19 +36,16 @@ export function buildOpenCodeArgs(task: Task, agent: Agent, prompt: string): str
 }
 
 function spawnOpenCode(executable: string, args: string[], cwd: string, env: NodeJS.ProcessEnv): ChildProcess {
-   const stdio: ["ignore", "pipe", "pipe"] = ["ignore", "pipe", "pipe"];
    const options = {
       cwd,
       env,
-      stdio,
       windowsHide: true,
+      reject: false
    };
 
-   if (process.platform === "win32" && /\.(cmd|bat)$/i.test(executable)) {
-      return spawn(process.env.comspec || "cmd.exe", ["/d", "/s", "/c", executable, ...args], options);
-   }
-
-   return spawn(executable, args, options);
+   // execa automatically handles cross-platform execution (including .cmd/.bat on Windows)
+   // without needing manual shell wrapping
+   return execa(executable, args, options) as unknown as ChildProcess;
 }
 
 export class OpenCodeDriver implements LLMDriver {

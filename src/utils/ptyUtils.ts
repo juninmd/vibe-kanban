@@ -1,4 +1,5 @@
-import { type ChildProcess, type SpawnOptions, spawn } from "node:child_process";
+import type { ChildProcess, SpawnOptions } from "node:child_process";
+import { execa } from "execa";
 import { platform } from "node:os";
 
 export interface PtyResult {
@@ -57,16 +58,28 @@ export function spawnWithPty(command: string, options: SpawnOptions = {}): PtyRe
 	const ptyArgs = buildPtyArgs(command);
 
 	if (ptyArgs) {
-		const proc = spawn(ptyArgs.file, ptyArgs.args, {
+		const proc = execa(ptyArgs.file, ptyArgs.args, {
 			...options,
 			stdio: ["ignore", "pipe", "pipe"],
-		});
+			reject: false
+		}) as unknown as ChildProcess;
 		return { proc, isPty: true };
 	}
 
-	const proc = spawn("sh", ["-c", command], {
+	// Fallback when PTY is unavailable: Parse the command string to avoid shell wrapper
+	const match = command.match(/[^\s"']+|"[^"]*"|'[^']*'/g) || [];
+	const args = match.map(s => {
+		if (s.length >= 2 && ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'")))) {
+			return s.slice(1, -1);
+		}
+		return s;
+	});
+	const bin = args.shift() || "echo";
+
+	const proc = execa(bin, args, {
 		...options,
 		stdio: ["ignore", "pipe", "pipe"],
-	});
+		reject: false
+	}) as unknown as ChildProcess;
 	return { proc, isPty: false };
 }
