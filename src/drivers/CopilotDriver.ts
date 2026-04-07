@@ -3,7 +3,7 @@ import { spawn } from "child_process";
 import { isCommandAvailable } from "../utils/commandUtils.js";
 import { logDebugBlock, logDebugCommand } from "./debugLogging.js";
 import { handleChildProcess } from "../utils/processHelpers.js";
-import { createStallDetector, STALL_MESSAGE } from "../utils/overseerUtils.js";
+import { createStallDetector, startOverseer } from "../utils/overseerUtils.js";
 
 import { ChildProcess } from "child_process";
 
@@ -24,9 +24,10 @@ export class CopilotDriver implements LLMDriver {
       ctx.onLog(task.id, `Running: ${cmd} ${args.join(" ")}`);
 
       const child = spawn(cmd, args, { shell: true });
-      const stallDetector = createStallDetector(child, 120);
+      const taskDir = task.workDir || process.cwd();
+      const overseer = startOverseer(child, taskDir, { enabled: true, check_interval: 30, stuck_threshold: 300 });
 
-      handleChildProcess(child, task, ctx, this.runningTasks, 120);
+      handleChildProcess(child, task, ctx, this.runningTasks, 120, overseer);
       return Promise.resolve();
    }
 
