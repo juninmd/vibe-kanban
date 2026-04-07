@@ -736,7 +736,7 @@ const server = createServer(async (req, res) => {
           "X-Frame-Options": "DENY",
           "Strict-Transport-Security": "max-age=31536000; includeSubDomains"
         });
-        res.end(content, "utf-8");
+        res.end(content);
       } catch (error: unknown) {
         const err = error as NodeJS.ErrnoException;
         if (err.code == "ENOENT") {
