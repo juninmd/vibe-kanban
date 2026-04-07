@@ -1,6 +1,5 @@
 import { buildSystemPrompt } from "../utils/promptUtils.js";
 import { Task, Agent, LLMDriver, DriverContext } from "../types.js";
-import { spawn } from "child_process";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
@@ -110,9 +109,14 @@ content
       // Pass current environment to the child process (includes GEMINI_API_KEY, etc.)
       const env = { ...process.env };
 
-      const modelFlag = agent.model ? `--model ${agent.model}` : "";
       const geminiPath = getGlobalCommandPath("gemini") || "gemini";
-      const command = `"${geminiPath}" --yolo ${modelFlag} -p "$(cat '${promptFile}')"`;
+
+      // Build arguments list to avoid string-based shell execution
+      const args = ["--yolo"];
+      if (agent.model) {
+         args.push("--model", agent.model);
+      }
+      args.push("-p", prompt); // Pass the prompt directly as an argument, avoids `$(cat prompt.md)`
 
       let fullOutput = "";
 
@@ -121,15 +125,15 @@ content
          ctx,
          task.id,
          geminiPath,
-         ["--yolo", ...(agent.model ? ["--model", agent.model] : []), "-p", "<prompt>"],
+         [...args.slice(0, -1), "<prompt>"],
       );
       ctx.onLog(task.id, `[SYSTEM] Iniciando Gemini CLI para Tarefa #${task.id}`);
       ctx.onLog(task.id, `[SYSTEM] Workspace: ${basePath}`);
       ctx.onLog(task.id, `[SYSTEM] Modelo: ${agent.model || "(default model)"}`);
-      ctx.onLog(task.id, `[gemini] Running: gemini --yolo ${modelFlag || "(default model)"} -p`);
+      ctx.onLog(task.id, `[gemini] Running: gemini --yolo ${agent.model ? `--model ${agent.model}` : ""} -p <prompt>`);
 
       try {
-         const { proc, isPty } = spawnWithPty(command, {
+         const { proc, isPty } = spawnWithPty(geminiPath, args, {
             cwd: basePath,
             env: env,
          });

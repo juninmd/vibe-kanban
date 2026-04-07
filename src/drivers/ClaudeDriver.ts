@@ -1,9 +1,9 @@
 import { Task, Agent, LLMDriver, DriverContext } from "../types.js";
-import { spawn } from "child_process";
+import { execa } from "execa";
 import { logDebugBlock, logDebugCommand } from "./debugLogging.js";
 import { handleChildProcess } from "../utils/processHelpers.js";
 import { createStallDetector, STALL_MESSAGE, startOverseer } from "../utils/overseerUtils.js";
-import { ChildProcess } from "child_process";
+import type { ChildProcess } from "child_process";
 
 export class ClaudeDriver implements LLMDriver {
    name: string = "Claude Code";
@@ -21,7 +21,7 @@ export class ClaudeDriver implements LLMDriver {
       logDebugCommand(ctx, task.id, cmd, ["prompt", "<prompt>", "--model", agent.model]);
       ctx.onLog(task.id, `Running: ${cmd} ${args.join(" ")}`);
 
-      const child = spawn(cmd, args);
+      const child = execa(cmd, args, { reject: false }) as unknown as ChildProcess;
       const stallDetector = createStallDetector(child, 120);
       const taskDir = task.workDir || process.cwd();
       const overseer = startOverseer(child, taskDir, { enabled: true, check_interval: 30, stuck_threshold: 300 });

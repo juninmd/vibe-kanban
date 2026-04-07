@@ -54,7 +54,10 @@ export function buildPtyArgs(command: string, os?: NodeJS.Platform): PtySpawnArg
  * Uses the `script` utility (available on macOS and Linux) to create the PTY.
  * Falls back to regular pipe if PTY is not available on the platform.
  */
-export function spawnWithPty(command: string, options: SpawnOptions = {}): PtyResult {
+export function spawnWithPty(bin: string, args: string[], options: SpawnOptions = {}): PtyResult {
+	// Escape arguments for the shell when passing to `script`
+	const escapedArgs = args.map(arg => `'${arg.replace(/'/g, "'\\''")}'`);
+	const command = `${bin} ${escapedArgs.join(" ")}`;
 	const ptyArgs = buildPtyArgs(command);
 
 	if (ptyArgs) {
@@ -65,16 +68,6 @@ export function spawnWithPty(command: string, options: SpawnOptions = {}): PtyRe
 		}) as unknown as ChildProcess;
 		return { proc, isPty: true };
 	}
-
-	// Fallback when PTY is unavailable: Parse the command string to avoid shell wrapper
-	const match = command.match(/[^\s"']+|"[^"]*"|'[^']*'/g) || [];
-	const args = match.map(s => {
-		if (s.length >= 2 && ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'")))) {
-			return s.slice(1, -1);
-		}
-		return s;
-	});
-	const bin = args.shift() || "echo";
 
 	const proc = execa(bin, args, {
 		...options,
