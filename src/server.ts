@@ -855,12 +855,14 @@ const server = createServer(async (req, res) => {
 
     // call LLM to decompose demand into issues
     const prompt = `You are a project planning agent for "Vibe Kanban 3D".
-Your job is to decompose a high-level goal into atomic, implementable issues.
+Your job is to decompose a high-level goal into atomic, implementable issues using Spec Driven Development.
 Goal Title: ${body.title}
 Goal Description: ${body.description || "N/A"}
 Repository URL: ${body.repoUrl || "N/A"}
 
-Decompose this goal into 2-8 atomic issues that can each be completed in a single AI coding session.
+Decompose this goal into 2-8 atomic issues broken down by the vision of various personas (e.g., Product Manager, Security, Performance, Developer, QA) so they can act as subAgents.
+You MUST include explicit tasks for testing (testes), build, and lint. The final task must represent the transformation of the feature into a pull request.
+Each issue must be completable in a single AI coding session.
 Categories: "roadmap", "security", "performance", "feature", "test", "bug".
 Priorities: "alta", "media", "baixa".
 
