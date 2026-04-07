@@ -5,8 +5,9 @@ import * as os from "os";
 import * as path from "path";
 import { getProjectContext, extractAndWriteFiles } from "../utils/fileUtils.js";
 import { isCommandAvailable, getGlobalCommandPath } from "../utils/commandUtils.js";
-import { spawnWithPty, stripAnsi } from "../utils/ptyUtils.js";
+import { stripAnsi } from "../utils/ptyUtils.js";
 import { createErrorLoopDetector, createSessionTimeout, createStallDetector, handleOverseerResults, startOverseer } from "../utils/overseerUtils.js";
+import { execa } from "execa";
 import { logDebugBlock, logDebugCommand } from "./debugLogging.js";
 
 // Gemini-specific: these prefixes appear on every failed tool call and API error
@@ -133,10 +134,13 @@ content
       ctx.onLog(task.id, `[gemini] Running: gemini --yolo ${agent.model ? `--model ${agent.model}` : ""} -p <prompt>`);
 
       try {
-         const { proc, isPty } = spawnWithPty(geminiPath, args, {
+         const proc = execa(geminiPath, args, {
             cwd: basePath,
             env: env,
-         });
+            reject: false
+         }) as unknown as ChildProcess;
+
+         const isPty = false;
 
          const sessionTimeout = createSessionTimeout(proc, 5 * 60); // 5 minutes timeout
          const errorLoopDetector = createErrorLoopDetector(proc, GEMINI_ERROR_PATTERN);
