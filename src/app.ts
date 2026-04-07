@@ -1198,9 +1198,10 @@ function updateLighting() {
 let computers: THREE.Group[] = [];
 
 // Desk generation
-function spawnComputers() {
+async function spawnComputers() {
   const loader = new GLTFLoader();
-  loader.load("/models/old_computer.glb", (gltf) => {
+  try {
+    const gltf = await loader.loadAsync("/models/old_computer.glb");
     officeData.padPositions.forEach((pos) => {
       const group = new THREE.Group();
       group.position.set(pos.x, 0, pos.z - 1.2);
@@ -1221,7 +1222,7 @@ function spawnComputers() {
       scene.add(group);
       computers.push(group);
     });
-  }, undefined, (error) => {
+  } catch (error) {
     console.error("Falha ao carregar modelo old_computer.glb, usando fallback", error);
     officeData.padPositions.forEach((pos) => {
       const deskGroup = new THREE.Group();
@@ -1242,7 +1243,7 @@ function spawnComputers() {
       scene.add(deskGroup);
       computers.push(deskGroup);
     });
-  });
+  }
 }
 
 // Confetti System
