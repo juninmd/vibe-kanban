@@ -11,8 +11,25 @@ jobs:
     uses: juninmd/github-actions-base/.github/workflows/commit-lint.yml@main
   build:
     uses: juninmd/github-actions-base/.github/workflows/node-ci.yml@main
+    with:
+      run-typecheck: false
+  typecheck:
+    runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run typecheck
   release:
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
-    needs: [build, gitleaks]
+    needs: [build, typecheck, gitleaks]
     uses: juninmd/github-actions-base/.github/workflows/release.yml@main
     secrets: inherit
