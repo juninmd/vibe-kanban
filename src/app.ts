@@ -567,7 +567,8 @@ function renderAgents() {
 }
 
 // --- Terminal UI Logic ---
-interface ITerminal {
+declare class Terminal {
+  constructor(options?: unknown);
   loadAddon(addon: unknown): void;
   open(parent: HTMLElement): void;
   onData(callback: (data: string) => void): void;
@@ -576,29 +577,22 @@ interface ITerminal {
   dispose(): void;
 }
 
-interface IFitAddon {
-  fit(): void;
+declare namespace FitAddon {
+  class FitAddon {
+    constructor();
+    fit(): void;
+  }
 }
 
-interface ITerminalConstructor {
-  new (options?: unknown): ITerminal;
+declare namespace WebLinksAddon {
+  class WebLinksAddon {
+    constructor();
+  }
 }
-
-interface IFitAddonConstructor {
-  new (): IFitAddon;
-}
-
-interface IWebLinksAddonConstructor {
-  new (): unknown;
-}
-
-declare var Terminal: ITerminalConstructor;
-declare var FitAddon: { FitAddon: IFitAddonConstructor };
-declare var WebLinksAddon: { WebLinksAddon: IWebLinksAddonConstructor };
 
 class TerminalInstance {
-  term: ITerminal;
-  fitAddon: IFitAddon;
+  term: Terminal;
+  fitAddon: FitAddon.FitAddon;
   agentId: string;
   container: HTMLDivElement;
   tab: HTMLDivElement;
