@@ -628,9 +628,33 @@ function renderAgents() {
 }
 
 // --- Terminal UI Logic ---
-declare var Terminal: any;
-declare var FitAddon: any;
-declare var WebLinksAddon: any;
+declare class Terminal {
+  constructor(options?: unknown);
+  open(container: HTMLElement): void;
+  dispose(): void;
+  loadAddon(addon: unknown): void;
+  onData(cb: (data: string) => void): void;
+  write(data: string): void;
+  focus(): void;
+  activate?(): void;
+}
+
+declare namespace FitAddon {
+  class FitAddon {
+    constructor();
+    fit(): void;
+    dispose(): void;
+    activate?(): void;
+  }
+}
+
+declare namespace WebLinksAddon {
+  class WebLinksAddon {
+    constructor();
+    dispose(): void;
+    activate?(): void;
+  }
+}
 
 class TerminalInstance {
   term: any;
