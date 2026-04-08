@@ -6,9 +6,10 @@ import * as os from "os";
 import * as path from "path";
 import { getProjectContext, extractAndWriteFiles } from "../utils/fileUtils.js";
 import { isCommandAvailable, getGlobalCommandPath } from "../utils/commandUtils.js";
-import { spawnWithPty, stripAnsi } from "../utils/ptyUtils.js";
+import { stripAnsi } from "../utils/ptyUtils.js";
 import { createErrorLoopDetector, createSessionTimeout, createStallDetector, handleOverseerResults, startOverseer } from "../utils/overseerUtils.js";
 import { logDebugBlock, logDebugCommand } from "./debugLogging.js";
+import { execa } from "execa";
 
 // Gemini-specific: these prefixes appear on every failed tool call and API error
 const GEMINI_ERROR_PATTERN = /^Error (executing tool|generating content)/;
@@ -103,18 +104,18 @@ content
 <<<END>>>
 `;
 
-      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "lisa-"));
-      const promptFile = path.join(tmpDir, "prompt.md");
-      fs.writeFileSync(promptFile, prompt, "utf-8");
-
       // Pass current environment to the child process (includes GEMINI_API_KEY, etc.)
       const env = { ...process.env };
 
-      const modelFlag = agent.model ? `--model ${agent.model}` : "";
       const geminiPath = getGlobalCommandPath("gemini") || "gemini";
-      const command = `"${geminiPath}" --yolo ${modelFlag} -p "$(cat '${promptFile}')"`;
 
       let fullOutput = "";
+
+      const args = ["--yolo"];
+      if (agent.model) {
+         args.push("--model", agent.model);
+      }
+      args.push("-p", prompt);
 
       logDebugBlock(ctx, task.id, "AGENT PROMPT", prompt);
       logDebugCommand(
@@ -126,22 +127,24 @@ content
       ctx.onLog(task.id, `[SYSTEM] Iniciando Gemini CLI para Tarefa #${task.id}`);
       ctx.onLog(task.id, `[SYSTEM] Workspace: ${basePath}`);
       ctx.onLog(task.id, `[SYSTEM] Modelo: ${agent.model || "(default model)"}`);
-      ctx.onLog(task.id, `[gemini] Running: gemini --yolo ${modelFlag || "(default model)"} -p`);
+      ctx.onLog(task.id, `[gemini] Running: gemini --yolo ${agent.model ? `--model ${agent.model}` : "(default model)"} -p`);
 
       try {
-         const { proc, isPty } = spawnWithPty(command, {
+         const proc = execa(geminiPath, args, {
             cwd: basePath,
             env: env,
-         });
+            reject: false,
+            encoding: 'utf8'
+         }) as unknown as ChildProcess;
 
          const sessionTimeout = createSessionTimeout(proc, 5 * 60); // 5 minutes timeout
          const errorLoopDetector = createErrorLoopDetector(proc, GEMINI_ERROR_PATTERN);
          const stallDetector = createStallDetector(proc, 120);
          const overseer = startOverseer(proc, basePath, { enabled: true, check_interval: 30, stuck_threshold: 300 });
 
-         proc.stdout?.on("data", (chunk: Buffer) => {
+         proc.stdout?.on("data", (chunk: Buffer | string) => {
             const raw = chunk.toString();
-            const text = isPty ? stripAnsi(raw) : raw;
+            const text = stripAnsi(raw);
             fullOutput += text;
             errorLoopDetector.check(text);
             stallDetector.update();
@@ -154,9 +157,9 @@ content
             });
          });
 
-         proc.stderr?.on("data", (chunk: Buffer) => {
+         proc.stderr?.on("data", (chunk: Buffer | string) => {
             const raw = chunk.toString();
-            const text = isPty ? stripAnsi(raw) : raw;
+            const text = stripAnsi(raw);
             const textTrimmed = text.trim();
             if (textTrimmed) {
                // We log stderr but identify it
@@ -179,9 +182,6 @@ content
             stallDetector.stop();
             overseer.stop();
             this.runningTasks.delete(task.id);
-            try {
-               fs.rmSync(tmpDir, { recursive: true, force: true });
-            } catch {}
 
             let filesCreated = 0;
             if (!isPlanMode) {
@@ -198,7 +198,6 @@ content
 
          this.runningTasks.set(task.id, proc);
       } catch (e: unknown) {
-         try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {}
          const errorMessage = e instanceof Error ? e.message : String(e);
          ctx.onLog(task.id, `[EXCEPTION] ${errorMessage}`);
          ctx.onBugFound(task.id, errorMessage);
