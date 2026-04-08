@@ -1,4 +1,6 @@
-export default {
+import type { UserConfig } from '@commitlint/types';
+
+const Configuration: UserConfig = {
   rules: {
     'body-leading-blank': [1, 'always'],
     'body-max-line-length': [2, 'always', 100],
@@ -33,3 +35,5 @@ export default {
     ]
   }
 };
+
+export default Configuration;
