@@ -17,7 +17,8 @@ export function handleChildProcess(child: ChildProcess, task: Task, ctx: DriverC
     });
 
     child.stderr?.on("data", (data) => {
-        ctx.onBugFound(task.id, data.toString());
+        const text = data.toString().trim();
+        if (text) ctx.onLog(task.id, `[STDERR] ${text}`);
     });
 
     child.on("error", (error: Error) => {

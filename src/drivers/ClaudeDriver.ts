@@ -2,7 +2,7 @@ import { Task, Agent, LLMDriver, DriverContext } from "../types.js";
 import { spawn } from "child_process";
 import { logDebugBlock, logDebugCommand } from "./debugLogging.js";
 import { handleChildProcess } from "../utils/processHelpers.js";
-import { createStallDetector, STALL_MESSAGE, startOverseer } from "../utils/overseerUtils.js";
+import { startOverseer } from "../utils/overseerUtils.js";
 import { ChildProcess } from "child_process";
 
 export class ClaudeDriver implements LLMDriver {
@@ -11,19 +11,22 @@ export class ClaudeDriver implements LLMDriver {
 
    async executeTask(task: Task, agent: Agent, ctx: DriverContext): Promise<void> {
       const cmd = "claude";
-      const args = ["prompt", task.title, "--model", agent.model];
-      logDebugBlock(
-         ctx,
-         task.id,
-         "AGENT PROMPT",
-         `TITLE: ${task.title}\nDESCRIPTION: ${task.description || "No description provided."}`,
-      );
-      logDebugCommand(ctx, task.id, cmd, ["prompt", "<prompt>", "--model", agent.model]);
-      ctx.onLog(task.id, `Running: ${cmd} ${args.join(" ")}`);
-
-      const child = spawn(cmd, args);
-      const stallDetector = createStallDetector(child, 120);
       const taskDir = task.workDir || process.cwd();
+      const fullPrompt = [
+         `[Role: ${agent.role}]`,
+         `Task: ${task.title}`,
+         task.description ? `Description: ${task.description}` : "",
+         `Category: ${task.category} | Priority: ${task.priority}`,
+         `Work directory: ${taskDir}`,
+         "Complete the task by writing, editing, and committing code. Work autonomously without asking for input.",
+      ].filter(Boolean).join("\n");
+
+      const args = ["-p", fullPrompt, "--model", agent.model];
+      logDebugBlock(ctx, task.id, "AGENT PROMPT", fullPrompt);
+      logDebugCommand(ctx, task.id, cmd, ["-p", "<prompt>", "--model", agent.model]);
+      ctx.onLog(task.id, `Running: ${cmd} -p "<prompt>" --model ${agent.model}`);
+
+      const child = spawn(cmd, args, { cwd: taskDir, env: { ...process.env } });
       const overseer = startOverseer(child, taskDir, { enabled: true, check_interval: 30, stuck_threshold: 300 });
 
       handleChildProcess(child, task, ctx, this.runningTasks, 120, overseer);
@@ -33,13 +36,14 @@ export class ClaudeDriver implements LLMDriver {
    async interruptTask(task: Task): Promise<void> {
       const child = this.runningTasks.get(task.id);
       if (child) {
-         if (child.kill) child.kill(); // child process
+         child.kill();
          this.runningTasks.delete(task.id);
       }
       return Promise.resolve();
    }
 
-   getLogs(taskId: number): string[] {
+   getLogs(_taskId: number): string[] {
       return [];
    }
 }
+

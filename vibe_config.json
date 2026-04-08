@@ -1,6 +1,6 @@
 {
   "opencodePath": "C:/Users/jr_ac/AppData/Local/OpenCode/opencode-cli.exe",
-  "cloneDir": "test-clones/",
+  "cloneDir": "test-clones\\",
   "proof_of_work": {
     "commands": [
       {

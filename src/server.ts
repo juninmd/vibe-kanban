@@ -357,9 +357,6 @@ const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? dri
         onLog: (tid, msg) => {
       const t = getTask(tid);
       if (t) {
-        const updatedLogs = [...t.logs, msg];
-        updateTask(tid, { logs: updatedLogs });
-        // Write to terminal buffer for the assigned agent
         if (t.assignedTo) {
           addTerminalLine(t.assignedTo, tid, "stdout", msg);
         }
@@ -541,12 +538,11 @@ function autoAssign() {
     // 1. If manually assigned:
     if (task.assignedTo) {
       const assignedAgent = agentsById.get(task.assignedTo);
-      if (assignedAgent && assignedAgent.status === "idle") {
+      if (assignedAgent && DB.claimTask(task.id, task.assignedTo)) {
         startTask(task, assignedAgent).catch(console.error);
-        assignedAgent.status = "working";
         availableSlots--;
       }
-      continue; // Stop here for explicitly assigned tasks (wait until agent is free)
+      continue;
     }
 
     // 2. Otherwise use basic heuristic: match category.
@@ -554,9 +550,11 @@ function autoAssign() {
     const agent = availableAgents?.find(a => a.status === "idle");
 
     if (agent) {
-      startTask(task, agent).catch(console.error);
-      agent.status = "working";
-      availableSlots--;
+      if (DB.claimTask(task.id, agent.id)) {
+        agent.status = "working"; // in-memory guard for current iteration
+        startTask(task, agent).catch(console.error);
+        availableSlots--;
+      }
     }
   }
 }

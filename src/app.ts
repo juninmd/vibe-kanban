@@ -62,14 +62,18 @@ const laneLabels: Record<string, string> = {
 let agents: Agent[] = [];
 let tasks: Task[] = [];
 let eventLog: EventLog[] = [];
-let previousTaskState = new Map<number, { lane: string; assignedTo: string | null }>(); // Para rastrear mudanças e detectar transições
+let previousTaskState = new Map<number, { lane: string; assignedTo: string | null }>();
 let renderQueued = false;
 let stateUpdateQueued = false;
 let pendingStateData: State | null = null;
 let lastUpdateTimestamp = 0;
-const STATE_DEBOUNCE_MS = 100; // Debounce state updates to prevent UI freeze
+const STATE_DEBOUNCE_MS = 100;
 let activeTaskDetailsId: number | null = null;
 let activeTaskLogKeys = new Set<string>();
+
+// DOM diff caches — avoid full innerHTML rebuild on every SSE message
+const kanbanCardCache = new Map<number, { el: HTMLElement; hash: string }>();
+const agentCardCache = new Map<string, { el: HTMLElement; hash: string }>();
 
 
 // --- Toast System ---
@@ -448,121 +452,178 @@ function bugFromTask(task: Task) {
   });
 }
 
-function renderKanban() {
-  els.kanban.innerHTML = "";
-  const agentsById = new Map(agents.map((agent) => [agent.id, agent.role]));
-  const tasksByLane = new Map<string, Task[]>();
+function taskCardHash(task: Task, agentsById: Map<string, string>): string {
+  const assigned = task.assignedTo ? (agentsById.get(task.assignedTo) ?? "-") : "-";
+  const lastLog = task.logs && task.logs.length > 0 ? task.logs[task.logs.length - 1] : "";
+  return [task.title, task.priority, task.lane, assigned, task.interrupted ? 1 : 0,
+    lastLog, task.description ?? "", task.githubRepo ?? "", task.category, task.source, task.agentType ?? ""].join("|");
+}
 
-  tasks.forEach((task) => {
-    if (!tasksByLane.has(task.lane)) tasksByLane.set(task.lane, []);
-    tasksByLane.get(task.lane)!.push(task);
+function buildTaskCard(task: Task, agentsById: Map<string, string>, lane: string): HTMLElement {
+  const card = document.createElement("article");
+  card.className = `task-card priority-${task.priority}`;
+  card.style.cursor = "pointer";
+  card.onclick = (e) => {
+    if ((e.target as HTMLElement).tagName === "BUTTON") return;
+    openTaskDetailsModal(task);
+    playClickSound();
+  };
+
+  const assigned = task.assignedTo ? agentsById.get(task.assignedTo) ?? "-" : "-";
+  const lastLog = task.logs && task.logs.length > 0 ? task.logs[task.logs.length - 1] : "";
+
+  card.innerHTML = `
+      <strong>#${task.id} ${task.title}</strong>
+      ${task.description ? `<p style="font-size:0.8em; margin: 4px 0">${task.description}</p>` : ""}
+      <div class="task-meta">
+        ${task.githubRepo ? `<span class="tag">Repo: ${task.githubRepo}</span>` : ""}
+        <span class="tag">${task.category}</span>
+        <span class="tag">${task.priority}</span>
+        <span class="tag">fonte: ${task.source}</span>
+        <span class="tag">agente: ${assigned}</span>
+        ${task.agentType ? `<span class="tag">cli/sdk: ${task.agentType}</span>` : ""}
+        ${task.interrupted ? '<span class="tag">interrompido</span>' : ""}
+      </div>
+      ${lastLog ? `<div style="font-size:0.8em; margin-top:5px; color:#aaa;">> ${lastLog}</div>` : ""}
+    `;
+
+  const actions = document.createElement("div");
+  actions.className = "task-actions";
+  const makeBtn = (txt: string, onClick: () => void) => {
+    const btn = document.createElement("button");
+    btn.textContent = txt;
+    btn.onclick = onClick;
+    return btn;
+  };
+  if (lane === "backlog") actions.append(makeBtn("Pegar tarefa", () => pickTask(task)));
+  if (lane === "in_progress") actions.append(makeBtn("Interromper", () => interruptTask(task)));
+  actions.append(makeBtn("←", () => moveTask(task, -1)));
+  actions.append(makeBtn("→", () => moveTask(task, +1)));
+  actions.append(makeBtn("↑", () => reprioritize(task, -1)));
+  actions.append(makeBtn("↓", () => reprioritize(task, +1)));
+  actions.append(makeBtn("+ bug", () => bugFromTask(task)));
+  card.append(actions);
+  return card;
+}
+
+function renderKanban() {
+  const agentsById = new Map(agents.map((a) => [a.id, a.role]));
+  const tasksByLane = new Map<string, Task[]>();
+  tasks.forEach((t) => {
+    if (!tasksByLane.has(t.lane)) tasksByLane.set(t.lane, []);
+    tasksByLane.get(t.lane)!.push(t);
   });
 
   lanes.forEach((lane) => {
-    const col = document.createElement("div");
-    col.className = "column";
-    col.innerHTML = `<h3>${laneLabels[lane]}</h3>`;
+    let col = els.kanban.querySelector<HTMLElement>(`[data-lane="${lane}"]`);
+    if (!col) {
+      col = document.createElement("div");
+      col.className = "column";
+      col.dataset.lane = lane;
+      col.innerHTML = `<h3>${laneLabels[lane]}</h3>`;
+      els.kanban.append(col);
+    }
 
-    (tasksByLane.get(lane) || []).forEach((task) => {
-      const card = document.createElement("article");
-      card.className = `task-card priority-${task.priority}`;
-      card.style.cursor = "pointer";
-      card.onclick = (e) => {
-        // Prevent click if clicking an action button
-        if ((e.target as HTMLElement).tagName === "BUTTON") return;
-        openTaskDetailsModal(task);
-        playClickSound();
-      };
-      
-      const assigned = task.assignedTo ? agentsById.get(task.assignedTo) ?? "-" : "-";
+    const laneTasks = tasksByLane.get(lane) || [];
+    const liveIds = new Set(laneTasks.map(t => t.id));
 
-      // Logs preview
-      const lastLog = task.logs && task.logs.length > 0 ? task.logs[task.logs.length - 1] : "";
-
-      card.innerHTML = `
-          <strong>#${task.id} ${task.title}</strong>
-          ${task.description ? `<p style="font-size:0.8em; margin: 4px 0">${task.description}</p>` : ""}
-          <div class="task-meta">
-            ${task.githubRepo ? `<span class="tag">Repo: ${task.githubRepo}</span>` : ""}
-            <span class="tag">${task.category}</span>
-            <span class="tag">${task.priority}</span>
-            <span class="tag">fonte: ${task.source}</span>
-            <span class="tag">agente: ${assigned}</span>
-            ${task.agentType ? `<span class="tag">cli/sdk: ${task.agentType}</span>` : ""}
-            ${task.interrupted ? '<span class="tag">interrompido</span>' : ""}
-          </div>
-          ${lastLog ? `<div style="font-size:0.8em; margin-top:5px; color:#aaa;">> ${lastLog}</div>` : ""}
-        `;
-
-      const actions = document.createElement("div");
-      actions.className = "task-actions";
-
-      const makeBtn = (txt: string, onClick: () => void) => {
-        const btn = document.createElement("button");
-        btn.textContent = txt;
-        btn.onclick = onClick;
-        return btn;
-      };
-
-      if (lane === "backlog") actions.append(makeBtn("Pegar tarefa", () => pickTask(task)));
-      if (lane === "in_progress") actions.append(makeBtn("Interromper", () => interruptTask(task)));
-
-      actions.append(makeBtn("←", () => moveTask(task, -1)));
-      actions.append(makeBtn("→", () => moveTask(task, +1)));
-      actions.append(makeBtn("↑", () => reprioritize(task, -1)));
-      actions.append(makeBtn("↓", () => reprioritize(task, +1)));
-      actions.append(makeBtn("+ bug", () => bugFromTask(task)));
-
-      card.append(actions);
-      col.append(card);
+    // Remove stale cards
+    Array.from(col.querySelectorAll<HTMLElement>("[data-task-id]")).forEach(card => {
+      const id = Number(card.dataset.taskId);
+      if (!liveIds.has(id)) { card.remove(); kanbanCardCache.delete(id); }
     });
 
-    els.kanban.append(col);
+    // Build/reuse ordered card elements
+    const orderedCards = laneTasks.map(task => {
+      const hash = taskCardHash(task, agentsById);
+      const cached = kanbanCardCache.get(task.id);
+      if (cached && cached.hash === hash) return cached.el;
+      const card = buildTaskCard(task, agentsById, lane);
+      card.dataset.taskId = String(task.id);
+      kanbanCardCache.set(task.id, { el: card, hash });
+      return card;
+    });
+
+    // Sync DOM order without full rebuild
+    const h3 = col.querySelector("h3")!;
+    let cursor: ChildNode | null = h3.nextSibling;
+    orderedCards.forEach(card => {
+      if (card === cursor) { cursor = cursor!.nextSibling; }
+      else { col!.insertBefore(card, cursor); }
+    });
   });
+}
+
+function agentCardHash(a: Agent): string {
+  return `${a.role}|${a.model}|${a.category}|${a.status}|${a.tool ?? ""}|${a.assignedTask ?? ""}`;
+}
+
+function buildAgentCard(a: Agent): HTMLElement {
+  const div = document.createElement("div");
+  div.className = "agent-item";
+  const statusClass = a.status === "idle" ? "status-idle" : "status-working";
+  const statusLabel = a.status === "idle" ? "Livre" : "Trabalhando";
+  div.innerHTML = `
+    <div class="agent-header">
+      <strong>${a.role}</strong>
+      <span class="agent-status ${statusClass}">${statusLabel}</span>
+    </div>
+    <div class="agent-details">
+      <span>Modelo: ${a.model}</span>
+      <span>Categoria: ${a.category}</span>
+      ${a.tool ? `<span>Ferramenta: ${a.tool}</span>` : ""}
+      ${a.assignedTask ? `<span>Task: #${a.assignedTask}</span>` : ""}
+    </div>
+  `;
+  const actions = document.createElement("div");
+  actions.className = "agent-actions";
+  const termBtn = document.createElement("button");
+  termBtn.className = "agent-term-btn";
+  termBtn.textContent = "📟 Terminal";
+  termBtn.onclick = () => openTerminal(a.id);
+  const editBtn = document.createElement("button");
+  editBtn.className = "agent-edit-btn";
+  editBtn.textContent = "✏️ Editar";
+  editBtn.onclick = () => openAgentEditModal(a);
+  const deleteBtn = document.createElement("button");
+  deleteBtn.className = "agent-delete-btn";
+  deleteBtn.textContent = "🗑️ Excluir";
+  deleteBtn.onclick = () => deleteAgentById(a.id, a.role);
+  actions.append(termBtn, editBtn, deleteBtn);
+  div.append(actions);
+  return div;
 }
 
 function renderAgents() {
   if (agents.length === 0) {
     els.agentsList.innerHTML = '<div class="agent-empty">Nenhum agente configurado.<br>Clique em "Novo Agente" para adicionar.</div>';
+    agentCardCache.clear();
   } else {
-    els.agentsList.innerHTML = "";
-    agents.forEach((a) => {
-      const div = document.createElement("div");
-      div.className = "agent-item";
-      const statusClass = a.status === "idle" ? "status-idle" : "status-working";
-      const statusLabel = a.status === "idle" ? "Livre" : "Trabalhando";
-      div.innerHTML = `
-        <div class="agent-header">
-          <strong>${a.role}</strong>
-          <span class="agent-status ${statusClass}">${statusLabel}</span>
-        </div>
-        <div class="agent-details">
-          <span>Modelo: ${a.model}</span>
-          <span>Categoria: ${a.category}</span>
-          ${a.tool ? `<span>Ferramenta: ${a.tool}</span>` : ""}
-          ${a.assignedTask ? `<span>Task: #${a.assignedTask}</span>` : ""}
-        </div>
-      `;
-      const actions = document.createElement("div");
-      actions.className = "agent-actions";
-      const termBtn = document.createElement("button");
-      termBtn.className = "agent-term-btn";
-      termBtn.textContent = "📟 Terminal";
-      termBtn.onclick = () => openTerminal(a.id);
-      const editBtn = document.createElement("button");
-      editBtn.className = "agent-edit-btn";
-      editBtn.textContent = "✏️ Editar";
-      editBtn.onclick = () => openAgentEditModal(a);
-      const deleteBtn = document.createElement("button");
-      deleteBtn.className = "agent-delete-btn";
-      deleteBtn.textContent = "🗑️ Excluir";
-      deleteBtn.onclick = () => deleteAgentById(a.id, a.role);
-      actions.append(termBtn, editBtn, deleteBtn);
-      div.append(actions);
-      els.agentsList.append(div);
+    const liveIds = new Set(agents.map(a => a.id));
+    // Remove stale agent cards
+    Array.from(agentCardCache.keys()).forEach(id => {
+      if (!liveIds.has(id)) {
+        const cached = agentCardCache.get(id);
+        if (cached?.el.parentElement === els.agentsList) cached.el.remove();
+        agentCardCache.delete(id);
+      }
+    });
+    // Build/reuse ordered elements
+    const orderedCards = agents.map(a => {
+      const hash = agentCardHash(a);
+      const cached = agentCardCache.get(a.id);
+      if (cached && cached.hash === hash) return cached.el;
+      const card = buildAgentCard(a);
+      agentCardCache.set(a.id, { el: card, hash });
+      return card;
+    });
+    // Sync DOM order
+    let cursor: ChildNode | null = els.agentsList.firstChild;
+    orderedCards.forEach(card => {
+      if (card === cursor) { cursor = cursor!.nextSibling; }
+      else { els.agentsList.insertBefore(card, cursor); }
     });
   }
-  // Dynamically populate taskAgentAssign dropdown
   populateAgentAssignDropdown();
 }
 
@@ -2035,31 +2096,45 @@ function updateTrails() {
   }
 }
 
-// SSE Connection
-const evtSource = new EventSource(`${API_URL}/api/events`);
-evtSource.onmessage = (event) => {
-  try {
-    const msg = JSON.parse(event.data);
+// SSE Connection with exponential backoff reconnect
+let sseReconnectDelay = 1000;
+const SSE_MAX_DELAY = 30000;
 
-    if (msg.terminalUpdate) {
-      const update = msg.terminalUpdate as TaskTerminalLog;
-      if (activeTaskDetailsId !== null && update.taskId === activeTaskDetailsId && els.taskDetailsModal.open) {
-        appendTaskHistoryEntry(update);
+function connectSSE() {
+  const evtSource = new EventSource(`${API_URL}/api/events`);
+
+  evtSource.onmessage = (event) => {
+    sseReconnectDelay = 1000; // reset on successful message
+    try {
+      const msg = JSON.parse(event.data);
+      if (msg.terminalUpdate) {
+        const update = msg.terminalUpdate as TaskTerminalLog;
+        if (activeTaskDetailsId !== null && update.taskId === activeTaskDetailsId && els.taskDetailsModal.open) {
+          appendTaskHistoryEntry(update);
+        }
+      } else if (msg.type === "terminal:data") {
+        terminalUIManager.handleTerminalData(msg.agentId, msg.content);
+      } else if (msg.type === "terminal:exit") {
+        terminalUIManager.handleTerminalExit(msg.agentId, msg.code);
+      } else {
+        updateState(msg);
+        if (msg.agents) terminalUIManager.cleanupDeadAgents(msg.agents);
       }
-    } else if (msg.type === "terminal:data") {
-      terminalUIManager.handleTerminalData(msg.agentId, msg.content);
-    } else if (msg.type === "terminal:exit") {
-      terminalUIManager.handleTerminalExit(msg.agentId, msg.code);
-    } else {
-      // Default state update
-      updateState(msg);
-      // Optional: Cleanup dead agent terminals
-      if (msg.agents) terminalUIManager.cleanupDeadAgents(msg.agents);
+    } catch (e) {
+      console.error("Error parsing SSE data", e);
     }
-  } catch (e) {
-    console.error("Error parsing SSE data", e);
-  }
-};
+  };
+
+  evtSource.onerror = () => {
+    evtSource.close();
+    const delay = sseReconnectDelay;
+    sseReconnectDelay = Math.min(sseReconnectDelay * 2, SSE_MAX_DELAY);
+    console.warn(`SSE disconnected. Reconnecting in ${delay}ms...`);
+    setTimeout(connectSSE, delay);
+  };
+}
+
+connectSSE();
 
 // --- Interaction ---
 const raycaster = new THREE.Raycaster();

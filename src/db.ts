@@ -216,6 +216,31 @@ export const DB = {
     db.prepare("DELETE FROM terminal_logs WHERE agentId = ?").run(agentId);
   },
 
+  /**
+   * Atomically claims a task for an agent using a SQLite transaction.
+   * Returns true only if task is in backlog AND agent is idle — prevents race conditions in autoAssign.
+   */
+  claimTask(taskId: number, agentId: string): boolean {
+    return db.transaction(() => {
+      const task = db.prepare("SELECT lane FROM tasks WHERE id = ?").get(taskId) as { lane: string } | undefined;
+      if (!task || task.lane !== "backlog") return false;
+
+      const agent = db.prepare("SELECT status FROM agents WHERE id = ?").get(agentId) as { status: string } | undefined;
+      if (!agent || agent.status !== "idle") return false;
+
+      const now = Date.now();
+      const taskResult = db.prepare(
+        "UPDATE tasks SET lane = 'in_progress', assignedTo = ?, interrupted = 0, updatedAt = ? WHERE id = ? AND lane = 'backlog'"
+      ).run(agentId, now, taskId);
+
+      const agentResult = db.prepare(
+        "UPDATE agents SET status = 'working', assignedTask = ? WHERE id = ? AND status = 'idle'"
+      ).run(taskId, agentId);
+
+      return taskResult.changes > 0 && agentResult.changes > 0;
+    })() as boolean;
+  },
+
   clearDoneTasks(): void {
     db.prepare("DELETE FROM tasks WHERE lane = 'done'").run();
   },
