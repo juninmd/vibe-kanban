@@ -1,13 +1,13 @@
 import { Task, Agent, LLMDriver, DriverContext } from "../types.js";
-import { spawn } from "child_process";
+import { execa } from "execa";
 import { logDebugBlock, logDebugCommand } from "./debugLogging.js";
 import { handleChildProcess } from "../utils/processHelpers.js";
 import { startOverseer } from "../utils/overseerUtils.js";
-import { ChildProcess } from "child_process";
+import type { ChildProcess } from "child_process";
 
 export class ClaudeDriver implements LLMDriver {
    name: string = "Claude Code";
-   private runningTasks = new Map<number, ChildProcess>();
+   private runningTasks = new Map<number, any>();
 
    async executeTask(task: Task, agent: Agent, ctx: DriverContext): Promise<void> {
       const cmd = "claude";
@@ -26,10 +26,10 @@ export class ClaudeDriver implements LLMDriver {
       logDebugCommand(ctx, task.id, cmd, ["-p", "<prompt>", "--model", agent.model]);
       ctx.onLog(task.id, `Running: ${cmd} -p "<prompt>" --model ${agent.model}`);
 
-      const child = spawn(cmd, args, { cwd: taskDir, env: { ...process.env } });
-      const overseer = startOverseer(child, taskDir, { enabled: true, check_interval: 30, stuck_threshold: 300 });
+      const child = execa(cmd, args, { cwd: taskDir, env: process.env, reject: false });
+      const overseer = startOverseer(child as unknown as ChildProcess, taskDir, { enabled: true, check_interval: 30, stuck_threshold: 300 });
 
-      handleChildProcess(child, task, ctx, this.runningTasks, 120, overseer);
+      handleChildProcess(child as unknown as ChildProcess, task, ctx, this.runningTasks, 120, overseer);
       return Promise.resolve();
    }
 

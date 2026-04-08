@@ -1,4 +1,5 @@
-import { type ChildProcess, type SpawnOptions, spawn } from "node:child_process";
+import type { ChildProcess, SpawnOptions } from "node:child_process";
+import { execa } from "execa";
 import { platform } from "node:os";
 
 export interface PtyResult {
@@ -56,17 +57,23 @@ export function buildPtyArgs(command: string, os?: NodeJS.Platform): PtySpawnArg
 export function spawnWithPty(command: string, options: SpawnOptions = {}): PtyResult {
 	const ptyArgs = buildPtyArgs(command);
 
+	// execa expects a Record<string, string> for env, but SpawnOptions allows undefined values
+	const env = options.env as Record<string, string> | undefined;
+
 	if (ptyArgs) {
-		const proc = spawn(ptyArgs.file, ptyArgs.args, {
-			...options,
-			stdio: ["ignore", "pipe", "pipe"],
+		const proc = execa(ptyArgs.file, ptyArgs.args, {
+			cwd: options.cwd ? String(options.cwd) : undefined,
+			env,
+			reject: false,
 		});
-		return { proc, isPty: true };
+		return { proc: proc as unknown as ChildProcess, isPty: true };
 	}
 
-	const proc = spawn("sh", ["-c", command], {
-		...options,
-		stdio: ["ignore", "pipe", "pipe"],
+	const proc = execa(command, {
+		cwd: options.cwd ? String(options.cwd) : undefined,
+		env,
+		shell: true,
+		reject: false,
 	});
-	return { proc, isPty: false };
+	return { proc: proc as unknown as ChildProcess, isPty: false };
 }

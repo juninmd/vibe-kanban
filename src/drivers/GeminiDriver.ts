@@ -1,6 +1,6 @@
 import { buildSystemPrompt } from "../utils/promptUtils.js";
 import { Task, Agent, LLMDriver, DriverContext } from "../types.js";
-import { spawn } from "child_process";
+import { execa } from "execa";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
@@ -13,11 +13,11 @@ import { logDebugBlock, logDebugCommand } from "./debugLogging.js";
 // Gemini-specific: these prefixes appear on every failed tool call and API error
 const GEMINI_ERROR_PATTERN = /^Error (executing tool|generating content)/;
 
-import { ChildProcess } from "child_process";
+import type { ChildProcess } from "child_process";
 
 export class GeminiDriver implements LLMDriver {
    name: string = "Gemini CLI Driver";
-   private runningTasks = new Map<number, ChildProcess>();
+   private runningTasks = new Map<number, any>();
    private getCloneDir: () => string;
 
    constructor(getCloneDir: () => string) {
@@ -112,7 +112,7 @@ content
 
       const modelFlag = agent.model ? `--model ${agent.model}` : "";
       const geminiPath = getGlobalCommandPath("gemini") || "gemini";
-      const command = `"${geminiPath}" --yolo ${modelFlag} -p "$(cat '${promptFile}')"`;
+      const args = ["--yolo", ...(agent.model ? ["--model", agent.model] : []), "-p", prompt];
 
       let fullOutput = "";
 
@@ -129,19 +129,20 @@ content
       ctx.onLog(task.id, `[gemini] Running: gemini --yolo ${modelFlag || "(default model)"} -p`);
 
       try {
-         const { proc, isPty } = spawnWithPty(command, {
+         const proc = execa(geminiPath, args, {
             cwd: basePath,
             env: env,
+            reject: false
          });
 
-         const sessionTimeout = createSessionTimeout(proc, 5 * 60); // 5 minutes timeout
-         const errorLoopDetector = createErrorLoopDetector(proc, GEMINI_ERROR_PATTERN);
-         const stallDetector = createStallDetector(proc, 120);
-         const overseer = startOverseer(proc, basePath, { enabled: true, check_interval: 30, stuck_threshold: 300 });
+         const sessionTimeout = createSessionTimeout(proc as unknown as ChildProcess, 5 * 60); // 5 minutes timeout
+         const errorLoopDetector = createErrorLoopDetector(proc as unknown as ChildProcess, GEMINI_ERROR_PATTERN);
+         const stallDetector = createStallDetector(proc as unknown as ChildProcess, 120);
+         const overseer = startOverseer(proc as unknown as ChildProcess, basePath, { enabled: true, check_interval: 30, stuck_threshold: 300 });
 
-         proc.stdout?.on("data", (chunk: Buffer) => {
-            const raw = chunk.toString();
-            const text = isPty ? stripAnsi(raw) : raw;
+         proc.stdout?.on("data", (chunk: unknown) => {
+            const raw = chunk ? chunk.toString() : "";
+            const text = stripAnsi(raw);
             fullOutput += text;
             errorLoopDetector.check(text);
             stallDetector.update();
@@ -154,9 +155,9 @@ content
             });
          });
 
-         proc.stderr?.on("data", (chunk: Buffer) => {
-            const raw = chunk.toString();
-            const text = isPty ? stripAnsi(raw) : raw;
+         proc.stderr?.on("data", (chunk: unknown) => {
+            const raw = chunk ? chunk.toString() : "";
+            const text = stripAnsi(raw);
             const textTrimmed = text.trim();
             if (textTrimmed) {
                // We log stderr but identify it
@@ -164,17 +165,7 @@ content
             }
          });
 
-         proc.on("error", (error: Error & { code?: string }) => {
-            if (error.code === "ENOENT") {
-               ctx.onLog(task.id, "Error: Gemini CLI ('gemini') not found in PATH.");
-               ctx.onBugFound(task.id, "Gemini CLI not found.");
-            } else {
-               ctx.onLog(task.id, `Spawn Error: ${error.message}`);
-               ctx.onBugFound(task.id, error.message);
-            }
-         });
-
-         proc.on("close", (code) => {
+         proc.then((result) => {
             sessionTimeout.stop();
             stallDetector.stop();
             overseer.stop();
@@ -192,8 +183,22 @@ content
             handleOverseerResults(
                task, ctx,
                sessionTimeout, overseer, errorLoopDetector, stallDetector,
-               code, filesCreated, fullOutput
+               result.exitCode ?? null, filesCreated, fullOutput
             );
+         }).catch((error: unknown) => {
+            let message = "Unknown error";
+            let code = "";
+            if (error instanceof Error) {
+                message = error.message;
+                code = (error as any).code;
+            }
+            if (code === "ENOENT") {
+               ctx.onLog(task.id, "Error: Gemini CLI ('gemini') not found in PATH.");
+               ctx.onBugFound(task.id, "Gemini CLI not found.");
+            } else {
+               ctx.onLog(task.id, `Spawn Error: ${message}`);
+               ctx.onBugFound(task.id, message);
+            }
          });
 
          this.runningTasks.set(task.id, proc);
@@ -208,10 +213,10 @@ content
     }
 
    async interruptTask(task: Task): Promise<void> {
-      const process = this.runningTasks.get(task.id);
-      if (process) {
+      const proc = this.runningTasks.get(task.id);
+      if (proc) {
          try {
-            if (process.kill) process.kill("SIGTERM");
+            if (proc.kill) proc.kill("SIGTERM");
          } catch (e) {
             // Process may have already exited
          }

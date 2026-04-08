@@ -1,6 +1,7 @@
 import { buildSystemPrompt } from "../utils/promptUtils.js";
 import { Task, Agent, LLMDriver, DriverContext } from "../types.js";
-import { spawn, type ChildProcess } from "child_process";
+import { execa } from "execa";
+import type { ChildProcess } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
 import { resolveOpenCodeCommand } from "../utils/commandUtils.js";
@@ -34,25 +35,9 @@ export function buildOpenCodeArgs(task: Task, agent: Agent, prompt: string): str
    return args;
 }
 
-function spawnOpenCode(executable: string, args: string[], cwd: string, env: NodeJS.ProcessEnv): ChildProcess {
-   const stdio: ["ignore", "pipe", "pipe"] = ["ignore", "pipe", "pipe"];
-   const options = {
-      cwd,
-      env,
-      stdio,
-      windowsHide: true,
-   };
-
-   if (process.platform === "win32" && /\.(cmd|bat)$/i.test(executable)) {
-      return spawn(process.env.comspec || "cmd.exe", ["/d", "/s", "/c", executable, ...args], options);
-   }
-
-   return spawn(executable, args, options);
-}
-
 export class OpenCodeDriver implements LLMDriver {
    name: string = "OpenCode AI";
-   private runningTasks = new Map<number, ChildProcess>();
+   private runningTasks = new Map<number, any>();
    private getCloneDir: () => string;
 
    constructor(getCloneDir: () => string) {
@@ -81,17 +66,17 @@ export class OpenCodeDriver implements LLMDriver {
    ctx.onLog(task.id, `[SYSTEM] OpenCode executable: ${openCode.command} (${openCode.source})`);
    ctx.onLog(task.id, `Running: ${visibleArgs} in ${taskDir}`);
 
-   const proc = spawnOpenCode(openCode.command, args, taskDir, process.env);
+   const proc = execa(openCode.command, args, { cwd: taskDir, env: process.env, reject: false });
 
-      const sessionTimeout = createSessionTimeout(proc, 5 * 60); // 5 minutes timeout
-      const errorLoopDetector = createErrorLoopDetector(proc, OPENCODE_ERROR_PATTERN);
-      const stallDetector = createStallDetector(proc, 120);
-      const overseer = startOverseer(proc, taskDir, { enabled: true, check_interval: 30, stuck_threshold: 300 });
+      const sessionTimeout = createSessionTimeout(proc as unknown as ChildProcess, 5 * 60); // 5 minutes timeout
+      const errorLoopDetector = createErrorLoopDetector(proc as unknown as ChildProcess, OPENCODE_ERROR_PATTERN);
+      const stallDetector = createStallDetector(proc as unknown as ChildProcess, 120);
+      const overseer = startOverseer(proc as unknown as ChildProcess, taskDir, { enabled: true, check_interval: 30, stuck_threshold: 300 });
 
       let fullOutput = "";
 
-      proc.stdout?.on("data", (data: Buffer) => {
-         const raw = data.toString();
+      proc.stdout?.on("data", (data: unknown) => {
+         const raw = data ? data.toString() : "";
          const text = stripAnsi(raw);
          fullOutput += text;
          errorLoopDetector.check(text);
@@ -104,8 +89,8 @@ export class OpenCodeDriver implements LLMDriver {
          ctx.onLog(task.id, text);
       });
 
-      proc.stderr?.on("data", (data: Buffer) => {
-         const raw = data.toString();
+      proc.stderr?.on("data", (data: unknown) => {
+         const raw = data ? data.toString() : "";
          const text = stripAnsi(raw);
 
          const textTrimmed = text.trim();
@@ -114,16 +99,7 @@ export class OpenCodeDriver implements LLMDriver {
          }
       });
 
-      proc.on("error", (error: Error & { code?: string }) => {
-         this.runningTasks.delete(task.id);
-         if (error.code === "ENOENT") {
-            ctx.onBugFound(task.id, MISSING_OPENCODE_MESSAGE);
-            return;
-         }
-         ctx.onBugFound(task.id, error.message);
-      });
-
-      proc.on("close", (code) => {
+      proc.then((result) => {
          sessionTimeout.stop();
          stallDetector.stop();
          overseer.stop();
@@ -134,8 +110,21 @@ export class OpenCodeDriver implements LLMDriver {
          handleOverseerResults(
             task, ctx,
             sessionTimeout, overseer, errorLoopDetector, stallDetector,
-            code, filesCreated, fullOutput
+            result.exitCode ?? null, filesCreated, fullOutput
          );
+      }).catch((err: unknown) => {
+         this.runningTasks.delete(task.id);
+         let message = "Unknown error";
+         let code = "";
+         if (err instanceof Error) {
+             message = err.message;
+             code = (err as any).code;
+         }
+         if (code === "ENOENT") {
+            ctx.onBugFound(task.id, MISSING_OPENCODE_MESSAGE);
+            return;
+         }
+         ctx.onBugFound(task.id, message);
       });
 
       this.runningTasks.set(task.id, proc);
