@@ -1,5 +1,6 @@
 import { type ChildProcess, type SpawnOptions, spawn } from "node:child_process";
 import { platform } from "node:os";
+import { execa } from "execa";
 
 export interface PtyResult {
 	proc: ChildProcess;
@@ -64,9 +65,23 @@ export function spawnWithPty(command: string, options: SpawnOptions = {}): PtyRe
 		return { proc, isPty: true };
 	}
 
-	const proc = spawn("sh", ["-c", command], {
-		...options,
-		stdio: ["ignore", "pipe", "pipe"],
+	// Fallback when PTY is not available: use execa to avoid running through `sh -c` directly.
+	// We still attempt to parse simple commands for basic fallback execution.
+	const match = command.match(/[^\s"']+|"[^"]*"|'[^']*'/g) || [];
+	const args = match.map((s: string) => {
+		if (s.length >= 2 && ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'")))) {
+			return s.slice(1, -1);
+		}
+		return s;
 	});
+	const bin = args.shift() || "echo";
+
+	const proc = execa(bin, args, {
+		...options as any,
+		stdio: ["ignore", "pipe", "pipe"],
+		reject: false,
+		encoding: 'utf8',
+	}) as unknown as ChildProcess;
+
 	return { proc, isPty: false };
 }

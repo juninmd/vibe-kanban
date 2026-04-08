@@ -1,5 +1,5 @@
 import { Task, Agent, LLMDriver, DriverContext } from "../types.js";
-import { spawn } from "child_process";
+import { execa } from "execa";
 import { isCommandAvailable } from "../utils/commandUtils.js";
 import { logDebugBlock, logDebugCommand } from "./debugLogging.js";
 import { handleChildProcess } from "../utils/processHelpers.js";
@@ -23,7 +23,7 @@ export class CopilotDriver implements LLMDriver {
       logDebugCommand(ctx, task.id, cmd, ["copilot", "suggest", "<prompt>", "--target", "nodejs"]);
       ctx.onLog(task.id, `Running: ${cmd} ${args.join(" ")}`);
 
-      const child = spawn(cmd, args, { shell: true });
+      const child = execa(cmd, args, { reject: false, encoding: 'utf8' }) as unknown as ChildProcess;
       const stallDetector = createStallDetector(child, 120);
 
       handleChildProcess(child, task, ctx, this.runningTasks, 120);
