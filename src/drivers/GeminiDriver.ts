@@ -1,8 +1,6 @@
 import { buildSystemPrompt } from "../utils/promptUtils.js";
 import { Task, Agent, LLMDriver, DriverContext } from "../types.js";
-import { spawn } from "child_process";
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
 import { getProjectContext, extractAndWriteFiles } from "../utils/fileUtils.js";
 import { isCommandAvailable, getGlobalCommandPath } from "../utils/commandUtils.js";
