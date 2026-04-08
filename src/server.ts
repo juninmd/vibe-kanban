@@ -854,6 +854,8 @@ const server = createServer(async (req, res) => {
     // call LLM to decompose demand into issues
     const prompt = `You are a project planning agent for "Vibe Kanban 3D".
 Your job is to decompose a high-level goal into atomic, implementable issues.
+Organize the task breakdown by personas (e.g., Product Manager, Security, Performance, Developer, QA) to act as subAgents.
+Strictly mandate that workflows end with tasks for testing, building, linting, and pull request creation.
 Goal Title: ${body.title}
 Goal Description: ${body.description || "N/A"}
 Repository URL: ${body.repoUrl || "N/A"}
