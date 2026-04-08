@@ -581,12 +581,16 @@ declare namespace FitAddon {
   class FitAddon {
     constructor();
     fit(): void;
+    activate(terminal: Terminal): void;
+    dispose(): void;
   }
 }
 
 declare namespace WebLinksAddon {
   class WebLinksAddon {
     constructor();
+    activate(terminal: Terminal): void;
+    dispose(): void;
   }
 }
 
