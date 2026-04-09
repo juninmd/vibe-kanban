@@ -858,21 +858,56 @@ Goal Title: ${body.title}
 Goal Description: ${body.description || "N/A"}
 Repository URL: ${body.repoUrl || "N/A"}
 
-Decompose this goal into 2-8 atomic issues that can each be completed in a single AI coding session.
-Categories: "roadmap", "security", "performance", "feature", "test", "bug".
+## Instructions
+
+Analyze the goal and decompose it into 2-8 atomic issues that can each be completed in a single AI coding session.
+Organize task breakdown by personas to act as subAgents. The available personas (Categories) are:
+- "roadmap" (Product Manager)
+- "security" (Security)
+- "performance" (Performance)
+- "feature" (Developer)
+- "test" (QA)
+- "bug" (Corrections / Bugs)
+
+Strictly mandate that workflows end with tasks for testing, building, linting, and pull request creation.
+
 Priorities: "alta", "media", "baixa".
+
+For each issue, provide:
+- title: Short, descriptive title (imperative: "Add X", "Fix Y", "Create Z")
+- description: Full markdown description with context, approach, and acceptance criteria as a \`- [ ]\` checklist
+- category: The persona category ("roadmap", "security", "performance", "feature", "test", "bug")
+- priority: "alta", "media", or "baixa"
+- acceptanceCriteria: Array of the checklist items as plain strings
+- relevantFiles: Array of file paths in the codebase that will be modified or created
+- dependsOn: Array of short descriptions of what this depends on
+- verifyCommand: A shell command that validates the issue is complete (e.g., \`npm test\`, \`npx tsc --noEmit\`, \`curl localhost:3000/health\`)
+- doneCriteria: What success looks like when the verify command runs (e.g., "All tests pass", "Returns 200 OK")
+- dependencies: Array of zero-based index of sibling tasks that must be completed first
+
+## Rules
+
+1. Each issue MUST be self-contained and completable in a single session
+2. Each issue MUST have at least 2 acceptance criteria
+3. Each issue MUST reference specific file paths (existing or to be created)
+4. Issues MUST include test expectations in their acceptance criteria
+5. Order issues so dependencies come first (lower dependencies = executes first)
+6. Use clear, specific titles — not vague ("Improve X" is bad, "Add rate limit middleware to /api/users" is good)
+7. Each issue SHOULD include a verifyCommand that can programmatically validate completion
+8. Output ONLY valid JSON array — no markdown code fences, no explanation text
 
 Return ONLY a JSON array with this structure:
 [
   {
-    "title": "Short descriptive title",
-    "description": "General description of the task",
+    "title": "Short descriptive title (Imperative)",
+    "description": "Full markdown description of the task",
     "category": "feature",
     "priority": "alta",
     "acceptanceCriteria": ["criterion 1", "criterion 2"],
     "relevantFiles": ["path/to/file1", "path/to/file2"],
     "dependsOn": ["Short description of what this depends on"],
     "verifyCommand": "pnpm test",
+    "doneCriteria": "All tests pass",
     "dependencies": [0] // Optional array of zero-based index of sibling tasks that must be completed first
   }
 ]`;
@@ -886,6 +921,7 @@ Return ONLY a JSON array with this structure:
       relevantFiles?: string[];
       dependsOn?: string[];
       verifyCommand?: string;
+      doneCriteria?: string;
       dependencies?: number[];
     };
     let generatedTasks: GeneratedTask[] = [];
@@ -919,6 +955,9 @@ Return ONLY a JSON array with this structure:
           }
           if (t.verifyCommand) {
             finalDescription += `\n\n### Verify Command\n\`${t.verifyCommand}\``;
+          }
+          if (t.doneCriteria) {
+            finalDescription += `\n\n### Done Criteria\n${t.doneCriteria}`;
           }
 
           const task = DB.createTask({
