@@ -632,7 +632,7 @@ declare class Terminal {
   constructor(options?: unknown);
   loadAddon(addon: unknown): void;
   open(container: HTMLDivElement): void;
-  onData(callback: (data: string) => void): void;
+  onData(callback: (data: string) => void): { dispose(): void };
   write(data: string): void;
   focus(): void;
   dispose(): void;
