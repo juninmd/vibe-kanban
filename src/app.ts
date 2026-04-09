@@ -628,13 +628,30 @@ function renderAgents() {
 }
 
 // --- Terminal UI Logic ---
-declare var Terminal: any;
-declare var FitAddon: any;
-declare var WebLinksAddon: any;
+declare class Terminal {
+  constructor(options?: unknown);
+  loadAddon(addon: unknown): void;
+  open(container: HTMLDivElement): void;
+  onData(callback: (data: string) => void): void;
+  write(data: string): void;
+  focus(): void;
+  dispose(): void;
+}
+declare namespace FitAddon {
+  class FitAddon {
+    constructor();
+    fit(): void;
+  }
+}
+declare namespace WebLinksAddon {
+  class WebLinksAddon {
+    constructor();
+  }
+}
 
 class TerminalInstance {
-  term: any;
-  fitAddon: any;
+  term: Terminal;
+  fitAddon: FitAddon.FitAddon;
   agentId: string;
   container: HTMLDivElement;
   tab: HTMLDivElement;
