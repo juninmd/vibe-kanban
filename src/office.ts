@@ -106,7 +106,7 @@ export function createOffice(scene: THREE.Scene, agentCount: number = 6): Office
 
         // Desk
         const deskZ = z - 0.9;
-        const deskY = 1.0;
+        const deskY = 1;
 
         // Desk Top
         const deskTop = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.1, 1.2), deskMat);
@@ -117,16 +117,16 @@ export function createOffice(scene: THREE.Scene, agentCount: number = 6): Office
         // Desk Legs
         const legGeo = new THREE.BoxGeometry(0.1, deskY, 0.1);
         const leg1 = new THREE.Mesh(legGeo, deskMat);
-        leg1.position.set(x - 1.0, deskY / 2, deskZ - 0.5);
+        leg1.position.set(x - 1, deskY / 2, deskZ - 0.5);
         scene.add(leg1);
         const leg2 = new THREE.Mesh(legGeo, deskMat);
-        leg2.position.set(x + 1.0, deskY / 2, deskZ - 0.5);
+        leg2.position.set(x + 1, deskY / 2, deskZ - 0.5);
         scene.add(leg2);
         const leg3 = new THREE.Mesh(legGeo, deskMat);
-        leg3.position.set(x - 1.0, deskY / 2, deskZ + 0.5);
+        leg3.position.set(x - 1, deskY / 2, deskZ + 0.5);
         scene.add(leg3);
         const leg4 = new THREE.Mesh(legGeo, deskMat);
-        leg4.position.set(x + 1.0, deskY / 2, deskZ + 0.5);
+        leg4.position.set(x + 1, deskY / 2, deskZ + 0.5);
         scene.add(leg4);
 
         // PC Monitor Stand
