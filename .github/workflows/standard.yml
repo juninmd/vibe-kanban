@@ -4,6 +4,9 @@ on:
     branches: [main, master]
   pull_request:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   gitleaks:
     uses: juninmd/github-actions-base/.github/workflows/gitleaks.yml@main
@@ -11,6 +14,21 @@ jobs:
     uses: juninmd/github-actions-base/.github/workflows/commit-lint.yml@main
   build:
     uses: juninmd/github-actions-base/.github/workflows/node-ci.yml@main
+    with:
+      run-typecheck: false
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa
+        with:
+          version: 9
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 20
+          cache: 'pnpm'
+      - run: pnpm install
+      - run: pnpm run typecheck
   release:
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
     needs: [build, gitleaks]
