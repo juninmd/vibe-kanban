@@ -336,7 +336,6 @@ function updateState(data: State) {
       const data = createOffice(scene, agents.length);
       officeData.padPositions = data.padPositions;
       isOfficeCreated = true;
-      spawnComputers();
     }
 
     eventLog = data.events || [];
@@ -1273,55 +1272,6 @@ function updateLighting() {
 
 // No Particles
 
-let computers: THREE.Group[] = [];
-
-// Desk generation
-function spawnComputers() {
-  const loader = new GLTFLoader();
-  loader.load("/models/old_computer.glb", (gltf) => {
-    officeData.padPositions.forEach((pos) => {
-      const group = new THREE.Group();
-      group.position.set(pos.x, 0, pos.z - 1.2);
-
-      const computer = gltf.scene.clone();
-      computer.scale.set(0.6, 0.6, 0.6);
-      computer.rotation.y = Math.PI;
-      group.add(computer);
-
-      // Oval rug
-      const rugGeo = new THREE.CylinderGeometry(2, 2, 0.01, 32);
-      const rugMat = new THREE.MeshStandardMaterial({ color: "#64748b" });
-      const rug = new THREE.Mesh(rugGeo, rugMat);
-      rug.scale.set(1, 1, 0.6);
-      rug.position.set(0, 0.01, 0);
-      group.add(rug);
-
-      scene.add(group);
-      computers.push(group);
-    });
-  }, undefined, (error) => {
-    console.error("Falha ao carregar modelo old_computer.glb, usando fallback", error);
-    officeData.padPositions.forEach((pos) => {
-      const deskGroup = new THREE.Group();
-      deskGroup.position.set(pos.x, 0, pos.z - 1.2);
-
-      const deskGeo = new THREE.BoxGeometry(2.0, 1.0, 1.2);
-      const deskMat = new THREE.MeshStandardMaterial({ color: "#0f172a", roughness: 0.8, metalness: 0.1 }); // Darker desk
-      const desk = new THREE.Mesh(deskGeo, deskMat);
-      desk.position.set(0, 0.5, 0);
-      deskGroup.add(desk);
-
-      const monGeo = new THREE.BoxGeometry(0.9, 0.6, 0.05);
-      const monMat = new THREE.MeshStandardMaterial({ color: "#0ea5e9", emissive: "#0ea5e9", emissiveIntensity: 0.3 }); // Cyan blue monitor
-      const monitor = new THREE.Mesh(monGeo, monMat);
-      monitor.position.set(0, 1.3, 0);
-      deskGroup.add(monitor);
-
-      scene.add(deskGroup);
-      computers.push(deskGroup);
-    });
-  });
-}
 
 // Confetti System
 function spawnConfetti() {
@@ -1860,9 +1810,8 @@ function updateAgents3D() {
     // Spread agents out more: -8 to +8 roughly
     const spawnPos = new THREE.Vector3(-8 + idx * 3, 0, -1.0);
     const pads = officeData.padPositions;
-    const deskIdx = computers.length > 0 ? idx % computers.length : idx % (pads.length || 1);
+    const deskIdx = idx % (pads.length || 1);
 
-    // Safe check for computers array
     const deskPos = pads[deskIdx] ? pads[deskIdx].clone() : spawnPos.clone();
     deskPos.y = 0; // Ground level
 
