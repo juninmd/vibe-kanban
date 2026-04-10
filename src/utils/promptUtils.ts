@@ -13,6 +13,7 @@ DESCRIPTION: ${task.description || "No description provided."}
 CATEGORY: ${task.category}
 PRIORITY: ${task.priority}
 
+${task.siblingContext ? `[LINEAGE CONTEXT]\n${task.siblingContext}\n` : ""}
 INSTRUCTIONS:
 1. Explore the codebase if necessary.
 2. Implement the requested changes.
