@@ -259,6 +259,16 @@ async function startTask(task: Task, agent: Agent) {
   // Refresh task object with new workDir
   const updatedTask = DB.getTask(task.id) || task;
 
+  // Build Lineage Context (siblingContext) if groupId exists
+  if (updatedTask.groupId) {
+    const allTasks = DB.getTasks();
+    const siblingTasks = allTasks.filter(t => t.groupId === updatedTask.groupId && t.id !== updatedTask.id);
+    if (siblingTasks.length > 0) {
+      const siblingDescriptions = siblingTasks.map(t => `- [#${t.id}] ${t.title}`).join("\n");
+      updatedTask.siblingContext = `The following sibling tasks are part of the same goal and may be running concurrently. Do NOT duplicate their work:\n${siblingDescriptions}`;
+    }
+  }
+
   const attempt = (fallbackAttempts.get(task.id) || 0) + 1;
   const attemptStr = attempt > 1 ? ` (Tentativa de Fallback ${attempt}/${MAX_FALLBACK_ATTEMPTS})` : "";
   addEvent(`[AutoPilot] ${agent.role} iniciou a tarefa #${task.id}${attemptStr}`);
@@ -940,6 +950,7 @@ Return ONLY a JSON array with this structure:
 
     const createdTasks: Task[] = [];
     if (Array.isArray(generatedTasks)) {
+      const groupId = crypto.randomUUID();
       // First pass: Create tasks
       for (const t of generatedTasks) {
         if (t.title && t.category) {
@@ -972,6 +983,7 @@ Return ONLY a JSON array with this structure:
             description: finalDescription,
             githubRepo: typeof body.repoUrl === "string" ? body.repoUrl : undefined,
             dependencies: [], // Initialize empty
+            groupId: groupId
           });
           createdTasks.push(task);
         }
