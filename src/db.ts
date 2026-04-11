@@ -21,7 +21,8 @@ db.exec(`
     createdAt INTEGER NOT NULL,
     updatedAt INTEGER NOT NULL,
     workDir TEXT,
-    dependencies TEXT DEFAULT '[]'
+    dependencies TEXT DEFAULT '[]',
+    taskOrder INTEGER
   );
 
   CREATE TABLE IF NOT EXISTS agents (
@@ -79,6 +80,13 @@ try {
   // Ignored because column may already exist
 }
 
+// Migration: add taskOrder column if missing
+try {
+  db.exec(`ALTER TABLE tasks ADD COLUMN taskOrder INTEGER`);
+} catch (e) {
+  // Ignored because column may already exist
+}
+
 export const DB = {
   // Tasks
   getTasks(): Task[] {
@@ -105,8 +113,8 @@ export const DB = {
   createTask(task: Partial<Task>): Task {
     const now = Date.now();
     const result = db.prepare(`
-      INSERT INTO tasks (title, source, category, priority, lane, assignedTo, interrupted, logs, githubRepo, description, agentType, createdAt, updatedAt, workDir, baseRepoDir, dependencies, groupId)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO tasks (title, source, category, priority, lane, assignedTo, interrupted, logs, githubRepo, description, agentType, createdAt, updatedAt, workDir, baseRepoDir, dependencies, groupId, taskOrder)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       task.title,
       task.source || "user",
@@ -124,7 +132,8 @@ export const DB = {
       task.workDir || null,
       task.baseRepoDir || null,
       JSON.stringify(task.dependencies || []),
-      task.groupId || null
+      task.groupId || null,
+      task.taskOrder || 0
     );
     return this.getTask(Number(result.lastInsertRowid))!;
   },

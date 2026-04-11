@@ -19,6 +19,7 @@ export interface Task {
   dependencies?: number[];
   groupId?: string;
   siblingContext?: string;
+  taskOrder?: number;
 }
 
 export interface Agent {
