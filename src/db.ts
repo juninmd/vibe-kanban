@@ -55,28 +55,28 @@ db.exec(`
 try {
   db.exec(`ALTER TABLE tasks ADD COLUMN workDir TEXT`);
 } catch (e) {
-  // column already exists
+  // Ignored because column may already exist
 }
 
 // Migration: add baseRepoDir column if missing
 try {
   db.exec(`ALTER TABLE tasks ADD COLUMN baseRepoDir TEXT`);
 } catch (e) {
-  // column already exists
+  // Ignored because column may already exist
 }
 
 // Migration: add dependencies column if missing
 try {
   db.exec(`ALTER TABLE tasks ADD COLUMN dependencies TEXT DEFAULT '[]'`);
 } catch (e) {
-  // column already exists
+  // Ignored because column may already exist
 }
 
 // Migration: add groupId column if missing
 try {
   db.exec(`ALTER TABLE tasks ADD COLUMN groupId TEXT`);
 } catch (e) {
-  // column already exists
+  // Ignored because column may already exist
 }
 
 export const DB = {
