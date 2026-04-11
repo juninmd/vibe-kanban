@@ -259,13 +259,38 @@ async function startTask(task: Task, agent: Agent) {
   // Refresh task object with new workDir
   const updatedTask = DB.getTask(task.id) || task;
 
-  // Build Lineage Context (siblingContext) if groupId exists
+  // Build Lineage Context (siblingContext) if groupId exists (Lisa inspired)
   if (updatedTask.groupId) {
     const allTasks = DB.getTasks();
-    const siblingTasks = allTasks.filter(t => t.groupId === updatedTask.groupId && t.id !== updatedTask.id);
-    if (siblingTasks.length > 0) {
-      const siblingDescriptions = siblingTasks.map(t => `- [#${t.id}] ${t.title}`).join("\n");
-      updatedTask.siblingContext = `The following sibling tasks are part of the same goal and may be running concurrently. Do NOT duplicate their work:\n${siblingDescriptions}`;
+    const groupTasks = allTasks.filter(t => t.groupId === updatedTask.groupId);
+
+    if (groupTasks.length > 1) {
+      // Sort tasks by taskOrder
+      const sorted = [...groupTasks].sort((a, b) => (a.taskOrder || 0) - (b.taskOrder || 0));
+
+      const taskList = sorted
+        .map((t, idx) => {
+          const marker = t.id === updatedTask.id ? " <-- (this task)" : "";
+          return `  ${idx + 1}. [Task #${t.id}] ${t.title}${marker}`;
+        })
+        .join("\n");
+
+      const siblings = sorted
+        .filter((t) => t.id !== updatedTask.id)
+        .map((t) => `- [Task #${t.id}] ${t.title}`)
+        .join("\n");
+
+      updatedTask.siblingContext = `## Task Hierarchy
+
+This task is part of a decomposed plan with ${groupTasks.length} subtasks:
+
+${taskList}
+
+## Parallel Work
+
+The following sibling tasks may be running concurrently. Do NOT duplicate their work:
+
+${siblings}`;
     }
   }
 
@@ -915,10 +940,10 @@ Return ONLY a JSON array with this structure:
     "priority": "alta",
     "acceptanceCriteria": ["criterion 1", "criterion 2"],
     "relevantFiles": ["path/to/file1", "path/to/file2"],
-    "dependsOn": ["Short description of what this depends on"],
+    "order": 1,
+    "dependsOn": [], // Array of order numbers this issue depends on
     "verifyCommand": "pnpm test",
-    "doneCriteria": "All tests pass",
-    "dependencies": [0] // Optional array of zero-based index of sibling tasks that must be completed first
+    "doneCriteria": "All tests pass"
   }
 ]`;
 
@@ -929,10 +954,10 @@ Return ONLY a JSON array with this structure:
       priority?: string;
       acceptanceCriteria?: string[];
       relevantFiles?: string[];
-      dependsOn?: string[];
+      order?: number;
+      dependsOn?: number[];
       verifyCommand?: string;
       doneCriteria?: string;
-      dependencies?: number[];
     };
     let generatedTasks: GeneratedTask[] = [];
     try {
@@ -962,7 +987,7 @@ Return ONLY a JSON array with this structure:
             finalDescription += "\n\n### Relevant Files\n" + t.relevantFiles.map((f: string) => `- ${f}`).join("\n");
           }
           if (t.dependsOn && Array.isArray(t.dependsOn)) {
-            finalDescription += "\n\n### Depends On\n" + t.dependsOn.map((d: string) => `- ${d}`).join("\n");
+            finalDescription += "\n\n### Depends On\n" + t.dependsOn.map((d: number) => `- Order ${d}`).join("\n");
           }
           if (t.verifyCommand) {
             finalDescription += `\n\n### Verify Command\n\`${t.verifyCommand}\``;
@@ -983,19 +1008,24 @@ Return ONLY a JSON array with this structure:
             description: finalDescription,
             githubRepo: typeof body.repoUrl === "string" ? body.repoUrl : undefined,
             dependencies: [], // Initialize empty
-            groupId: groupId
+            groupId: groupId,
+            taskOrder: t.order || 0
           });
           createdTasks.push(task);
         }
       }
 
-      // Second pass: Map local index dependencies to database IDs
+      // Second pass: Map dependsOn orders to database IDs
       for (let i = 0; i < generatedTasks.length; i++) {
-        const localDeps = generatedTasks[i].dependencies;
+        const localDeps = generatedTasks[i].dependsOn;
         if (Array.isArray(localDeps) && localDeps.length > 0 && i < createdTasks.length) {
           const dbDeps = localDeps
-            .filter((idx: unknown): idx is number => typeof idx === 'number' && idx >= 0 && idx < createdTasks.length)
-            .map((idx) => createdTasks[idx].id);
+            .filter((order: unknown): order is number => typeof order === 'number')
+            .map((order) => {
+              const depTask = createdTasks.find(t => t.taskOrder === order);
+              return depTask ? depTask.id : null;
+            })
+            .filter((id): id is number => id !== null);
 
           if (dbDeps.length > 0) {
             createdTasks[i].dependencies = dbDeps; // Update local reference too
