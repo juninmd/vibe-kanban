@@ -1553,6 +1553,9 @@ function createAlertIcon(type: "bug" | "perf") {
   ctx.arc(64, 64, 50, 0, Math.PI * 2);
   ctx.fill();
 
+  ctx.translate(0, canvas.height);
+  ctx.scale(1, -1);
+
   ctx.font = "bold 60px Inter, sans-serif";
   ctx.fillStyle = "white";
   ctx.textAlign = "center";
@@ -1560,6 +1563,8 @@ function createAlertIcon(type: "bug" | "perf") {
   ctx.fillText(type === "bug" ? "!" : "⚡", 64, 64);
 
   const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.flipY = false;
   const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
   const sprite = new THREE.Sprite(mat);
   sprite.scale.set(0.8, 0.8, 1);
