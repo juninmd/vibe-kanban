@@ -117,7 +117,7 @@ export function getBodyMaterials(role: string, modelName?: string, badgeColorFal
                 ctx.save();
                 // We use scale(1, -1) to flip Y back so the text draws upright in the canvas coordinate system
                 // which is already Y-flipped at the top level. This prevents horizontal mirroring.
-                ctx.translate(128, rectY + rectHeight / 2);
+                ctx.translate(ctx.canvas.width / 2, rectY + rectHeight / 2);
                 ctx.scale(1, -1);
                 ctx.fillText(line1, 0, -8);
                 ctx.fillText(line2, 0, 10);
