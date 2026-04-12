@@ -146,8 +146,8 @@ content
             errorLoopDetector.check(text);
             stallDetector.update();
 
-            if (/reading|analyzing|searching|grep|cat|ls|find/i.test(text)) {
-                overseer.notifyActivity();
+            if (/\b(reading|analyzing|searching|grep|cat|ls|find)\b/i.test(text)) {
+               overseer.notifyActivity();
             }
 
             // Clean up output for the terminal view
