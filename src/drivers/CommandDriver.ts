@@ -143,7 +143,7 @@ Do not output hypothetical logs. Output the actual file content needed to solve 
                 errorLoopDetector.check(text);
                 stallDetector.update();
 
-                if (/reading|analyzing|searching|grep|cat|ls|find/i.test(text)) {
+                if (/\b(reading|analyzing|searching|grep|cat|ls|find)\b/i.test(text)) {
                     overseer.notifyActivity();
                 }
 
