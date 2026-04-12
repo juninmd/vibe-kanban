@@ -146,6 +146,10 @@ content
             errorLoopDetector.check(text);
             stallDetector.update();
 
+            if (/\b(reading|analyzing|searching|grep|cat|ls|find)\b/i.test(text)) {
+               overseer.notifyActivity();
+            }
+
             // Clean up output for the terminal view
             const lines = text.split("\n");
             lines.forEach(line => {

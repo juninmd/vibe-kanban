@@ -142,6 +142,11 @@ Do not output hypothetical logs. Output the actual file content needed to solve 
                 fullOutput += text;
                 errorLoopDetector.check(text);
                 stallDetector.update();
+
+                if (/\b(reading|analyzing|searching|grep|cat|ls|find)\b/i.test(text)) {
+                    overseer.notifyActivity();
+                }
+
                 const trimmed = text.trim();
                 if (trimmed) {
                     this.appendLog(task.id, trimmed);
