@@ -43,7 +43,7 @@ function formatProofOfWork(results: { name: string; success: boolean; duration: 
 
   for (const r of results) {
       const status = r.success ? "Pass" : "Fail";
-      const duration = `${Math.round(r.duration / 1000)}s`;
+      const duration = (r.duration / 1000).toFixed(1) + "s";
       lines.push(`| ${r.name} | ${status} | ${duration} |`);
   }
 
