@@ -16,8 +16,8 @@ export function formatSpecCompliance(results: { criterion: string; met: boolean;
 
     for (const c of results) {
         const status = c.met ? "Met" : "Not Met";
-        const evidence = c.evidence.replace(/\|/g, "\\|").replace(/\n/g, " ");
-        const criterion = c.criterion.replace(/\|/g, "\\|").replace(/\n/g, " ");
+        const evidence = (c.evidence || "").toString().replace(/\|/g, "\\|").replace(/\n/g, " ");
+        const criterion = (c.criterion || "").toString().replace(/\|/g, "\\|").replace(/\n/g, " ");
         lines.push(`| ${criterion} | ${status} | ${evidence} |`);
     }
 
