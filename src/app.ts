@@ -1931,8 +1931,8 @@ function tick() {
         leftLeg.rotation.x = -Math.sin(time) * 0.5;
         rightLeg.rotation.x = Math.sin(time) * 0.5;
       } else if (item.phase === "working") {
-        leftArm.rotation.x = -1.2 + Math.sin(time * 10) * 0.1;
-        rightArm.rotation.x = -1.2 + Math.cos(time * 10) * 0.1;
+        leftArm.rotation.x = -1.2 + Math.sin(time * 10 + item.group.id) * 0.1;
+        rightArm.rotation.x = -1.2 + Math.cos(time * 10 + item.group.id) * 0.1;
         leftLeg.rotation.x = -0.2;
         rightLeg.rotation.x = -0.2;
       } else if (item.phase === "celebrating") {
