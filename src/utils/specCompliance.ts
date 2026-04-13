@@ -5,10 +5,29 @@ export interface SpecComplianceResult {
     evidence: string;
 }
 
+export function formatSpecCompliance(results: { criterion: string; met: boolean; evidence: string }[]): string {
+    const lines: string[] = ["", "---", "## Spec Compliance", ""];
+    const metCount = results.filter(r => r.met).length;
+    const summary = `${metCount}/${results.length} criteria met`;
+    lines.push(`**${summary}**`);
+    lines.push("");
+    lines.push("| Criterion | Status | Evidence |");
+    lines.push("|-----------|--------|----------|");
+
+    for (const c of results) {
+        const status = c.met ? "Met" : "Not Met";
+        const evidence = (c.evidence || "").toString().replace(/\|/g, "\\|").replace(/\n/g, " ");
+        const criterion = (c.criterion || "").toString().replace(/\|/g, "\\|").replace(/\n/g, " ");
+        lines.push(`| ${criterion} | ${status} | ${evidence} |`);
+    }
+
+    return lines.join("\n");
+}
+
 export async function verifySpecCompliance(
     description: string,
     diff: string
-): Promise<{ success: boolean; unmetCriteria: string[] }> {
+): Promise<{ success: boolean; unmetCriteria: string[]; allResults: { criterion: string; met: boolean; evidence: string }[] }> {
     const lines = description.split('\n');
     const criteria: string[] = [];
 
@@ -20,14 +39,17 @@ export async function verifySpecCompliance(
     }
 
     if (criteria.length === 0) {
-        return { success: true, unmetCriteria: [] };
+        return { success: true, unmetCriteria: [], allResults: [] };
     }
 
     if (!diff || diff.trim() === '') {
-        return { success: false, unmetCriteria: criteria.map(c => `Diff is empty, cannot verify: ${c}`) };
+        const unmetCriteria = criteria.map(c => `Diff is empty, cannot verify: ${c}`);
+        const allResults = criteria.map(c => ({ criterion: c, met: false, evidence: "Diff is empty" }));
+        return { success: false, unmetCriteria, allResults };
     }
 
     const unmetCriteria: string[] = [];
+    let allResults: { criterion: string; met: boolean; evidence: string }[] = [];
 
     const prompt = `You are a strict QA agent. Your job is to verify if the given git diff meets the specified acceptance criteria.
 For each criterion, evaluate if the changes in the diff satisfy the requirement.
@@ -55,6 +77,7 @@ Return ONLY a JSON array of objects with the following structure, one for each c
             if (startIdx !== -1 && endIdx !== -1) {
                 const results = JSON.parse(content.substring(startIdx, endIdx + 1));
                 if (Array.isArray(results)) {
+                    allResults = results;
                     for (const result of results) {
                         if (result.met === false) {
                             unmetCriteria.push(`${result.criterion}: ${result.evidence}`);
@@ -64,15 +87,20 @@ Return ONLY a JSON array of objects with the following structure, one for each c
             }
         } else {
              // Fallback if LLM fails, assume not met to be safe
-             return { success: false, unmetCriteria: ['Failed to verify criteria due to LLM error'] };
+             const unmetCriteria = ['Failed to verify criteria due to LLM error'];
+             allResults = criteria.map(c => ({ criterion: c, met: false, evidence: "LLM error" }));
+             return { success: false, unmetCriteria, allResults };
         }
     } catch (error) {
         console.error("Spec compliance verification failed:", error);
-        return { success: false, unmetCriteria: ['Error parsing LLM response for spec verification'] };
+        const unmetCriteria = ['Error parsing LLM response for spec verification'];
+        allResults = criteria.map(c => ({ criterion: c, met: false, evidence: "Parse error" }));
+        return { success: false, unmetCriteria, allResults };
     }
 
     return {
         success: unmetCriteria.length === 0,
-        unmetCriteria
+        unmetCriteria,
+        allResults
     };
 }

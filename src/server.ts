@@ -21,7 +21,7 @@ import { getToolingLandscape } from "./utils/toolingLandscape.js";
 import { enrichDemand } from "./utils/demandIntake.js";
 import { prepareWorktree, cleanupWorktree } from "./utils/worktreeUtils.js";
 import { callLLM } from "./utils/llmUtils.js";
-import { verifySpecCompliance } from "./utils/specCompliance.js";
+import { verifySpecCompliance, formatSpecCompliance } from "./utils/specCompliance.js";
 import { execa } from "execa";
 import "dotenv/config";
 
@@ -36,6 +36,35 @@ try {
 } catch (e) { }
 
 // --- State and Persistence ---
+function formatProofOfWork(results: { name: string; success: boolean; duration: number; output: string }[]): string {
+  const lines: string[] = ["", "---", "## Proof of Work", ""];
+  lines.push("| Check | Status | Duration |");
+  lines.push("|-------|--------|----------|");
+
+  for (const r of results) {
+      const status = r.success ? "Pass" : "Fail";
+      const duration = (r.duration / 1000).toFixed(1) + "s";
+      lines.push(`| ${r.name} | ${status} | ${duration} |`);
+  }
+
+  const failures = results.filter((r) => !r.success);
+  if (failures.length > 0) {
+      lines.push("");
+      for (const f of failures) {
+          const trimmed = f.output.trim().slice(-2000);
+          lines.push(`<details><summary>${f.name} output</summary>`);
+          lines.push("");
+          lines.push("```");
+          lines.push(trimmed);
+          lines.push("```");
+          lines.push("");
+          lines.push("</details>");
+      }
+  }
+
+  return lines.join("\n");
+}
+
 function initializeState(): State {
   const existingAgents = DB.getAgents();
   if (existingAgents.length === 0) {
@@ -408,8 +437,12 @@ const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? dri
         const powConfig = (appConfig as { proof_of_work?: { commands?: { name?: string; run: string }[] } }).proof_of_work;
         const powCommands = powConfig?.commands || [{ name: "test", run: "npm test" }];
 
+        const powResults: { name: string; success: boolean; duration: number; output: string }[] = [];
+
         for (const cmd of powCommands) {
-            addTerminalLine(t.assignedTo, tid, "system", `⚙️ Executando Proof of Work (${cmd.name || cmd.run})...`);
+            const cmdName = cmd.name || cmd.run;
+            addTerminalLine(t.assignedTo, tid, "system", `⚙️ Executando Proof of Work (${cmdName})...`);
+            const start = Date.now();
             try {
                 const match = cmd.run.match(/[^\s"']+|"[^"]*"|'[^']*'/g) || [];
                 const args = match.map((s: string) => {
@@ -419,18 +452,32 @@ const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? dri
                     return s;
                 });
                 const bin = args.shift() || "echo";
-                await execa(bin, args, { cwd: workDir });
-                addTerminalLine(t.assignedTo, tid, "system", `✅ Proof of Work (${cmd.name || cmd.run}) validado com sucesso!`);
+                const result = await execa(bin, args, { cwd: workDir, reject: false });
+                const duration = Date.now() - start;
+
+                if (result.failed) {
+                    const errorOutput = result.stderr || result.stdout || "Command failed";
+                    powResults.push({ name: cmdName, success: false, duration, output: errorOutput });
+                    addTerminalLine(t.assignedTo, tid, "stderr", `❌ Falha no Proof of Work (${cmdName}):\n${errorOutput}`);
+                    handleBugFound(tid, `Proof of Work (${cmdName}) failed: ${errorOutput}`);
+                    // We don't halt here to allow PR generation with failure report
+                } else {
+                    powResults.push({ name: cmdName, success: true, duration, output: result.stdout });
+                    addTerminalLine(t.assignedTo, tid, "system", `✅ Proof of Work (${cmdName}) validado com sucesso!`);
+                }
             } catch (powError: unknown) {
+                const duration = Date.now() - start;
                 const errorObj = powError as { stderr?: string; stdout?: string; message?: string };
                 const errorOutput = errorObj.stderr || errorObj.stdout || errorObj.message || String(powError);
-                addTerminalLine(t.assignedTo, tid, "stderr", `❌ Falha no Proof of Work (${cmd.name || cmd.run}):\n${errorOutput}`);
-                handleBugFound(tid, `Proof of Work (${cmd.name || cmd.run}) failed: ${errorOutput}`);
-                return; // Halt completion
+                powResults.push({ name: cmdName, success: false, duration, output: errorOutput });
+                addTerminalLine(t.assignedTo, tid, "stderr", `❌ Falha no Proof of Work (${cmdName}):\n${errorOutput}`);
+                handleBugFound(tid, `Proof of Work (${cmdName}) failed: ${errorOutput}`);
+                // We don't halt here to allow PR generation with failure report
             }
         }
 
         // Spec Compliance Validation (Lisa inspired)
+        let specComplianceResults: { criterion: string; met: boolean; evidence: string }[] | undefined;
         if (t.description && t.description.includes("- [ ]")) {
             addTerminalLine(t.assignedTo, tid, "system", `⚙️ Verificando Spec Compliance (Critérios de Aceite)...`);
             try {
@@ -446,12 +493,13 @@ const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? dri
                 }
 
                 const compliance = await verifySpecCompliance(t.description, diff);
+                specComplianceResults = compliance.allResults;
 
                 if (!compliance.success) {
                     const errorMsg = `Spec Compliance failed. Unmet criteria:\n${compliance.unmetCriteria.join("\n")}`;
                     addTerminalLine(t.assignedTo, tid, "stderr", `❌ Falha no Spec Compliance:\n${compliance.unmetCriteria.join("\n")}`);
                     handleBugFound(tid, errorMsg);
-                    return; // Halt completion
+                    // We don't halt here to allow PR generation with failure report
                 }
                 addTerminalLine(t.assignedTo, tid, "system", `✅ Spec Compliance validado com sucesso!`);
             } catch (specError: unknown) {
@@ -472,7 +520,13 @@ const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? dri
         if (t.githubRepo && process.env.GITHUB_TOKEN) {
             addTerminalLine(t.assignedTo, tid, "system", `🔄 Gerando Pull Request para o repositório ${t.githubRepo}...`);
             try {
-                const prFinalDescription = "";
+                let prFinalDescription = "";
+                if (powResults && powResults.length > 0) {
+                    prFinalDescription += "\n\n" + formatProofOfWork(powResults);
+                }
+                if (specComplianceResults && specComplianceResults.length > 0) {
+                    prFinalDescription += "\n\n" + formatSpecCompliance(specComplianceResults);
+                }
                 const githubUser = process.env.GITHUB_USER || "vibe-agent";
                 const prResult = await createPullRequest(workDir, t.id, t.title, t.githubRepo, process.env.GITHUB_TOKEN, githubUser, prFinalDescription);
                 addTerminalLine(t.assignedTo, tid, "system", `✅ ${prResult}`);
