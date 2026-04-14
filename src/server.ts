@@ -19,6 +19,7 @@ import { getAvailableTools } from "./providers.js";
 import { isEligibleForFallback } from "./utils/fallbackUtils.js";
 import { getToolingLandscape } from "./utils/toolingLandscape.js";
 import { enrichDemand } from "./utils/demandIntake.js";
+import { enrichContext } from "./utils/enrichment.js";
 import { prepareWorktree, cleanupWorktree } from "./utils/worktreeUtils.js";
 import { callLLM } from "./utils/llmUtils.js";
 import { verifySpecCompliance, formatSpecCompliance } from "./utils/specCompliance.js";
@@ -320,6 +321,18 @@ ${taskList}
 The following sibling tasks may be running concurrently. Do NOT duplicate their work:
 
 ${siblings}`;
+    }
+  }
+
+  // Context Enrichment (Lisa inspired)
+  if (finalWorkDir) {
+    try {
+      const enrichedText = await enrichContext(finalWorkDir, updatedTask);
+      if (enrichedText) {
+        updatedTask.description = (updatedTask.description || "") + "\n\n" + enrichedText;
+      }
+    } catch (err: unknown) {
+      console.warn(`Context enrichment failed for task #${task.id}:`, err);
     }
   }
 
