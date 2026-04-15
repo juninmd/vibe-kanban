@@ -1787,6 +1787,7 @@ function updateAgents3D() {
 
     if (!agentMeshes.has(agent.id)) {
       const meshData = createAgentMesh(agent, idx);
+      scene.add(meshData.group);
       if (oldState) {
         meshData.group.position.copy(oldState.position);
         meshData.group.rotation.copy(oldState.rotation);
