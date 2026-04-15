@@ -16,7 +16,7 @@ import { createPullRequest } from "./utils/githubUtils.js";
 import { isCommandAvailable } from "./utils/commandUtils.js";
 import { buildProviderChain, isEligibleForProviderFallback } from "./drivers/providerFallback.js";
 import { getAvailableTools } from "./providers.js";
-import { isEligibleForFallback } from "./utils/fallbackUtils.js";
+import { isEligibleForFallback, isCompleteProviderExhaustion, ModelAttempt } from "./utils/fallbackUtils.js";
 import { getToolingLandscape } from "./utils/toolingLandscape.js";
 import { enrichDemand } from "./utils/demandIntake.js";
 import { enrichContext } from "./utils/enrichment.js";
@@ -346,14 +346,25 @@ ${siblings}`;
 
   setTimeout(() => {
     let attemptIndex = 0;
+    const modelAttempts: ModelAttempt[] = [];
 
     const runAttempt = (tool: string) => {
+      const startTime = Date.now();
 const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? drivers[tool] : null) || resolveDriverForAgent(agent);
       const executionAgent = { ...agent, tool };
       activeTaskDrivers.set(task.id, executeDriver);
       addTerminalLine(agent.id, task.id, "system", `🤖 Provider: ${tool}`);
 
       const handleBugFound = (tid: number, desc: string) => {
+        const duration = Date.now() - startTime;
+        modelAttempts.push({
+            provider: tool,
+            model: executionAgent.model,
+            success: false,
+            error: desc,
+            duration
+        });
+
         const nextTool = providerChain[attemptIndex + 1];
         if (nextTool && isEligibleForProviderFallback(desc)) {
           attemptIndex += 1;
@@ -372,9 +383,10 @@ const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? dri
 
             // We consider provider exhaustion to be complete when we have tried all tools in the providerChain
             // AND have exceeded the total MAX_FALLBACK_ATTEMPTS for transient errors. This prevents infinite fallback loops.
-            const isCompleteProviderExhaustion = attempts > MAX_FALLBACK_ATTEMPTS && attemptIndex >= providerChain.length - 1;
+            // Then we also use the lisa check to see if every attempt in a fallback chain failed due to provider infrastructure issues.
+            const exhaustionFlag = isCompleteProviderExhaustion(modelAttempts) || (attempts > MAX_FALLBACK_ATTEMPTS && attemptIndex >= providerChain.length - 1);
 
-            if (!isCompleteProviderExhaustion) {
+            if (!exhaustionFlag) {
                 if (attempts <= MAX_FALLBACK_ATTEMPTS) {
                     addEvent(`[Fallback] Erro transiente em #${tid}: ${desc}. Tentando novamente... (${attempts}/${MAX_FALLBACK_ATTEMPTS})`);
                     if (t.assignedTo) {
@@ -441,6 +453,14 @@ const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? dri
       }
     },
     onComplete: async (tid) => {
+      const duration = Date.now() - startTime;
+      modelAttempts.push({
+          provider: tool,
+          model: executionAgent.model,
+          success: true,
+          duration
+      });
+
       activeTaskDrivers.delete(tid);
       const t = getTask(tid);
       if (t && t.assignedTo) {
