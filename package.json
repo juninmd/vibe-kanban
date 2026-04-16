@@ -13,7 +13,8 @@
     "test:all": "pnpm test && pnpm test:e2e",
     "kind:up": "./scripts/kind-up.sh",
     "kind:down": "./scripts/kind-down.sh",
-    "cli": "node dist/cli/vibe.js"
+    "cli": "node dist/cli/vibe.js",
+    "postinstall": "playwright install chromium"
   },
   "devDependencies": {
     "@commitlint/cli": "^20.5.0",
