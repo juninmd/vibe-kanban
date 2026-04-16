@@ -1,3 +1,4 @@
+import { buildSystemPrompt } from "../utils/promptUtils.js";
 import { Task, Agent, LLMDriver, DriverContext } from "../types.js";
 import { spawn } from "child_process";
 import { logDebugBlock, logDebugCommand } from "./debugLogging.js";
@@ -12,14 +13,9 @@ export class ClaudeDriver implements LLMDriver {
    async executeTask(task: Task, agent: Agent, ctx: DriverContext): Promise<void> {
       const cmd = "claude";
       const taskDir = task.workDir || process.cwd();
-      const fullPrompt = [
-         `[Role: ${agent.role}]`,
-         `Task: ${task.title}`,
-         task.description ? `Description: ${task.description}` : "",
-         `Category: ${task.category} | Priority: ${task.priority}`,
-         `Work directory: ${taskDir}`,
-         "Complete the task by writing, editing, and committing code. Work autonomously without asking for input.",
-      ].filter(Boolean).join("\n");
+
+      const basePrompt = buildSystemPrompt(task, agent);
+      const fullPrompt = `${basePrompt}\n\nWork directory: ${taskDir}\nComplete the task by writing, editing, and committing code. Work autonomously without asking for input.`;
 
       const args = ["-p", fullPrompt, "--model", agent.model];
       logDebugBlock(ctx, task.id, "AGENT PROMPT", fullPrompt);

@@ -1,6 +1,7 @@
 import { execa } from "execa";
 import * as fs from "fs";
 import * as path from "path";
+import { buildSystemPrompt } from "../utils/promptUtils.js";
 import { Task, Agent, LLMDriver, DriverContext } from "../types.js";
 import { extractAndWriteFiles } from "../utils/fileUtils.js";
 import { logDebugBlock, logDebugCommand } from "./debugLogging.js";
@@ -52,23 +53,9 @@ export class CommandDriver implements LLMDriver {
             guardrails = `\nPREVIOUS ATTEMPT FAILED WITH ERROR:\n${task.lastError}\nEnsure you fix the issue and do not repeat the same mistake.\n`;
         }
 
-        const prompt = `Task: ${task.title}
-Description: ${task.description || ""}
-Source: ${task.source}
-${guardrails}
-You are an autonomous coding agent. Your goal is to complete the task by writing code.
-To create or overwrite a file, use the following format exactly:
+        const basePrompt = buildSystemPrompt(task, agent);
+        const prompt = `${basePrompt}\n\nSource: ${task.source}\n${guardrails}`;
 
-<<<FILE:filename.ext>>>
-file content here
-<<<END>>>
-
-Example:
-<<<FILE:hello.py>>>
-print("Hello World")
-<<<END>>>
-
-Do not output hypothetical logs. Output the actual file content needed to solve the task.`;
         logDebugBlock(ctx, task.id, "AGENT PROMPT", prompt);
 
         if (agent.tool === "opencode" && this.terminalManager) {

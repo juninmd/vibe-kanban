@@ -1,3 +1,4 @@
+import { buildSystemPrompt } from "../utils/promptUtils.js";
 import { Task, Agent, LLMDriver, DriverContext } from "../types.js";
 import * as fs from "fs";
 import * as path from "path";
@@ -28,20 +29,9 @@ export class CopilotDriver implements LLMDriver {
 
       const projectContext = getProjectContext(basePath);
       const model = agent.model || "gpt-4o";
-      const prompt = [
-         `[Role: ${agent.role}]`,
-         `Task: ${task.title}`,
-         `Description: ${task.description || "No description provided."}`,
-         `Category: ${task.category} | Priority: ${task.priority}`,
-         projectContext,
-         "",
-         "You are an autonomous coding agent. Complete the task by writing code.",
-         "To create or overwrite a file, use the following format exactly:",
-         "<<<FILE:filename.ext>>>",
-         "file content here",
-         "<<<END>>>",
-         "Write the actual implementation needed to solve the task.",
-      ].join("\n");
+
+      const basePrompt = buildSystemPrompt(task, agent);
+      const prompt = `${basePrompt}\n\n${projectContext}`;
 
       ctx.onLog(task.id, `Starting GitHub Copilot Agent with model ${model}...`);
       logDebugBlock(ctx, task.id, "COPILOT PROMPT", prompt);

@@ -26,27 +26,8 @@ export class OpenAIDriver implements LLMDriver {
 
       const projectContext = getProjectContext(basePath);
 
-      const prompt = `
-Task: ${task.title}
-Description: ${task.description || "No description provided."}
-Category: ${task.category}
-Priority: ${task.priority}
-
-${projectContext}
-
-You are an autonomous coding agent. Your goal is to complete the task by writing code.
-To create or overwrite a file, use the following format exactly:
-
-<<<FILE:filename.ext>>>
-file content here
-<<<END>>>
-
-Example:
-<<<FILE:hello.py>>>
-print("Hello World")
-<<<END>>>
-
-Do not output hypothetical logs. Output the actual file content needed to solve the task.`;
+      const basePrompt = buildSystemPrompt(task, agent);
+      const prompt = `${basePrompt}\n\n${projectContext}`;
 
       ctx.onLog(task.id, `Starting OpenAI Agent with model ${agent.model || "gpt-4o"}...`);
       logDebugBlock(
