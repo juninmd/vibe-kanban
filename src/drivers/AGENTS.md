@@ -14,6 +14,7 @@ Todos os drivers devem implementar a interface `LLMDriver` definida em `src/type
 - **`CopilotDriver`**: Interface com o GitHub Copilot CLI.
 - **`ClaudeDriver`**: Interface com o Claude Code CLI.
 - **`OpenAIDriver`**: Interface direta com a API da OpenAI.
+- **`CodexDriver`**: Integrates with Codex-based LLMs bridging the driver ecosystem.
 - **`CommandDriver`**: Driver genérico para execução de comandos shell.
 
 ## Recommendations
