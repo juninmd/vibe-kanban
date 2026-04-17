@@ -8,6 +8,7 @@ const TOOL_CHECKS: Record<string, () => boolean> = {
   copilot: () => isCommandAvailable("gh"),
   claude: () => isCommandAvailable("claude") || Boolean(process.env.ANTHROPIC_API_KEY),
   openai: () => Boolean(process.env.OPENAI_API_KEY),
+  codex: () => isCommandAvailable("codex"),
 };
 
 export function buildProviderChain(agent: Agent, drivers: Record<string, LLMDriver>): string[] {

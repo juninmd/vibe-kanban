@@ -22,6 +22,7 @@ const providerFactories: ToolProvider[] = [
     name: "Claude (API)",
     isAvailable: () => !isCommandAvailable("claude") && Boolean(process.env.ANTHROPIC_API_KEY)
   },
+  { id: "codex", name: "Codex Engine", isAvailable: () => isCommandAvailable("codex") },
   { id: "mock", name: "Mock Tool", isAvailable: () => true }
 ];
 

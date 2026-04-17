@@ -9,6 +9,7 @@ import { OpenCodeDriver } from "./drivers/OpenCodeDriver.js";
 import { OpenAIDriver } from "./drivers/OpenAIDriver.js";
 import { ClaudeDriver } from "./drivers/ClaudeDriver.js";
 import { CommandDriver } from "./drivers/CommandDriver.js";
+import { CodexDriver } from "./drivers/CodexDriver.js";
 import { DB } from "./db.js";
 import { TerminalManager } from "./terminal/TerminalManager.js";
 import { Memory } from "./memory.js";
@@ -781,6 +782,7 @@ const drivers: Record<string, LLMDriver> = {
   opencode: new OpenCodeDriver(() => appConfig.cloneDir),
   claude: new ClaudeDriver(),
   openai: new OpenAIDriver(() => appConfig.cloneDir),
+  codex: new CodexDriver(() => appConfig.cloneDir),
 };
 
 // Keep the app functional even when Gemini CLI is not installed.
