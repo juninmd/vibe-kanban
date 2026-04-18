@@ -708,7 +708,7 @@ async function generateRoadmapTasks() {
 Current agents: ${roles}.
 Categories: "roadmap", "security", "performance", "feature", "test", "bug".
 Priorities: "alta", "media", "baixa".
-Generate 2 realistic tasks. Return ONLY a JSON array: [{"title":"...","category":"...","priority":"...","description":"..."}]`;
+Generate 1 realistic task inspired by https://docs.codegen.com/introduction/overview. Return ONLY a JSON array: [{"title":"...","category":"...","priority":"...","description":"..."}]`;
 
   const processTasks = (raw: string) => {
     try {
@@ -752,8 +752,8 @@ Generate 2 realistic tasks. Return ONLY a JSON array: [{"title":"...","category"
   }
 }
 
-// PM loop (every 60 seconds)
-setInterval(generateRoadmapTasks, 60000);
+// PM loop (every day)
+setInterval(generateRoadmapTasks, 86400000);
 
 function sanitizeCloneDir(input: unknown): string {
   if (typeof input !== "string") return "./clones";
