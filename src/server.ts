@@ -708,7 +708,7 @@ async function generateRoadmapTasks() {
 Current agents: ${roles}.
 Categories: "roadmap", "security", "performance", "feature", "test", "bug".
 Priorities: "alta", "media", "baixa".
-Generate 1 realistic task inspired by https://docs.codegen.com/introduction/overview. Return ONLY a JSON array: [{"title":"...","category":"...","priority":"...","description":"..."}]`;
+Generate 1 new feature task inspired by https://docs.codegen.com/introduction/overview. The category must be "feature". Return ONLY a JSON array: [{"title":"...","category":"feature","priority":"...","description":"..."}]`;
 
   const processTasks = (raw: string) => {
     try {
