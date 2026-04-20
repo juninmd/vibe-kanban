@@ -25,6 +25,30 @@ import { prepareWorktree, cleanupWorktree } from "./utils/worktreeUtils.js";
 import { callLLM } from "./utils/llmUtils.js";
 import { sendSlackNotification } from "./utils/slackUtils.js";
 import { verifySpecCompliance, formatSpecCompliance } from "./utils/specCompliance.js";
+import { buildComplianceRecoveryPrompt } from "./utils/specCompliance.js";
+function buildValidationRecoveryPrompt(title: string, failures: { name: string; output: string }[]): string {
+    const failureSections = failures
+        .map((f) => {
+            const trimmed = f.output.trim().slice(-3000);
+            return `### ${f.name}\nCommand: \`${f.name}\`\nOutput:\n\`\`\`\n${trimmed}\n\`\`\``;
+        })
+        .join("\n\n");
+
+    return `You are continuing work on issue: "${title}".
+
+Your implementation has code changes but the following validation checks failed. Fix the issues, commit your changes, and push.
+
+${failureSections}
+
+IMPORTANT:
+- Do NOT create a new branch — you are already on the correct branch.
+- Fix ONLY the validation failures above.
+- Commit and push your fixes.
+- Do NOT create a PR — that will be handled separately.`;
+}
+
+// ... existing verifySpecCompliance import
+
 import { execa } from "execa";
 import "dotenv/config";
 
@@ -468,81 +492,141 @@ const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? dri
       if (t && t.assignedTo) {
         const workDir = t.workDir || path.join(appConfig.cloneDir, `task-${t.id}`);
 
-        // Proof of Work Validation (Lisa inspired)
-        const powConfig = (appConfig as { proof_of_work?: { commands?: { name?: string; run: string }[] } }).proof_of_work;
+                // Proof of Work Validation (Lisa inspired) with Retry Loop
+        const powConfig = (appConfig as { proof_of_work?: { commands?: { name?: string; run: string }[], max_retries?: number } }).proof_of_work;
         const powCommands = powConfig?.commands || [{ name: "test", run: "npm test" }];
+        let powRetriesLeft = powConfig?.max_retries ?? 2;
+        let finalPowResults: { name: string; success: boolean; duration: number; output: string }[] = [];
 
-        const powResults: { name: string; success: boolean; duration: number; output: string }[] = [];
+        while (true) {
+            const powResults: { name: string; success: boolean; duration: number; output: string }[] = [];
+            for (const cmd of powCommands) {
+                const cmdName = cmd.name || cmd.run;
+                addTerminalLine(t.assignedTo, tid, "system", `⚙️ Executando Proof of Work (${cmdName})...`);
+                const start = Date.now();
+                try {
+                    const match = cmd.run.match(/[^\s"']+|"[^"]*"|'[^']*'/g) || [];
+                    const args = match.map((s: string) => {
+                        if (s.length >= 2 && ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'")))) {
+                            return s.slice(1, -1);
+                        }
+                        return s;
+                    });
+                    const bin = args.shift() || "echo";
+                    const result = await execa(bin, args, { cwd: workDir, reject: false });
+                    const duration = Date.now() - start;
 
-        for (const cmd of powCommands) {
-            const cmdName = cmd.name || cmd.run;
-            addTerminalLine(t.assignedTo, tid, "system", `⚙️ Executando Proof of Work (${cmdName})...`);
-            const start = Date.now();
-            try {
-                const match = cmd.run.match(/[^\s"']+|"[^"]*"|'[^']*'/g) || [];
-                const args = match.map((s: string) => {
-                    if (s.length >= 2 && ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'")))) {
-                        return s.slice(1, -1);
+                    if (result.failed) {
+                        const errorOutput = result.stderr || result.stdout || "Command failed";
+                        powResults.push({ name: cmdName, success: false, duration, output: errorOutput });
+                        addTerminalLine(t.assignedTo, tid, "stderr", `❌ Falha no Proof of Work (${cmdName}):\n${errorOutput}`);
+                    } else {
+                        powResults.push({ name: cmdName, success: true, duration, output: result.stdout });
+                        addTerminalLine(t.assignedTo, tid, "system", `✅ Proof of Work (${cmdName}) validado com sucesso!`);
                     }
-                    return s;
-                });
-                const bin = args.shift() || "echo";
-                const result = await execa(bin, args, { cwd: workDir, reject: false });
-                const duration = Date.now() - start;
-
-                if (result.failed) {
-                    const errorOutput = result.stderr || result.stdout || "Command failed";
+                } catch (powError: unknown) {
+                    const duration = Date.now() - start;
+                    const errorObj = powError as { stderr?: string; stdout?: string; message?: string };
+                    const errorOutput = errorObj.stderr || errorObj.stdout || errorObj.message || String(powError);
                     powResults.push({ name: cmdName, success: false, duration, output: errorOutput });
                     addTerminalLine(t.assignedTo, tid, "stderr", `❌ Falha no Proof of Work (${cmdName}):\n${errorOutput}`);
-                    handleBugFound(tid, `Proof of Work (${cmdName}) failed: ${errorOutput}`);
-                    // We don't halt here to allow PR generation with failure report
-                } else {
-                    powResults.push({ name: cmdName, success: true, duration, output: result.stdout });
-                    addTerminalLine(t.assignedTo, tid, "system", `✅ Proof of Work (${cmdName}) validado com sucesso!`);
                 }
-            } catch (powError: unknown) {
-                const duration = Date.now() - start;
-                const errorObj = powError as { stderr?: string; stdout?: string; message?: string };
-                const errorOutput = errorObj.stderr || errorObj.stdout || errorObj.message || String(powError);
-                powResults.push({ name: cmdName, success: false, duration, output: errorOutput });
-                addTerminalLine(t.assignedTo, tid, "stderr", `❌ Falha no Proof of Work (${cmdName}):\n${errorOutput}`);
-                handleBugFound(tid, `Proof of Work (${cmdName}) failed: ${errorOutput}`);
-                // We don't halt here to allow PR generation with failure report
+            }
+            finalPowResults = powResults;
+            const failures = powResults.filter(r => !r.success);
+
+            if (failures.length === 0) {
+                break;
+            }
+
+            if (powRetriesLeft <= 0) {
+                for (const f of failures) {
+                    handleBugFound(tid, `Proof of Work (${f.name}) failed after retries: ${f.output}`);
+                }
+                break;
+            }
+
+            powRetriesLeft--;
+            addTerminalLine(t.assignedTo, tid, "system", `🔄 Retrying Proof of Work... (${powRetriesLeft} retries left)`);
+            const recoveryPrompt = buildValidationRecoveryPrompt(t.title, failures);
+            try {
+                const recoveryDriver = activeTaskDrivers.get(tid) || drivers[executionAgent.tool];
+                await recoveryDriver.executeTask({ ...t, description: recoveryPrompt }, executionAgent, {
+                    onLog: (r_tid, msg) => {
+                        if (t.assignedTo) addTerminalLine(t.assignedTo, tid, "stdout", msg);
+                    },
+                    onComplete: () => { /* Handled by loop */ },
+                    onBugFound: (r_tid, desc) => { handleBugFound(r_tid, desc); },
+                    onInterrupt: () => { /* no-op for recovery */ },
+                    memory: Memory.getInstance()
+                });
+            } catch (recoveryErr) {
+                addTerminalLine(t.assignedTo, tid, "stderr", `❌ Recovery failed: ${recoveryErr}`);
+                break; // Stop retrying on recovery failure
             }
         }
 
-        // Spec Compliance Validation (Lisa inspired)
+        const powResults = finalPowResults;
+
+        // Spec Compliance Validation (Lisa inspired) with Retry Loop
         let specComplianceResults: { criterion: string; met: boolean; evidence: string }[] | undefined;
-        if (t.description && t.description.includes("- [ ]")) {
-            addTerminalLine(t.assignedTo, tid, "system", `⚙️ Verificando Spec Compliance (Critérios de Aceite)...`);
-            try {
-                // If HEAD~1 fails (e.g. no commits), we fallback to diff against HEAD or just unstaged/staged
-                const diffCmd = await execa("git", ["diff", "HEAD~1"], { cwd: workDir, reject: false });
-                let diff = diffCmd.stdout || "";
+        if (t.description && (t.description.includes("- [ ]") || /acceptance criteria|critérios de aceite/i.test(t.description))) {
+            let scRetriesLeft = 1;
+            while (true) {
+                addTerminalLine(t.assignedTo, tid, "system", `⚙️ Verificando Spec Compliance (Critérios de Aceite)...`);
+                try {
+                    const diffCmd = await execa("git", ["diff", "HEAD~1"], { cwd: workDir, reject: false });
+                    let diff = diffCmd.stdout || "";
+                    if (diff.trim() === "") {
+                        const diffCmdUnstaged = await execa("git", ["diff"], { cwd: workDir, reject: false });
+                        const diffCmdStaged = await execa("git", ["diff", "--cached"], { cwd: workDir, reject: false });
+                        diff = (diffCmdUnstaged.stdout || "") + "\n" + (diffCmdStaged.stdout || "");
+                    }
 
-                if (diff.trim() === "") {
-                    // Fallback to checking unstaged and staged changes together if HEAD~1 isn't resolving properly
-                    const diffCmdUnstaged = await execa("git", ["diff"], { cwd: workDir, reject: false });
-                    const diffCmdStaged = await execa("git", ["diff", "--cached"], { cwd: workDir, reject: false });
-                    diff = (diffCmdUnstaged.stdout || "") + "\n" + (diffCmdStaged.stdout || "");
+                    const compliance = await verifySpecCompliance(t.title, t.description, diff);
+                    specComplianceResults = compliance.allResults;
+
+                    if (!compliance.success) {
+                        const errorMsg = `Spec Compliance failed. Unmet criteria:\n${compliance.unmetCriteria.join("\n")}`;
+                        addTerminalLine(t.assignedTo, tid, "stderr", `❌ Falha no Spec Compliance:\n${compliance.unmetCriteria.join("\n")}`);
+
+                        if (scRetriesLeft <= 0) {
+                            handleBugFound(tid, errorMsg);
+                            break;
+                        }
+
+                        scRetriesLeft--;
+                        addTerminalLine(t.assignedTo, tid, "system", `🔄 Retrying Spec Compliance... (${scRetriesLeft} retries left)`);
+
+                        // Parse unmet criteria back into objects for prompt
+                        const unmetObjs = compliance.unmetCriteria.map(u => {
+                            const splitIdx = u.indexOf(': ');
+                            if (splitIdx === -1) return { criterion: u, evidence: "Not met" };
+                            return { criterion: u.substring(0, splitIdx), evidence: u.substring(splitIdx + 2) };
+                        });
+
+                        const recoveryPrompt = buildComplianceRecoveryPrompt(t.title, unmetObjs);
+                        const recoveryDriver = activeTaskDrivers.get(tid) || drivers[executionAgent.tool];
+                        await recoveryDriver.executeTask({ ...t, description: recoveryPrompt }, executionAgent, {
+                    onLog: (r_tid, msg) => {
+                        if (t.assignedTo) addTerminalLine(t.assignedTo, tid, "stdout", msg);
+                    },
+                    onComplete: () => { /* Handled by loop */ },
+                    onBugFound: (r_tid, desc) => { handleBugFound(r_tid, desc); },
+                    onInterrupt: () => { /* no-op for recovery */ },
+                    memory: Memory.getInstance()
+                });
+                        continue; // retry loop
+                    }
+
+                    addTerminalLine(t.assignedTo, tid, "system", `✅ Spec Compliance validado com sucesso!`);
+                    break;
+                } catch (specError: unknown) {
+                    const errorMessage = specError instanceof Error ? specError.message : String(specError);
+                    addTerminalLine(t.assignedTo, tid, "stderr", `❌ Erro ao verificar Spec Compliance: ${errorMessage}`);
+                    handleBugFound(tid, `Spec Compliance error: ${errorMessage}`);
+                    break;
                 }
-
-                const compliance = await verifySpecCompliance(t.description, diff);
-                specComplianceResults = compliance.allResults;
-
-                if (!compliance.success) {
-                    const errorMsg = `Spec Compliance failed. Unmet criteria:\n${compliance.unmetCriteria.join("\n")}`;
-                    addTerminalLine(t.assignedTo, tid, "stderr", `❌ Falha no Spec Compliance:\n${compliance.unmetCriteria.join("\n")}`);
-                    handleBugFound(tid, errorMsg);
-                    // We don't halt here to allow PR generation with failure report
-                }
-                addTerminalLine(t.assignedTo, tid, "system", `✅ Spec Compliance validado com sucesso!`);
-            } catch (specError: unknown) {
-                const errorMessage = specError instanceof Error ? specError.message : String(specError);
-                addTerminalLine(t.assignedTo, tid, "stderr", `❌ Erro ao verificar Spec Compliance: ${errorMessage}`);
-                // Proceed normally if LLM fails, or we can fail it. For now, let's treat it as a bug.
-                handleBugFound(tid, `Spec Compliance error: ${errorMessage}`);
-                return;
             }
         }
 

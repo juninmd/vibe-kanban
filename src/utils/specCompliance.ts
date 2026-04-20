@@ -24,19 +24,108 @@ export function formatSpecCompliance(results: { criterion: string; met: boolean;
     return lines.join("\n");
 }
 
+export function extractAcceptanceCriteria(description: string): string[] {
+    const criteria: string[] = [];
+
+    // Extract markdown checklist items: - [ ] Something
+    const checklistRegex = /^[\t ]*- \[ \]\s*(.+)$/gm;
+    let match: RegExpExecArray | null;
+    match = checklistRegex.exec(description);
+    while (match) {
+        if (match[1]) criteria.push(match[1].trim());
+        match = checklistRegex.exec(description);
+    }
+
+    if (criteria.length > 0) return criteria;
+
+    // Fallback: extract lines under "Acceptance Criteria" / "Critérios de Aceite" header
+    const headerRegex = /(?:acceptance criteria|critérios de aceite|expected behavior)[:\s]*\n/i;
+    const headerMatch = headerRegex.exec(description);
+    if (headerMatch) {
+        const afterHeader = description.slice(headerMatch.index + headerMatch[0].length);
+        const lines = afterHeader.split("\n");
+        for (const line of lines) {
+            const trimmed = line.trim();
+            // Stop at next header or empty line after content
+            if (trimmed.startsWith("#") || trimmed.startsWith("---")) break;
+            // Capture list items
+            const listMatch = /^[-*]\s+(.+)$/.exec(trimmed);
+            if (listMatch?.[1]) {
+                criteria.push(listMatch[1].trim());
+            }
+            const numberedMatch = /^\d+[.)]\s+(.+)$/.exec(trimmed);
+            if (numberedMatch?.[1]) {
+                criteria.push(numberedMatch[1].trim());
+            }
+        }
+    }
+
+    return criteria;
+}
+
+export function buildCompliancePrompt(title: string, criteria: string[], diff: string): string {
+    const criteriaList = criteria.map((c, i) => `${i + 1}. ${c}`).join("\n");
+
+    return `You are a spec compliance validator. Your ONLY task is to check if an implementation satisfies the acceptance criteria. Do NOT modify any files or run any commands.
+
+## Issue
+${title}
+
+## Acceptance Criteria
+${criteriaList}
+
+## Implementation (git diff)
+\`\`\`diff
+${diff.substring(0, 100000)}
+\`\`\`
+
+## Task
+For each acceptance criterion above, determine if the implementation (git diff) satisfies it.
+
+Respond with ONLY a valid JSON object — no markdown fences, no explanation, no other text:
+
+{
+  "criteria": [
+    { "criterion": "the criterion text", "met": true, "evidence": "brief explanation of how it's met" },
+    { "criterion": "the criterion text", "met": false, "evidence": "what is missing or wrong" }
+  ],
+  "summary": "X/Y criteria met",
+  "passed": false
+}
+
+IMPORTANT:
+- Do NOT create, edit, or modify any files.
+- Do NOT run any shell commands.
+- Do NOT create branches or commits.
+- ONLY output the JSON object above.`;
+}
+
+export function buildComplianceRecoveryPrompt(title: string, unmetCriteria: { criterion: string; evidence: string }[]): string {
+    const unmetList = unmetCriteria
+        .map((c, i) => `${i + 1}. **${c.criterion}**\n   Reason: ${c.evidence}`)
+        .join("\n\n");
+
+    return `You are continuing work on issue: "${title}".
+
+Your implementation was checked against the acceptance criteria and the following were NOT met:
+
+${unmetList}
+
+Fix ONLY the unmet criteria above. Commit and push your changes.
+
+IMPORTANT:
+- Do NOT create a new branch — you are already on the correct branch.
+- Fix ONLY the unmet criteria listed above.
+- Commit and push your fixes.
+- Do NOT create a PR — that will be handled separately.`;
+}
+
 export async function verifySpecCompliance(
+    title: string,
     description: string,
     diff: string
 ): Promise<{ success: boolean; unmetCriteria: string[]; allResults: { criterion: string; met: boolean; evidence: string }[] }> {
-    const lines = description.split('\n');
-    const criteria: string[] = [];
-
-    for (const line of lines) {
-        const trimmed = line.trim();
-        if (trimmed.startsWith('- [ ]') || trimmed.startsWith('- []')) {
-            criteria.push(trimmed.replace(/^- \[\s?\]/, '').trim());
-        }
-    }
+    const criteria = extractAcceptanceCriteria(description);
 
     if (criteria.length === 0) {
         return { success: true, unmetCriteria: [], allResults: [] };
@@ -51,39 +140,42 @@ export async function verifySpecCompliance(
     const unmetCriteria: string[] = [];
     let allResults: { criterion: string; met: boolean; evidence: string }[] = [];
 
-    const prompt = `You are a strict QA agent. Your job is to verify if the given git diff meets the specified acceptance criteria.
-For each criterion, evaluate if the changes in the diff satisfy the requirement.
-
-Git Diff:
-${diff.substring(0, 100000)} // Truncate at a higher limit (e.g., 100k chars) to leverage larger context windows
-
-Acceptance Criteria:
-${criteria.map((c, i) => `${i + 1}. ${c}`).join('\n')}
-
-Return ONLY a JSON array of objects with the following structure, one for each criterion:
-[
-  {
-    "criterion": "The description of the criterion",
-    "met": true, // or false
-    "evidence": "Brief explanation of why it was met or not met based on the diff"
-  }
-]`;
+    const prompt = buildCompliancePrompt(title, criteria, diff);
 
     try {
-        const content = await callLLM(prompt, "You return JSON arrays representing spec compliance results.");
+        const content = await callLLM(prompt, "You return JSON objects representing spec compliance results.");
         if (content) {
-            const startIdx = content.indexOf('[');
-            const endIdx = content.lastIndexOf(']');
-            if (startIdx !== -1 && endIdx !== -1) {
-                const results = JSON.parse(content.substring(startIdx, endIdx + 1));
-                if (Array.isArray(results)) {
-                    allResults = results;
-                    for (const result of results) {
-                        if (result.met === false) {
-                            unmetCriteria.push(`${result.criterion}: ${result.evidence}`);
-                        }
+            // Parse JSON object as from the new prompt
+            const jsonPatterns = [
+                // Direct JSON object
+                /\{[\s\S]*"criteria"[\s\S]*\}/,
+                // Inside markdown code fence
+                /\`\`\`(?:json)?\s*(\{[\s\S]*"criteria"[\s\S]*\})\s*\`\`\`/
+            ];
+
+            let parsed: any = null;
+            for (const pattern of jsonPatterns) {
+                const match = pattern.exec(content);
+                if (match) {
+                    const jsonStr = match[1] ?? match[0];
+                    try {
+                        parsed = JSON.parse(jsonStr);
+                        break;
+                    } catch {
+                        // Try next pattern
                     }
                 }
+            }
+
+            if (parsed && Array.isArray(parsed.criteria)) {
+                allResults = parsed.criteria;
+                for (const result of parsed.criteria) {
+                    if (result.met === false) {
+                        unmetCriteria.push(`${result.criterion}: ${result.evidence}`);
+                    }
+                }
+            } else {
+                throw new Error("Invalid JSON structure returned by LLM");
             }
         } else {
              // Fallback if LLM fails, assume not met to be safe
