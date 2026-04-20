@@ -555,9 +555,9 @@ const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? dri
                     onLog: (r_tid, msg) => {
                         if (t.assignedTo) addTerminalLine(t.assignedTo, tid, "stdout", msg);
                     },
-                    onComplete: async () => {}, // Handled by loop
-                    onBugFound: async (r_tid, desc) => { handleBugFound(r_tid, desc); },
-                    onInterrupt: async () => {},
+                    onComplete: () => { /* Handled by loop */ },
+                    onBugFound: (r_tid, desc) => { handleBugFound(r_tid, desc); },
+                    onInterrupt: () => { /* no-op for recovery */ },
                     memory: Memory.getInstance()
                 });
             } catch (recoveryErr) {
@@ -611,9 +611,9 @@ const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? dri
                     onLog: (r_tid, msg) => {
                         if (t.assignedTo) addTerminalLine(t.assignedTo, tid, "stdout", msg);
                     },
-                    onComplete: async () => {}, // Handled by loop
-                    onBugFound: async (r_tid, desc) => { handleBugFound(r_tid, desc); },
-                    onInterrupt: async () => {},
+                    onComplete: () => { /* Handled by loop */ },
+                    onBugFound: (r_tid, desc) => { handleBugFound(r_tid, desc); },
+                    onInterrupt: () => { /* no-op for recovery */ },
                     memory: Memory.getInstance()
                 });
                         continue; // retry loop
