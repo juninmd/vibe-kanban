@@ -23,6 +23,7 @@ import { enrichDemand } from "./utils/demandIntake.js";
 import { enrichContext } from "./utils/enrichment.js";
 import { prepareWorktree, cleanupWorktree } from "./utils/worktreeUtils.js";
 import { callLLM } from "./utils/llmUtils.js";
+import { sendSlackNotification } from "./utils/slackUtils.js";
 import { verifySpecCompliance, formatSpecCompliance } from "./utils/specCompliance.js";
 import { execa } from "execa";
 import "dotenv/config";
@@ -1354,6 +1355,7 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
       workDir: workDir || undefined,
     });
     addEvent(`Novo card criado: ${task.title} (${task.source})`);
+    sendSlackNotification(process.env.SLACK_WEBHOOK_URL || "", `[Vibe Kanban] Novo card criado: ${task.title}`);
     return jsonResponse(res, 201, { task });
   }
 
@@ -1425,6 +1427,11 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
       }
     }
     updateTask(task.id, { lane });
+
+    if (lane === "done") {
+      sendSlackNotification(process.env.SLACK_WEBHOOK_URL || "", `[Vibe Kanban] Tarefa concluída: ${task.title}`);
+    }
+
     return jsonResponse(res, 200, { task: getTask(taskId) });
   }
 
