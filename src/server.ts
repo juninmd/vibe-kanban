@@ -24,8 +24,8 @@ import { enrichContext } from "./utils/enrichment.js";
 import { prepareWorktree, cleanupWorktree } from "./utils/worktreeUtils.js";
 import { callLLM } from "./utils/llmUtils.js";
 import { sendSlackNotification } from "./utils/slackUtils.js";
-import { verifySpecCompliance, formatSpecCompliance } from "./utils/specCompliance.js";
-import { buildComplianceRecoveryPrompt } from "./utils/specCompliance.js";
+import { verifySpecCompliance, formatSpecCompliance, buildComplianceRecoveryPrompt } from "./utils/specCompliance.js";
+
 function buildValidationRecoveryPrompt(title: string, failures: { name: string; output: string }[]): string {
     const failureSections = failures
         .map((f) => {
@@ -47,7 +47,7 @@ IMPORTANT:
 - Do NOT create a PR — that will be handled separately.`;
 }
 
-// ... existing verifySpecCompliance import
+
 
 import { execa } from "execa";
 import "dotenv/config";
