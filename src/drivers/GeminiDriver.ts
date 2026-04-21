@@ -1,23 +1,14 @@
-import { buildSystemPrompt } from "../utils/promptUtils.js";
 import { Task, Agent, LLMDriver, DriverContext } from "../types.js";
-import { spawn } from "child_process";
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
 import { getProjectContext, extractAndWriteFiles } from "../utils/fileUtils.js";
-import { isCommandAvailable, getGlobalCommandPath } from "../utils/commandUtils.js";
-import { spawnWithPty, stripAnsi } from "../utils/ptyUtils.js";
-import { createErrorLoopDetector, createSessionTimeout, createStallDetector, handleOverseerResults, startOverseer } from "../utils/overseerUtils.js";
-import { logDebugBlock, logDebugCommand } from "./debugLogging.js";
-
-// Gemini-specific: these prefixes appear on every failed tool call and API error
-const GEMINI_ERROR_PATTERN = /^Error (executing tool|generating content)/;
-
-import { ChildProcess } from "child_process";
+import { logDebugBlock } from "./debugLogging.js";
+import { streamText } from "ai";
+import { createGeminiProvider } from "ai-sdk-provider-gemini-cli";
 
 export class GeminiDriver implements LLMDriver {
    name: string = "Gemini CLI Driver";
-   private runningTasks = new Map<number, ChildProcess>();
+   private runningTasks = new Map<number, AbortController>();
    private getCloneDir: () => string;
 
    constructor(getCloneDir: () => string) {
@@ -32,11 +23,6 @@ export class GeminiDriver implements LLMDriver {
          fs.mkdirSync(basePath, { recursive: true });
       }
 
-       // Check if Gemini is installed
-       if (!isCommandAvailable("gemini")) {
-          throw new Error("Gemini CLI not found in PATH. Please install it: npm install -g @google/gemini-cli");
-       }
-
       const isPlanMode = task.agentType === "plan";
 
       let guardrails = "";
@@ -44,10 +30,11 @@ export class GeminiDriver implements LLMDriver {
           guardrails = `\n[GUARDRAILS]\nPREVIOUS ATTEMPT FAILED WITH ERROR:\n${task.lastError}\nEnsure you fix the issue and do not repeat the same mistake.\n`;
       }
 
+      const projectContext = getProjectContext(basePath);
+
       // Prompts distintos para modo plan (somente leitura) e build (mutação)
-      const prompt = isPlanMode
-         ? `
-[SYSTEM: PLAN MODE - READ ONLY]
+      const systemPrompt = isPlanMode
+         ? `[SYSTEM: PLAN MODE - READ ONLY]
 You are an autonomous planning agent integrated into a Kanban board called "Vibe Kanban".
 You are acting as the agent role: "${agent.role}".
 Your goal is to ANALYZE the repository in this workspace and produce a high quality refactoring / implementation PLAN,
@@ -77,10 +64,8 @@ RULES:
    }
 5. Keep the JSON valid and minified (no comments).
 
-Respond ONLY with the JSON object, nothing else.
-`
-         : `
-[SYSTEM: AUTONOMOUS MODE]
+Respond ONLY with the JSON object, nothing else.`
+         : `[SYSTEM: AUTONOMOUS MODE]
 You are an autonomous coding agent integrated into a Kanban board called "Vibe Kanban".
 You are acting as the agent role: "${agent.role}".
 Your goal is to complete the following task in this workspace.
@@ -100,125 +85,77 @@ INSTRUCTIONS:
 If you don't have tool access, use this format to create/update files:
 <<<FILE:filename.ext>>>
 content
-<<<END>>>
-`;
+<<<END>>>`;
 
-      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "lisa-"));
-      const promptFile = path.join(tmpDir, "prompt.md");
-      fs.writeFileSync(promptFile, prompt, "utf-8");
+      const prompt = `${systemPrompt}\n\n${projectContext}`;
 
-      // Pass current environment to the child process (includes GEMINI_API_KEY, etc.)
-      const env = { ...process.env };
+      const geminiApiKey = process.env.GEMINI_API_KEY;
+      const gemini = createGeminiProvider(
+         geminiApiKey
+            ? { authType: 'api-key', apiKey: geminiApiKey }
+            : { authType: 'oauth-personal' }
+      );
 
-      const modelFlag = agent.model ? `--model ${agent.model}` : "";
-      const geminiPath = getGlobalCommandPath("gemini") || "gemini";
-      const command = `"${geminiPath}" --yolo ${modelFlag} -p "$(cat '${promptFile}')"`;
-
-      let fullOutput = "";
+      const modelName = agent.model || "gemini-2.5-pro";
+      const model = gemini(modelName);
 
       logDebugBlock(ctx, task.id, "AGENT PROMPT", prompt);
-      logDebugCommand(
-         ctx,
-         task.id,
-         geminiPath,
-         ["--yolo", ...(agent.model ? ["--model", agent.model] : []), "-p", "<prompt>"],
-      );
-      ctx.onLog(task.id, `[SYSTEM] Iniciando Gemini CLI para Tarefa #${task.id}`);
+      ctx.onLog(task.id, `[SYSTEM] Iniciando Gemini Provider para Tarefa #${task.id}`);
       ctx.onLog(task.id, `[SYSTEM] Workspace: ${basePath}`);
-      ctx.onLog(task.id, `[SYSTEM] Modelo: ${agent.model || "(default model)"}`);
-      ctx.onLog(task.id, `[gemini] Running: gemini --yolo ${modelFlag || "(default model)"} -p`);
+      ctx.onLog(task.id, `[SYSTEM] Modelo: ${modelName}`);
+
+      const abortController = new AbortController();
+      this.runningTasks.set(task.id, abortController);
 
       try {
-         const { proc, isPty } = spawnWithPty(command, {
-            cwd: basePath,
-            env: env,
+         const stream = await streamText({
+            model,
+            prompt,
+            abortSignal: abortController.signal
          });
 
-         const sessionTimeout = createSessionTimeout(proc, 5 * 60); // 5 minutes timeout
-         const errorLoopDetector = createErrorLoopDetector(proc, GEMINI_ERROR_PATTERN);
-         const stallDetector = createStallDetector(proc, 120);
-         const overseer = startOverseer(proc, basePath, { enabled: true, check_interval: 30, stuck_threshold: 300 });
+         let fullOutput = "";
 
-         proc.stdout?.on("data", (chunk: Buffer) => {
-            const raw = chunk.toString();
-            const text = isPty ? stripAnsi(raw) : raw;
-            fullOutput += text;
-            errorLoopDetector.check(text);
-            stallDetector.update();
+         for await (const textPart of stream.textStream) {
+            fullOutput += textPart;
 
-            if (/\b(reading|analyzing|searching|grep|cat|ls|find)\b/i.test(text)) {
-               overseer.notifyActivity();
-            }
-
-            // Clean up output for the terminal view
-            const lines = text.split("\n");
+            // Log cleaned up output chunk
+            const lines = textPart.split("\n");
             lines.forEach(line => {
                const trimmed = line.trim();
                if (trimmed) ctx.onLog(task.id, trimmed);
             });
-         });
+         }
 
-         proc.stderr?.on("data", (chunk: Buffer) => {
-            const raw = chunk.toString();
-            const text = isPty ? stripAnsi(raw) : raw;
-            const textTrimmed = text.trim();
-            if (textTrimmed) {
-               // We log stderr but identify it
-               ctx.onLog(task.id, `[STDERR] ${textTrimmed}`);
-            }
-         });
+         let filesCreated = 0;
+         if (!isPlanMode) {
+            filesCreated = extractAndWriteFiles(fullOutput, basePath, ctx, task.id);
+         }
 
-         proc.on("error", (error: Error & { code?: string }) => {
-            if (error.code === "ENOENT") {
-               ctx.onLog(task.id, "Error: Gemini CLI ('gemini') not found in PATH.");
-               ctx.onBugFound(task.id, "Gemini CLI not found.");
-            } else {
-               ctx.onLog(task.id, `Spawn Error: ${error.message}`);
-               ctx.onBugFound(task.id, error.message);
-            }
-         });
+         if (filesCreated === 0 && !isPlanMode) {
+             ctx.onLog(task.id, "No files were created. Response: " + fullOutput.substring(0, 200) + "...");
+         } else if (!isPlanMode) {
+             ctx.onLog(task.id, `Task completed. Files created: ${filesCreated}`);
+         }
 
-         proc.on("close", (code) => {
-            sessionTimeout.stop();
-            stallDetector.stop();
-            overseer.stop();
-            this.runningTasks.delete(task.id);
-            try {
-               fs.rmSync(tmpDir, { recursive: true, force: true });
-            } catch {}
-
-            let filesCreated = 0;
-            if (!isPlanMode) {
-               // Fallback: Parse files if Gemini used the text format instead of tools
-               filesCreated = extractAndWriteFiles(fullOutput, basePath, ctx, task.id);
-            }
-
-            handleOverseerResults(
-               task, ctx,
-               sessionTimeout, overseer, errorLoopDetector, stallDetector,
-               code, filesCreated, fullOutput
-            );
-         });
-
-         this.runningTasks.set(task.id, proc);
+         ctx.onComplete(task.id);
       } catch (e: unknown) {
-         try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {}
          const errorMessage = e instanceof Error ? e.message : String(e);
-         ctx.onLog(task.id, `[EXCEPTION] ${errorMessage}`);
-         ctx.onBugFound(task.id, errorMessage);
+         if (errorMessage.includes("AbortError")) {
+            ctx.onLog(task.id, `[SYSTEM] Tarefa interrompida.`);
+         } else {
+            ctx.onLog(task.id, `[EXCEPTION] ${errorMessage}`);
+            ctx.onBugFound(task.id, errorMessage);
+         }
+      } finally {
+         this.runningTasks.delete(task.id);
       }
-
-       return Promise.resolve();
     }
 
    async interruptTask(task: Task): Promise<void> {
-      const process = this.runningTasks.get(task.id);
-      if (process) {
-         try {
-            if (process.kill) process.kill("SIGTERM");
-         } catch (e) {
-            // Process may have already exited
-         }
+      const controller = this.runningTasks.get(task.id);
+      if (controller) {
+         controller.abort();
          this.runningTasks.delete(task.id);
       }
       return Promise.resolve();
