@@ -108,3 +108,35 @@ export async function createPullRequest(
     const prData = await response.json() as { html_url: string };
     return `Pull Request criado com sucesso: ${prData.html_url}`;
 }
+
+export async function createPullRequestReview(
+    githubRepo: string,
+    prNumber: number,
+    reviewText: string,
+    githubToken: string
+): Promise<string> {
+    const normalizedRepo = normalizeGithubRepo(githubRepo);
+
+    const response = await fetch(`https://api.github.com/repos/${normalizedRepo}/issues/${prNumber}/comments`, {
+        method: "POST",
+        headers: {
+            "Authorization": `token ${githubToken}`,
+            "Accept": "application/vnd.github.v3+json",
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ body: reviewText })
+    });
+
+    if (!response.ok) {
+        let errorData;
+        try {
+            errorData = await response.json();
+        } catch {
+            errorData = await response.text();
+        }
+        throw new Error(`Falha ao criar PR Review na API do GitHub: ${response.status} ${response.statusText} - ${JSON.stringify(errorData)}`);
+    }
+
+    const commentData = await response.json() as { html_url: string };
+    return `Pull Request Review criado com sucesso: ${commentData.html_url}`;
+}

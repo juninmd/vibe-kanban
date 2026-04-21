@@ -13,7 +13,7 @@ import { CodexDriver } from "./drivers/CodexDriver.js";
 import { DB } from "./db.js";
 import { TerminalManager } from "./terminal/TerminalManager.js";
 import { Memory } from "./memory.js";
-import { createPullRequest } from "./utils/githubUtils.js";
+import { createPullRequest, createPullRequestReview } from "./utils/githubUtils.js";
 import { isCommandAvailable } from "./utils/commandUtils.js";
 import { buildProviderChain, isEligibleForProviderFallback } from "./drivers/providerFallback.js";
 import { getAvailableTools } from "./providers.js";
@@ -650,6 +650,25 @@ const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? dri
                 const prResult = await createPullRequest(workDir, t.id, t.title, t.githubRepo, process.env.GITHUB_TOKEN, githubUser, prFinalDescription);
                 addTerminalLine(t.assignedTo, tid, "system", `✅ ${prResult}`);
                 addEvent(`PR criado para Tarefa #${tid}: ${t.githubRepo}`);
+
+                // Auto PR Review feature inspired by Codegen
+                const prUrlMatch = prResult.match(/https:\/\/github\.com\/[^/]+\/[^/]+\/pull\/(\d+)/);
+                if (prUrlMatch && prUrlMatch[1]) {
+                    const prNumber = parseInt(prUrlMatch[1], 10);
+                    addTerminalLine(t.assignedTo, tid, "system", `🔄 Gerando PR Review automático...`);
+                    try {
+                        const reviewPrompt = `You are a strict but helpful AI code reviewer.\nPlease review the changes for the following task.\nTitle: ${t.title}\nDescription:\n${t.description}\n\nProvide a brief review of the expected changes. Keep it professional and short (2-3 sentences).`;
+                        const reviewContent = await callLLM(reviewPrompt);
+                        if (reviewContent) {
+                            await createPullRequestReview(t.githubRepo, prNumber, reviewContent, process.env.GITHUB_TOKEN);
+                            addTerminalLine(t.assignedTo, tid, "system", `✅ PR Review postado com sucesso!`);
+                            addEvent(`PR Review criado para a PR #${prNumber} da Tarefa #${tid}`);
+                        }
+                    } catch (reviewErr: unknown) {
+                        const reviewErrorMsg = reviewErr instanceof Error ? reviewErr.message : String(reviewErr);
+                        addTerminalLine(t.assignedTo, tid, "stderr", `❌ Falha ao postar PR Review: ${reviewErrorMsg}`);
+                    }
+                }
             } catch (prError: unknown) {
                 const errorMessage = prError instanceof Error ? prError.message : String(prError);
                 addTerminalLine(t.assignedTo, tid, "stderr", `❌ Falha ao criar Pull Request: ${errorMessage}`);
