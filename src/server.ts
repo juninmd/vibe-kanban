@@ -112,6 +112,10 @@ function initializeState(): State {
   if (existingTasks.length === 0 && process.env.NODE_ENV !== 'test') {
     DB.createTask({ title: "Analyze codex codebase", source: "system", category: "roadmap", priority: "media", lane: "backlog", assignedTo: null, interrupted: false, logs: [], githubRepo: "https://github.com/openai/codex", description: "Analyze openai/codex" });
     DB.createTask({ title: "Analyze opencode codebase", source: "system", category: "roadmap", priority: "media", lane: "backlog", assignedTo: null, interrupted: false, logs: [], githubRepo: "https://github.com/anomalyco/opencode", description: "Analyze anomalyco/opencode" });
+    DB.createTask({ title: "Analyze Auto-Company codebase", source: "system", category: "roadmap", priority: "media", lane: "backlog", assignedTo: null, interrupted: false, logs: [], githubRepo: "https://github.com/MaxMiksa/Auto-Company", description: "Analyze MaxMiksa/Auto-Company" });
+    DB.createTask({ title: "Analyze Auto-Claude codebase", source: "system", category: "roadmap", priority: "media", lane: "backlog", assignedTo: null, interrupted: false, logs: [], githubRepo: "https://github.com/AndyMik90/Auto-Claude", description: "Analyze AndyMik90/Auto-Claude" });
+    DB.createTask({ title: "Analyze nanobot codebase", source: "system", category: "roadmap", priority: "media", lane: "backlog", assignedTo: null, interrupted: false, logs: [], githubRepo: "https://github.com/HKUDS/nanobot", description: "Analyze HKUDS/nanobot" });
+    DB.createTask({ title: "Analyze clawe codebase", source: "system", category: "roadmap", priority: "media", lane: "backlog", assignedTo: null, interrupted: false, logs: [], githubRepo: "https://github.com/getclawe/clawe", description: "Analyze getclawe/clawe" });
   }
 
   // Self-healing: reset stuck tasks and agents
@@ -812,7 +816,10 @@ async function generateRoadmapTasks() {
 Current agents: ${roles}.
 Categories: "roadmap", "security", "performance", "feature", "test", "bug".
 Priorities: "alta", "media", "baixa".
-Generate 1 new feature task inspired by https://docs.codegen.com/introduction/overview. The category must be "feature". Return ONLY a JSON array: [{"title":"...","category":"feature","priority":"...","description":"..."}]`;
+Generate 1 new feature task inspired by Jules' changelog (https://jules.google/docs/changelog/) as roadmap of development.
+You must also include functionalities similar to Auto-Claude (https://github.com/AndyMik90/Auto-Claude), but making them compatible with gemini-cli and copilot-sdk.
+Take inspiration from MaxMiksa/Auto-Company, HKUDS/nanobot, and getclawe/clawe.
+The category must be "feature". Return ONLY a JSON array: [{"title":"...","category":"feature","priority":"...","description":"..."}]`;
 
   const processTasks = (raw: string) => {
     try {
