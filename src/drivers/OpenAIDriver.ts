@@ -117,7 +117,7 @@ Do not output hypothetical logs. Output the actual file content needed to solve 
          return models
             .map((m) => m.id)
             .filter(id => typeof id === "string" && id.startsWith("gpt-"));
-      } catch {
+      } catch (e) { // reason
          return [];
       }
    }

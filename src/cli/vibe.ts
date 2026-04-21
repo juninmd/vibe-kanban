@@ -23,7 +23,7 @@ function loadCliConfig(): VibeCliConfig {
       json.apiUrl || process.env.VIBE_API_URL || "http://localhost:5174";
     const defaultRepoDir: string | undefined = json.defaultRepoDir;
     return { apiUrl, defaultRepoDir };
-  } catch {
+  } catch (e) { // reason
     return {
       apiUrl: process.env.VIBE_API_URL || "http://localhost:5174",
     };

@@ -13,7 +13,7 @@ function readVibeConfig(cwd: string): Record<string, unknown> | null {
     const configPath = path.join(cwd, "vibe_config.json");
     if (!fs.existsSync(configPath)) return null;
     return JSON.parse(fs.readFileSync(configPath, "utf-8"));
-  } catch {
+  } catch (e) { // reason
     return null;
   }
 }
@@ -49,7 +49,7 @@ export function getGlobalCommandPath(command: string): string | null {
     const result = execaSync(bin, [command], { encoding: "utf8", stdio: "pipe", reject: false });
     if (result.failed || !result.stdout) return null;
     return result.stdout.split("\n")[0].trim() || null;
-  } catch {
+  } catch (e) { // reason
     return null;
   }
 }
@@ -92,7 +92,7 @@ export function getCommandVersion(command: string): string | null {
     const result = execaSync(cmdPath, ["--version"], { encoding: "utf8", stdio: "pipe", reject: false });
     if (result.failed || !result.stdout) return null;
     return result.stdout.trim() || null;
-  } catch {
+  } catch (e) { // reason
     return null;
   }
 }

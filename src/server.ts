@@ -60,7 +60,9 @@ try {
   if (fs.existsSync(CONFIG_FILE)) {
     appConfig = JSON.parse(fs.readFileSync(CONFIG_FILE, "utf-8"));
   }
-} catch (e) { }
+} catch (e) {
+// reason
+}
 
 // --- State and Persistence ---
 function formatProofOfWork(results: { name: string; success: boolean; duration: number; output: string }[]): string {
@@ -154,7 +156,9 @@ function addTerminalLine(agentId: string, taskId: number | null, type: string, c
   DB.addTerminalLog(agentId, taskId, type, content);
   // Broadcast terminal update to SSE clients
   const termData = JSON.stringify({ terminalUpdate: { agentId, taskId, ...entry } });
-  clients.forEach(c => { try { c.res.write(`data: ${termData}\n\n`); } catch (e) { } });
+  clients.forEach(c => { try { c.res.write(`data: ${termData}\n\n`); } catch (e) {
+// reason
+} });
 }
 
 // Bug rate limiter & Fallback State
@@ -1557,7 +1561,9 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
       if (fs.existsSync(envPath)) {
         envContent = fs.readFileSync(envPath, "utf-8");
       }
-    } catch (e) { }
+    } catch (e) {
+// reason
+}
 
     const newKeys = Object.keys(body).filter(k => ALLOWED_ENV_KEYS.includes(k));
 

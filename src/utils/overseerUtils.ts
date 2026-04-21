@@ -17,7 +17,7 @@ export function killWithEscalation(proc: ChildProcess): void {
 		const escalation = setTimeout(() => {
 			try {
 				proc.kill("SIGKILL");
-			} catch {
+			} catch (e) { // reason
 				// Process may already be dead
 			}
 		}, SIGKILL_GRACE_MS);
@@ -97,7 +97,9 @@ export function createStallDetector(
 			stalled = true;
 			try {
 				killWithEscalation(proc);
-			} catch (e) {}
+			} catch (e) {
+// reason
+}
 		}, timeoutSeconds * 1000);
 	};
 
@@ -165,7 +167,7 @@ export async function getGitSnapshot(cwd: string): Promise<string | null> {
 			timeout: 10_000,
 		});
 		return stdout;
-	} catch {
+	} catch (e) { // reason
 		return null;
 	}
 }
@@ -263,7 +265,7 @@ export function startOverseer(
 				}
 				killWithEscalation(proc);
 			}
-		} catch {
+		} catch (e) { // reason
 			// Ignore monitoring errors — do not interrupt the provider
 		}
 	};

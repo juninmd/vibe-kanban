@@ -97,7 +97,7 @@ export class CopilotDriver implements LLMDriver {
          const data = await res.json() as { id: string }[] | { data?: { id: string }[] };
          const list = Array.isArray(data) ? data : ((data as { data?: { id: string }[] }).data ?? []);
          return list.map((m) => m.id).filter(Boolean);
-      } catch {
+      } catch (e) { // reason
          return ["gpt-4o", "gpt-4o-mini"];
       }
    }

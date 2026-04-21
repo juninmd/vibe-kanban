@@ -52,7 +52,7 @@ export async function enrichContext(cwd: string, task: Task): Promise<string | n
 			);
             if (!stdout) return [];
 			return stdout.trim().split("\n").filter(Boolean);
-		} catch {
+		} catch (e) { // reason
 			return [];
 		}
 	});

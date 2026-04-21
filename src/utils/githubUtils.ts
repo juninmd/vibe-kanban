@@ -32,7 +32,7 @@ export async function createPullRequest(
     // Ensure it's a git repository
     try {
         await runGit(["status"], true);
-    } catch {
+    } catch (e) { // reason
         throw new Error("O diretório da tarefa não é um repositório git válido.");
     }
 
@@ -40,7 +40,7 @@ export async function createPullRequest(
     let currentBranch = "main";
     try {
          currentBranch = await runGit(["rev-parse", "--abbrev-ref", "HEAD"]);
-    } catch {
+    } catch (e) { // reason
          // ignore
     }
 
@@ -50,7 +50,7 @@ export async function createPullRequest(
          try {
              await runGit(["show-ref", "--verify", "--quiet", `refs/heads/${branchName}`], true);
              await runGit(["checkout", branchName]);
-         } catch {
+         } catch (e) { // reason
              await runGit(["checkout", "-b", branchName]);
          }
     }
@@ -62,7 +62,7 @@ export async function createPullRequest(
     try {
         await runGit(["diff-index", "--quiet", "HEAD"], true);
         return `Sem alterações para commitar na branch ${branchName}.`;
-    } catch {
+    } catch (e) { // reason
         await runGit(["commit", "-m", commitMessage]);
     }
 
@@ -72,7 +72,7 @@ export async function createPullRequest(
 
     try {
         await runGit(["remote", "set-url", "origin", remoteUrl], true);
-    } catch {
+    } catch (e) { // reason
         await runGit(["remote", "add", "origin", remoteUrl]);
     }
 

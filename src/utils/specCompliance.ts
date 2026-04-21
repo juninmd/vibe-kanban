@@ -161,7 +161,7 @@ export async function verifySpecCompliance(
                     try {
                         parsed = JSON.parse(jsonStr);
                         break;
-                    } catch {
+                    } catch (e) { // reason
                         // Try next pattern
                     }
                 }

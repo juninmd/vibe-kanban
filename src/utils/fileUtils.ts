@@ -39,7 +39,9 @@ export function getProjectContext(dir: string, maxChars: number = 20000): string
                             context += `--- START ${relPath} ---\n${content}\n--- END ${relPath} ---\n`;
                             charCount += content.length;
                         }
-                    } catch (e) {}
+                    } catch (e) { // reason
+// reason
+}
                 }
             }
         }
