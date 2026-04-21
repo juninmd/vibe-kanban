@@ -1,5 +1,5 @@
 import { Task, Agent, LLMDriver, DriverContext } from "../types.js";
-import * as fs from "fs";
+import { existsSync, mkdirSync } from "fs";
 import * as path from "path";
 import { getProjectContext, extractAndWriteFiles } from "../utils/fileUtils.js";
 import { logDebugBlock } from "./debugLogging.js";
@@ -8,7 +8,7 @@ import { createGeminiProvider } from "ai-sdk-provider-gemini-cli";
 
 export class GeminiDriver implements LLMDriver {
    name: string = "Gemini CLI Driver";
-   private runningTasks = new Map<number, AbortController>();
+   private runningTasks: Map<number, AbortController> = new Map();
    private getCloneDir: () => string;
 
    constructor(getCloneDir: () => string) {
@@ -19,8 +19,8 @@ export class GeminiDriver implements LLMDriver {
       // Prioritize task-specific workDir, fallback to cloning pattern
       const basePath = task.workDir || path.join(this.getCloneDir(), `task-${task.id}`);
       
-      if (!fs.existsSync(basePath)) {
-         fs.mkdirSync(basePath, { recursive: true });
+      if (!existsSync(basePath)) {
+         mkdirSync(basePath, { recursive: true });
       }
 
       const isPlanMode = task.agentType === "plan";

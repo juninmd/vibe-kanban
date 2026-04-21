@@ -2,7 +2,7 @@ import { describe, it, mock, beforeEach, afterEach } from "node:test";
 import assert from "node:assert";
 import { GeminiDriver } from "../../src/drivers/GeminiDriver.js";
 import { Task, Agent, DriverContext } from "../../src/types.js";
-import * as fs from "fs";
+import { existsSync } from "fs";
 
 
 describe("GeminiDriver", () => {
@@ -92,13 +92,16 @@ describe("GeminiDriver", () => {
             process.env.GEMINI_API_KEY = "invalid"; // Should cause exception which is caught
             await driver.executeTask(task, agent, mockCtx);
             process.env = originalEnv;
-        } catch (e) {
+        } catch (e: unknown) {
             // Expected error during mocked execution
+            if (e instanceof Error) {
+                assert.ok(e.message !== undefined);
+            }
         }
 
 
 
-        assert.ok(fs.existsSync(task.workDir!), "Should create workdir");
+        assert.ok(existsSync(task.workDir!), "Should create workdir");
     });
 
     it("should return empty array from getLogs", () => {
