@@ -2,7 +2,7 @@ import { Task, Agent, LLMDriver, DriverContext } from "../types.js";
 import * as fs from "fs";
 import * as path from "path";
 import { getProjectContext, extractAndWriteFiles } from "../utils/fileUtils.js";
-import { logDebugBlock, logDebugCommand } from "./debugLogging.js";
+import { logDebugBlock } from "./debugLogging.js";
 import { streamText } from "ai";
 import { createGeminiProvider } from "ai-sdk-provider-gemini-cli";
 
@@ -120,7 +120,7 @@ content
             fullOutput += textPart;
 
             // Log cleaned up output chunk
-            const lines = textPart.split("\\n");
+            const lines = textPart.split("\n");
             lines.forEach(line => {
                const trimmed = line.trim();
                if (trimmed) ctx.onLog(task.id, trimmed);

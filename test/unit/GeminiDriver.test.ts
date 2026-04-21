@@ -2,8 +2,6 @@ import { describe, it, mock, beforeEach, afterEach } from "node:test";
 import assert from "node:assert";
 import { GeminiDriver } from "../../src/drivers/GeminiDriver.js";
 import { Task, Agent, DriverContext } from "../../src/types.js";
-import * as aiSdk from "ai";
-import * as providerSdk from "ai-sdk-provider-gemini-cli";
 import * as fs from "fs";
 
 
@@ -35,7 +33,7 @@ describe("GeminiDriver", () => {
         const originalEnv = { ...process.env };
         process.env.GEMINI_API_KEY = "test-api-key";
 
-        mock.method(global, "fetch", async (url: string) => {
+        mock.method(globalThis, "fetch", async (url: string) => {
             if (url.includes("generativelanguage.googleapis.com/v1beta/models")) {
                 return {
                     ok: true,
@@ -94,7 +92,9 @@ describe("GeminiDriver", () => {
             process.env.GEMINI_API_KEY = "invalid"; // Should cause exception which is caught
             await driver.executeTask(task, agent, mockCtx);
             process.env = originalEnv;
-        } catch (e) {}
+        } catch (e) {
+            // Expected error during mocked execution
+        }
 
 
 
