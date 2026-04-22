@@ -1,3 +1,4 @@
+import { detectDependencyCycles, detectFileOverlaps, GeneratedTask } from "./utils/planValidation.js";
 import { createServer, ServerResponse, IncomingMessage } from "http";
 import * as fs from "fs";
 import * as path from "path";
@@ -1147,30 +1148,46 @@ Return ONLY a JSON array with this structure:
   }
 ]`;
 
-    type GeneratedTask = {
-      title?: string;
-      description?: string;
-      category?: string;
-      priority?: string;
-      acceptanceCriteria?: string[];
-      relevantFiles?: string[];
-      order?: number;
-      dependsOn?: number[];
-      verifyCommand?: string;
-      doneCriteria?: string;
-    };
+    // GeneratedTask is imported from planValidation.js
     let generatedTasks: GeneratedTask[] = [];
-    try {
-      const content = await callLLM(prompt, "You generate JSON task arrays.");
-      if (content) {
-        const startIdx = content.indexOf('[');
-        const endIdx = content.lastIndexOf(']');
-        if (startIdx !== -1 && endIdx !== -1) {
-          generatedTasks = JSON.parse(content.substring(startIdx, endIdx + 1));
+    let attempts = 0;
+    const maxAttempts = 3;
+    let currentPrompt = prompt;
+
+    while (attempts < maxAttempts) {
+      try {
+        const content = await callLLM(currentPrompt, "You generate JSON task arrays.");
+        if (content) {
+          const startIdx = content.indexOf('[');
+          const endIdx = content.lastIndexOf(']');
+          if (startIdx !== -1 && endIdx !== -1) {
+            generatedTasks = JSON.parse(content.substring(startIdx, endIdx + 1));
+
+            // Validate Plan (Lisa inspired)
+            const cycles = detectDependencyCycles(generatedTasks);
+            if (cycles) {
+              console.warn(`[DemandIntake] Dependency cycles detected: ${cycles.join(", ")}`);
+              addEvent(`[DemandIntake] Ciclos de dependência detectados, re-planejando (tentativa ${attempts + 1})...`);
+              currentPrompt = prompt + `\n\n## Feedback from previous attempt\nFix dependency cycles: ${cycles.join(", ")}. Ensure no circular dependencies.`;
+              attempts++;
+              continue;
+            }
+
+            const overlaps = detectFileOverlaps(generatedTasks);
+            if (overlaps.length > 0) {
+              for (const o of overlaps) {
+                console.warn(`[DemandIntake] File ${o.file} touched by issues ${o.issues.join(", ")} — merge conflict risk`);
+                addEvent(`[DemandIntake] Aviso: Risco de conflito de merge no arquivo ${o.file} (issues: ${o.issues.join(", ")})`);
+              }
+            }
+
+            break; // Success
+          }
         }
+      } catch (e) {
+        console.warn("Demand intake LLM planning failed:", e);
       }
-    } catch (e) {
-      console.warn("Demand intake LLM planning failed:", e);
+      attempts++;
     }
 
     const createdTasks: Task[] = [];
