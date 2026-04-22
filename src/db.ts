@@ -282,7 +282,7 @@ export const DB = {
       { id: `agent-perf`, role: "Performance", model: "gpt-4o", category: "performance", status: "idle", assignedTask: null, tool: "copilot", terminalId: `term-perf` },
       { id: `agent-func`, role: "Novas Funcionalidades", model: "claude-3-5-sonnet-20241022", category: "feature", status: "idle", assignedTask: null, tool: "claude", terminalId: `term-func` },
       { id: `agent-test`, role: "Testes", model: "gpt-4o", category: "test", status: "idle", assignedTask: null, tool: "opencode", terminalId: `term-test` },
-      { id: `agent-feat`, role: "Novas Features", model: "gpt-4o", category: "feature", status: "idle", assignedTask: null, tool: "opencode", terminalId: `term-feat` }
+      { id: `agent-bug`, role: "Correções", model: "gpt-4o", category: "bug", status: "idle", assignedTask: null, tool: "codex", terminalId: `term-bug` }
     ];
     for (const agent of defaultAgents) {
       this.saveAgent(agent);
