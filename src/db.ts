@@ -147,7 +147,7 @@ export const DB = {
       UPDATE tasks SET
         title = ?, source = ?, category = ?, priority = ?, lane = ?,
         assignedTo = ?, interrupted = ?, logs = ?, githubRepo = ?,
-        description = ?, agentType = ?, updatedAt = ?, workDir = ?, baseRepoDir = ?, dependencies = ?, groupId = ?
+        description = ?, agentType = ?, updatedAt = ?, workDir = ?, baseRepoDir = ?, dependencies = ?, groupId = ?, taskOrder = ?
       WHERE id = ?
     `).run(
       updatedTask.title,
@@ -166,6 +166,7 @@ export const DB = {
       updatedTask.baseRepoDir || null,
       JSON.stringify(updatedTask.dependencies || []),
       updatedTask.groupId || null,
+      updatedTask.taskOrder || 0,
       id
     );
   },
