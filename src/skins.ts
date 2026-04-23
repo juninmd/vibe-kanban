@@ -117,8 +117,8 @@ export function getBodyMaterials(role: string, modelName?: string, badgeColorFal
                 ctx.save();
                 ctx.translate(ctx.canvas.width / 2, rectY + rectHeight / 2);
                 ctx.scale(1, -1);
-                ctx.fillText(line1, 0, 10);
-                ctx.fillText(line2, 0, -8);
+                ctx.fillText(line1, 0, -10);
+                ctx.fillText(line2, 0, 12);
                 ctx.restore();
             } else {
                 ctx.save();
