@@ -3,12 +3,15 @@ import * as fs from "fs";
 import * as path from "path";
 import { getProjectContext, extractAndWriteFiles } from "../utils/fileUtils.js";
 import { logDebugBlock } from "./debugLogging.js";
+import { streamText } from "ai";
+import { createGitHubCopilotOpenAICompatible } from "@opeoginni/github-copilot-openai-compatible";
+import { buildSystemPrompt } from "../utils/promptUtils.js";
 
 const GITHUB_MODELS_ENDPOINT = "https://models.inference.ai.azure.com/chat/completions";
 
 export class CopilotDriver implements LLMDriver {
    name: string = "GitHub Copilot";
-   private runningTasks = new Map<number, unknown>();
+   private runningTasks = new Map<number, AbortController>();
    private getCloneDir: () => string;
 
    constructor(getCloneDir?: () => string) {
@@ -26,63 +29,61 @@ export class CopilotDriver implements LLMDriver {
          fs.mkdirSync(basePath, { recursive: true });
       }
 
+      const isPlanMode = task.agentType === "plan";
       const projectContext = getProjectContext(basePath);
-      const model = agent.model || "gpt-4o";
-      const prompt = [
-         `[Role: ${agent.role}]`,
-         `Task: ${task.title}`,
-         `Description: ${task.description || "No description provided."}`,
-         `Category: ${task.category} | Priority: ${task.priority}`,
-         projectContext,
-         "",
-         "You are an autonomous coding agent. Complete the task by writing code.",
-         "To create or overwrite a file, use the following format exactly:",
-         "<<<FILE:filename.ext>>>",
-         "file content here",
-         "<<<END>>>",
-         "Write the actual implementation needed to solve the task.",
-      ].join("\n");
+      const systemPrompt = buildSystemPrompt(task, agent);
+      const prompt = `${systemPrompt}\n\n${projectContext}`;
+      const modelName = agent.model || "gpt-4o";
 
-      ctx.onLog(task.id, `Starting GitHub Copilot Agent with model ${model}...`);
+      ctx.onLog(task.id, `Starting GitHub Copilot Agent with model ${modelName}...`);
       logDebugBlock(ctx, task.id, "COPILOT PROMPT", prompt);
 
+      const abortController = new AbortController();
+      this.runningTasks.set(task.id, abortController);
+
       try {
-         const res = await fetch(GITHUB_MODELS_ENDPOINT, {
-            method: "POST",
-            headers: {
-               "Content-Type": "application/json",
-               "Authorization": `Bearer ${token}`,
-            },
-            body: JSON.stringify({
-               model,
-               messages: [
-                  { role: "system", content: "You are an expert coding assistant. Complete coding tasks autonomously." },
-                  { role: "user", content: prompt },
-               ],
-            }),
+         const copilot = createGitHubCopilotOpenAICompatible();
+         const model = copilot(modelName);
+
+         const stream = await streamText({
+            model,
+            prompt,
+            abortSignal: abortController.signal
          });
 
-         if (!res.ok) {
-            const errText = await res.text();
-            throw new Error(`GitHub Models API Error: ${res.status} ${errText}`);
+         let fullOutput = "";
+
+         for await (const textPart of stream.textStream) {
+            fullOutput += textPart;
+            const lines = textPart.split("\n");
+            lines.forEach(line => {
+               const trimmed = line.trim();
+               if (trimmed) ctx.onLog(task.id, trimmed);
+            });
          }
 
-         const data = await res.json() as { choices?: { message?: { content?: string } }[] };
-         const content = data.choices?.[0]?.message?.content || "";
+         let filesCreated = 0;
+         if (!isPlanMode) {
+            filesCreated = extractAndWriteFiles(fullOutput, basePath, ctx, task.id);
+         }
 
-         ctx.onLog(task.id, "Received response from GitHub Copilot.");
-         const filesCreated = extractAndWriteFiles(content, basePath, ctx, task.id);
-
-         if (filesCreated === 0) {
-            ctx.onLog(task.id, "No files created. Response: " + content.substring(0, 200));
-         } else {
+         if (filesCreated === 0 && !isPlanMode) {
+            ctx.onLog(task.id, "No files were created. Response: " + fullOutput.substring(0, 200) + "...");
+         } else if (!isPlanMode) {
             ctx.onLog(task.id, `Task completed. Files created: ${filesCreated}`);
-            ctx.onComplete(task.id);
          }
+
+         ctx.onComplete(task.id);
       } catch (e: unknown) {
          const errorMessage = e instanceof Error ? e.message : String(e);
-         ctx.onLog(task.id, `Exception: ${errorMessage}`);
-         ctx.onBugFound(task.id, errorMessage);
+         if (errorMessage.includes("AbortError")) {
+            ctx.onLog(task.id, `[SYSTEM] Tarefa interrompida.`);
+         } else {
+            ctx.onLog(task.id, `Exception: ${errorMessage}`);
+            ctx.onBugFound(task.id, errorMessage);
+         }
+      } finally {
+         this.runningTasks.delete(task.id);
       }
    }
 
@@ -103,7 +104,12 @@ export class CopilotDriver implements LLMDriver {
    }
 
    async interruptTask(task: Task): Promise<void> {
-      this.runningTasks.delete(task.id);
+      const controller = this.runningTasks.get(task.id);
+      if (controller) {
+         controller.abort();
+         this.runningTasks.delete(task.id);
+      }
+      return Promise.resolve();
    }
 
    getLogs(_taskId: number): string[] {
