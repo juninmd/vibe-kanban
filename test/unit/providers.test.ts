@@ -5,13 +5,13 @@ import { getAvailableTools } from '../../dist/providers.js';
 describe('providers', () => {
   test('returns only available providers from custom registry', () => {
     const tools = getAvailableTools([
-      { id: 'gemini', name: 'Gemini CLI', isAvailable: () => true },
+      { id: 'gemini', name: 'Gemini SDK', isAvailable: () => true },
       { id: 'openai', name: 'OpenAI API', isAvailable: () => false },
       { id: 'claude', name: 'Claude Code', isAvailable: () => true }
     ]);
 
     assert.deepEqual(tools, [
-      { id: 'gemini', name: 'Gemini CLI' },
+      { id: 'gemini', name: 'Gemini SDK' },
       { id: 'claude', name: 'Claude Code' }
     ]);
   });

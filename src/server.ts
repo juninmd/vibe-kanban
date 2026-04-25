@@ -897,10 +897,10 @@ const drivers: Record<string, LLMDriver> = {
   codex: new CodexDriver(() => appConfig.cloneDir),
 };
 
-// Keep the app functional even when Gemini CLI is not installed.
+// Keep the app functional even when Gemini API KEY is not present.
 let currentDriver: LLMDriver = drivers.gemini;
-if (!isCommandAvailable("gemini")) {
-  addEvent("Aviso: Gemini CLI não encontrado. Driver padrão definido como Gemini, mas pode falhar sem a CLI instalada.");
+if (!process.env.GEMINI_API_KEY) {
+  addEvent("Aviso: GEMINI_API_KEY não encontrada no ambiente. Driver padrão definido como Gemini, mas as chamadas de API falharão.");
 }
 
 const apiRateLimits = new Map<string, number>();
