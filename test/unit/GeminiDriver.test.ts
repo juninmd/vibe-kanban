@@ -26,7 +26,7 @@ describe("GeminiDriver", () => {
     });
 
     it("should instantiate with expected name", () => {
-        assert.strictEqual(driver.name, "Gemini CLI Driver");
+        assert.strictEqual(driver.name, "Gemini SDK Driver");
     });
 
     it("should list models and handle API requests", async () => {

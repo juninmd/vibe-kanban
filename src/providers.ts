@@ -12,7 +12,7 @@ interface ToolProvider {
 }
 
 const providerFactories: ToolProvider[] = [
-  { id: "gemini", name: "Gemini CLI", isAvailable: () => isCommandAvailable("gemini") },
+  { id: "gemini", name: "Gemini SDK", isAvailable: () => Boolean(process.env.GEMINI_API_KEY) },
   { id: "opencode", name: "OpenCode AI", isAvailable: () => Boolean(resolveOpenCodeExecutable()) },
   { id: "copilot", name: "GitHub Copilot (gh cli)", isAvailable: () => isCommandAvailable("gh") },
   { id: "claude", name: "Claude Code", isAvailable: () => isCommandAvailable("claude") },
