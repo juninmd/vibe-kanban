@@ -874,9 +874,7 @@ async function generateRoadmapTasks() {
 Current agents: ${roles}.
 Categories: "roadmap", "security", "performance", "feature", "test", "bug".
 Priorities: "alta", "media", "baixa".
-Generate 1 new feature task inspired by Jules' changelog (https://jules.google/docs/changelog/) and Codegen documentation (https://docs.codegen.com/introduction/overview) as roadmap of development.
-You must also include functionalities similar to Auto-Claude (https://github.com/AndyMik90/Auto-Claude), but making them compatible with gemini-cli and copilot-sdk.
-Take inspiration from MaxMiksa/Auto-Company, HKUDS/nanobot, and getclawe/clawe.
+Generate 1 new feature task inspired by Codegen documentation (https://docs.codegen.com/introduction/overview) as roadmap of development.
 The category must be "feature". Return ONLY a JSON array: [{"title":"...","category":"feature","priority":"...","description":"..."}]`;
 
   const processTasks = (raw: string) => {
