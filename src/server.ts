@@ -27,6 +27,8 @@ import { callLLM } from "./utils/llmUtils.js";
 import { sendSlackNotification } from "./utils/slackUtils.js";
 import { verifySpecCompliance, formatSpecCompliance } from "./utils/specCompliance.js";
 import { buildComplianceRecoveryPrompt } from "./utils/specCompliance.js";
+import { monitorCi, buildCiRecoveryPrompt } from "./utils/ciMonitor.js";
+
 function buildValidationRecoveryPrompt(title: string, failures: { name: string; output: string }[]): string {
     const failureSections = failures
         .map((f) => {
@@ -672,6 +674,61 @@ const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? dri
                     } catch (reviewErr: unknown) {
                         const reviewErrorMsg = reviewErr instanceof Error ? reviewErr.message : String(reviewErr);
                         addTerminalLine(t.assignedTo, tid, "stderr", `❌ Falha ao postar PR Review: ${reviewErrorMsg}`);
+                    }
+                }
+
+                // CI Monitor integration
+                const ciConfig = (appConfig as any).ci_monitor;
+                if (ciConfig && ciConfig.enabled && t.githubRepo && process.env.GITHUB_TOKEN) {
+                    addTerminalLine(t.assignedTo, tid, "system", `🔄 Iniciando monitoramento de CI Pipeline...`);
+                    let ciRetriesLeft = ciConfig.max_retries || 3;
+                    const pollInterval = ciConfig.poll_interval || 30;
+                    const pollTimeout = ciConfig.poll_timeout || 600;
+
+                    while (true) {
+                        const ciResult = await monitorCi(
+                            t.githubRepo.replace(/^https:\/\/github\.com\//, '').replace(/\.git$/, ''),
+                            `feature/task-${tid}`,
+                            process.env.GITHUB_TOKEN,
+                            1, // We handle outer retry loop here to pass context
+                            pollInterval,
+                            pollTimeout,
+                            (msg) => {
+                                if (t.assignedTo) addTerminalLine(t.assignedTo, tid, "system", msg);
+                            }
+                        );
+
+                        if (ciResult.passed || ciResult.skipped) {
+                            break;
+                        }
+
+                        if (ciRetriesLeft <= 0) {
+                            handleBugFound(tid, `Falha no CI Pipeline após ${ciConfig.max_retries || 3} tentativas de correção.`);
+                            break;
+                        }
+
+                        ciRetriesLeft--;
+                        addTerminalLine(t.assignedTo, tid, "system", `🔄 Tentando corrigir falhas do CI... (${ciRetriesLeft} tentativas restantes)`);
+
+                        const recoveryPrompt = buildCiRecoveryPrompt(t.title, ciResult.ciLogs || "Nenhum log extraído", `feature/task-${tid}`);
+                        try {
+                            const recoveryDriver = activeTaskDrivers.get(tid) || drivers[executionAgent.tool];
+                            await recoveryDriver.executeTask({ ...t, description: recoveryPrompt }, executionAgent, {
+                                onLog: (r_tid, msg) => {
+                                    if (t.assignedTo) addTerminalLine(t.assignedTo, tid, "stdout", msg);
+                                },
+                                onComplete: () => { /* Handled by outer loop */ },
+                                onBugFound: (r_tid, desc) => { handleBugFound(r_tid, desc); },
+                                onInterrupt: () => { /* no-op for recovery */ },
+                                memory: Memory.getInstance()
+                            });
+
+                            // Give GitHub Actions time to register the new commit before polling again
+                            await new Promise(resolve => setTimeout(resolve, 5000));
+                        } catch (recoveryErr) {
+                            addTerminalLine(t.assignedTo, tid, "stderr", `❌ Falha ao acionar agente para CI recovery: ${recoveryErr}`);
+                            break;
+                        }
                     }
                 }
             } catch (prError: unknown) {
