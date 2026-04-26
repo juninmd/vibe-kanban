@@ -8,5 +8,11 @@
         "run": "npm test"
       }
     ]
+  },
+  "ci_monitor": {
+    "enabled": true,
+    "max_retries": 3,
+    "poll_interval": 30,
+    "poll_timeout": 600
   }
 }
