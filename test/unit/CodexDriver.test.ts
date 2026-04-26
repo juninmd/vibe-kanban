@@ -1,3 +1,4 @@
+import os from 'os';
 import { describe, it, mock, beforeEach, afterEach } from "node:test";
 import assert from "node:assert";
 import { EventEmitter } from "node:events";
@@ -6,7 +7,7 @@ import { Task, Agent, DriverContext } from "../../src/types.js";
 
 describe("CodexDriver", () => {
     let mockCtx: DriverContext;
-    const getCloneDir = () => "/tmp/mock-clone-dir-" + Date.now();
+    const getCloneDir = () => os.tmpdir() + "/mock-clone-dir-" + Date.now();
     let driver: CodexDriver;
 
     beforeEach(() => {
