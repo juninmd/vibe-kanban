@@ -8,7 +8,7 @@ function createTexture(width: number, height: number, drawFn: (ctx: CanvasRender
     drawFn(ctx);
     const tex = new THREE.CanvasTexture(canvas);
     tex.colorSpace = THREE.SRGBColorSpace;
-    tex.flipY = false; // Impede que o Three.js inverta a CanvasTexture no eixo Y, garantindo a orientação correta do texto.
+    tex.flipY = true; // Permite que o Three.js inverta a CanvasTexture no eixo Y
     if (filter === 'linear') {
         tex.magFilter = THREE.LinearFilter;
         tex.minFilter = THREE.LinearMipmapLinearFilter;
@@ -34,9 +34,6 @@ export function getHeadMaterials(role: string): THREE.Material[] {
     const hairColor = role === 'Product Manager' ? '#e2e8f0' : '#452c1e'; // Gray for PM, Brown for others
 
     const faceTex = createTexture(64, 64, (ctx) => {
-        ctx.translate(0, 64);
-        ctx.scale(1, -1);
-
         // Skin base
         ctx.fillStyle = skinColor;
         ctx.fillRect(0, 0, 64, 64);
@@ -74,9 +71,6 @@ export function getBodyMaterials(role: string, modelName?: string, badgeColorFal
     const primaryColor = "#1e293b";
 
     const frontTex = createTexture(256, 256, (ctx) => {
-        ctx.translate(0, 256);
-        ctx.scale(1, -1);
-
         // Shirt base
         ctx.fillStyle = primaryColor;
         ctx.fillRect(0, 0, 256, 256);
