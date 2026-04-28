@@ -122,8 +122,14 @@ export function getBodyMaterials(role: string, modelName?: string, badgeColorFal
         }
     }, 'linear');
 
+    const backTex = frontTex.clone();
+    backTex.repeat.x = -1;
+    backTex.offset.x = 1;
+    backTex.needsUpdate = true;
+
     const mat = new THREE.MeshStandardMaterial({ color: primaryColor });
     const frontMat = new THREE.MeshStandardMaterial({ map: frontTex });
+    const backMat = new THREE.MeshStandardMaterial({ map: backTex });
 
     // BoxGeometry mapping:
     // 0: Right, 1: Left, 2: Top, 3: Bottom, 4: Front, 5: Back
@@ -133,7 +139,7 @@ export function getBodyMaterials(role: string, modelName?: string, badgeColorFal
         mat,      // Top
         mat,      // Bottom
         frontMat, // Front
-        frontMat  // Back
+        backMat   // Back
     ];
 }
 
