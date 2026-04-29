@@ -738,23 +738,28 @@ const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? dri
                 }
 
                 // Review Monitor integration
-                const reviewConfig = (appConfig as any).review_monitor;
+                const configRecord = appConfig as Record<string, unknown>;
+                const reviewConfig = configRecord.review_monitor as Record<string, unknown> | undefined;
                 if (ciPassed && reviewConfig && reviewConfig.enabled && t.githubRepo && process.env.GITHUB_TOKEN) {
                     addTerminalLine(t.assignedTo, tid, "system", `🔄 Iniciando monitoramento de PR Reviews...`);
-                    const pollInterval = (reviewConfig.poll_interval || 60) * 1000;
-                    const pollTimeout = (reviewConfig.poll_timeout || 3600) * 1000;
+                    const SECONDS_TO_MS = 1000;
+                    const defaultPollIntervalSec = 60;
+                    const defaultPollTimeoutSec = 3600;
+
+                    const pollInterval = (typeof reviewConfig.poll_interval === 'number' ? reviewConfig.poll_interval : defaultPollIntervalSec) * SECONDS_TO_MS;
+                    const pollTimeout = (typeof reviewConfig.poll_timeout === 'number' ? reviewConfig.poll_timeout : defaultPollTimeoutSec) * SECONDS_TO_MS;
                     const deadline = Date.now() + pollTimeout;
 
                     let attempts = 0;
                     let firstTriggeredAt: number | null = null;
 
-                    const reactionsConfig = (appConfig as any).reactions || {};
+                    const reactionsConfig = (configRecord.reactions as import("./utils/reactions.js").ReactionsConfig) || {};
 
                     const prNum = await getPrNumberFromBranch(t.githubRepo, `feature/task-${tid}`, process.env.GITHUB_TOKEN);
 
                     if (prNum) {
                         while (Date.now() < deadline) {
-                            await new Promise(resolve => setTimeout(resolve, pollInterval));
+                            await new Promise(resolve => { setTimeout(resolve, pollInterval); });
 
                             const rawDecision = await fetchReviewDecision(t.githubRepo, prNum, process.env.GITHUB_TOKEN);
                             const decision = parseReviewDecision(rawDecision);
@@ -807,16 +812,22 @@ const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? dri
                                         onLog: (r_tid, msg) => {
                                             if (t.assignedTo) addTerminalLine(t.assignedTo, tid, "stdout", msg);
                                         },
-                                        onComplete: () => { /* Handled by outer loop */ },
+                                        onComplete: () => {
+                                            // Handled by outer loop
+                                        },
                                         onBugFound: (r_tid, desc) => { handleBugFound(r_tid, desc); },
-                                        onInterrupt: () => { /* no-op for recovery */ },
+                                        onInterrupt: () => {
+                                            // no-op for recovery
+                                        },
                                         memory: Memory.getInstance()
                                     });
 
                                     // Give GitHub Actions time to register the new commit before polling again
-                                    await new Promise(resolve => setTimeout(resolve, 5000));
-                                } catch (recoveryErr) {
-                                    addTerminalLine(t.assignedTo, tid, "stderr", `❌ Falha ao acionar agente para Review Fixes: ${recoveryErr}`);
+                                    const CI_DELAY_MS = 5000;
+                                    await new Promise(resolve => { setTimeout(resolve, CI_DELAY_MS); });
+                                } catch (recoveryErr: unknown) {
+                                    const errMsg = recoveryErr instanceof Error ? recoveryErr.message : String(recoveryErr);
+                                    addTerminalLine(t.assignedTo, tid, "stderr", `❌ Falha ao acionar agente para Review Fixes: ${errMsg}`);
                                     break;
                                 }
                             }

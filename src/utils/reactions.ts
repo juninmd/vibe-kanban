@@ -30,9 +30,13 @@ export function parseDuration(duration: string | undefined): number | null {
     const value = parseInt(match[1] as string, 10);
     const unit = match[2];
 
-    if (unit === "s") return value * 1000;
-    if (unit === "m") return value * 60 * 1000;
-    if (unit === "h") return value * 60 * 60 * 1000;
+    const SECONDS_TO_MS = 1000;
+    const MINUTES_TO_MS = 60 * SECONDS_TO_MS;
+    const HOURS_TO_MS = 60 * MINUTES_TO_MS;
+
+    if (unit === "s") return value * SECONDS_TO_MS;
+    if (unit === "m") return value * MINUTES_TO_MS;
+    if (unit === "h") return value * HOURS_TO_MS;
 
     return null;
 }

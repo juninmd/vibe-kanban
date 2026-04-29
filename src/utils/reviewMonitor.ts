@@ -107,10 +107,11 @@ export async function fetchReviewDecision(
 
         if (!response.ok) return undefined;
 
-        const data = await response.json() as any;
+        const data = await response.json() as { data?: { repository?: { pullRequest?: { reviewDecision?: string } } } };
         return data?.data?.repository?.pullRequest?.reviewDecision;
-    } catch (err) {
-        console.warn(`Failed to fetch review decision: ${err}`);
+    } catch (err: unknown) {
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        console.warn(`Failed to fetch review decision: ${errorMsg}`);
         return undefined;
     }
 }
@@ -134,7 +135,7 @@ export async function fetchReviewComments(
 
         if (!response.ok) return [];
 
-        const commentsData = await response.json() as any[];
+        const commentsData = await response.json() as { id: string | number, user: { login: string }, body: string, path?: string, line?: number, html_url: string }[];
         return commentsData.map(obj => ({
             id: obj.id.toString(),
             author: obj.user.login,
@@ -143,8 +144,9 @@ export async function fetchReviewComments(
             line: obj.line,
             url: obj.html_url
         }));
-    } catch (err) {
-        console.warn(`Failed to fetch review comments: ${err}`);
+    } catch (err: unknown) {
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        console.warn(`Failed to fetch review comments: ${errorMsg}`);
         return [];
     }
 }
@@ -171,12 +173,13 @@ export async function getPrNumberFromBranch(
             },
         });
         if (!response.ok) return null;
-        const data = await response.json() as any[];
+        const data = await response.json() as { number: number }[];
         if (data.length > 0) {
             return data[0].number;
         }
-    } catch (err) {
-         console.warn(`Failed to fetch PR number: ${err}`);
+    } catch (err: unknown) {
+         const errorMsg = err instanceof Error ? err.message : String(err);
+         console.warn(`Failed to fetch PR number: ${errorMsg}`);
     }
     return null;
 }
