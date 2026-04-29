@@ -162,7 +162,7 @@ describe('Vibe Kanban API', async () => {
     });
     assert.strictEqual(assignRes.status, 200);
     const assignData = await assignRes.json();
-    assert.strictEqual(assignData.task.assignedTo, assignData.agent.id);
+    assert.strictEqual(assignData.task.assignedTo, pmAgent.id);
     assert.strictEqual(assignData.task.lane, 'in_progress');
   });
 
