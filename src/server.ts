@@ -1,4 +1,4 @@
-import { detectDependencyCycles, detectFileOverlaps, GeneratedTask } from "./utils/planValidation.js";
+import { detectDependencyCycles, detectFileOverlaps, GeneratedTask, buildPlanValidationPrompt, parsePlanValidationResponse } from "./utils/planValidation.js";
 import { createServer, ServerResponse, IncomingMessage } from "http";
 import * as fs from "fs";
 import * as path from "path";
@@ -1228,6 +1228,7 @@ Return ONLY a JSON array with this structure:
               continue;
             }
 
+
             const overlaps = detectFileOverlaps(generatedTasks);
             if (overlaps.length > 0) {
               for (const o of overlaps) {
@@ -1235,6 +1236,55 @@ Return ONLY a JSON array with this structure:
                 addEvent(`[DemandIntake] Aviso: Risco de conflito de merge no arquivo ${o.file} (issues: ${o.issues.join(", ")})`);
               }
             }
+
+            // AI Plan Validation (Lisa inspired)
+            addEvent(`[DemandIntake] Executando validação de qualidade do plano...`);
+            let validationAttempts = 0;
+            const maxValidationAttempts = 2;
+            let currentValidationIssues = generatedTasks;
+            let planPassed = false;
+
+            while (validationAttempts < maxValidationAttempts) {
+              const valPrompt = buildPlanValidationPrompt(body.title + "\n" + (body.description || ""), currentValidationIssues);
+              const valResponse = await callLLM(valPrompt, "You are a plan quality validator.");
+
+              if (!valResponse) {
+                console.warn("[DemandIntake] Plan validation LLM call failed. Skipping.");
+                planPassed = true;
+                break;
+              }
+
+              const validation = parsePlanValidationResponse(valResponse);
+              if (!validation) {
+                console.warn("[DemandIntake] Could not parse validation response. Skipping.");
+                planPassed = true;
+                break;
+              }
+
+              if (validation.passed) {
+                addEvent(`[DemandIntake] Plano validado com sucesso na tentativa ${validationAttempts + 1}.`);
+                planPassed = true;
+                break;
+              }
+
+              if (validation.refinedIssues && validation.refinedIssues.length > 0) {
+                addEvent(`[DemandIntake] Plano refinado após encontrar problemas de alta severidade (tentativa ${validationAttempts + 1}).`);
+                currentValidationIssues = validation.refinedIssues;
+                // Double check dependencies again after refinement
+                const recheckCycles = detectDependencyCycles(currentValidationIssues);
+                if (recheckCycles) {
+                  addEvent(`[DemandIntake] Refinamento criou ciclos de dependência. Abortando refinamento e usando plano anterior se possível.`);
+                  break; // Stop trying to refine and just use the last version (or let it fail)
+                }
+              } else {
+                addEvent(`[DemandIntake] Falha na validação mas nenhum plano refinado foi fornecido.`);
+                break;
+              }
+              validationAttempts++;
+            }
+
+            generatedTasks = currentValidationIssues;
+
 
             break; // Success
           }
