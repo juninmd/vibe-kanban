@@ -28,6 +28,8 @@ import { sendSlackNotification } from "./utils/slackUtils.js";
 import { verifySpecCompliance, formatSpecCompliance } from "./utils/specCompliance.js";
 import { buildComplianceRecoveryPrompt } from "./utils/specCompliance.js";
 import { monitorCi, buildCiRecoveryPrompt } from "./utils/ciMonitor.js";
+import { fetchReviewDecision, fetchReviewComments, getPrNumberFromBranch, buildReviewRecoveryPrompt, parseReviewDecision } from "./utils/reviewMonitor.js";
+import { resolveReaction, shouldEscalate } from "./utils/reactions.js";
 
 function buildValidationRecoveryPrompt(title: string, failures: { name: string; output: string }[]): string {
     const failureSections = failures
@@ -679,6 +681,7 @@ const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? dri
 
                 // CI Monitor integration
                 const ciConfig = (appConfig as any).ci_monitor;
+                let ciPassed = true;
                 if (ciConfig && ciConfig.enabled && t.githubRepo && process.env.GITHUB_TOKEN) {
                     addTerminalLine(t.assignedTo, tid, "system", `🔄 Iniciando monitoramento de CI Pipeline...`);
                     let ciRetriesLeft = ciConfig.max_retries || 3;
@@ -704,6 +707,7 @@ const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? dri
 
                         if (ciRetriesLeft <= 0) {
                             handleBugFound(tid, `Falha no CI Pipeline após ${ciConfig.max_retries || 3} tentativas de correção.`);
+                            ciPassed = false;
                             break;
                         }
 
@@ -727,8 +731,109 @@ const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? dri
                             await new Promise(resolve => setTimeout(resolve, 5000));
                         } catch (recoveryErr) {
                             addTerminalLine(t.assignedTo, tid, "stderr", `❌ Falha ao acionar agente para CI recovery: ${recoveryErr}`);
+                            ciPassed = false;
                             break;
                         }
+                    }
+                }
+
+                // Review Monitor integration
+                const configRecord = appConfig as Record<string, unknown>;
+                const reviewConfig = configRecord.review_monitor as Record<string, unknown> | undefined;
+                if (ciPassed && reviewConfig && reviewConfig.enabled && t.githubRepo && process.env.GITHUB_TOKEN) {
+                    addTerminalLine(t.assignedTo, tid, "system", `🔄 Iniciando monitoramento de PR Reviews...`);
+                    const SECONDS_TO_MS = 1000;
+                    const defaultPollIntervalSec = 60;
+                    const defaultPollTimeoutSec = 3600;
+
+                    const pollInterval = (typeof reviewConfig.poll_interval === 'number' ? reviewConfig.poll_interval : defaultPollIntervalSec) * SECONDS_TO_MS;
+                    const pollTimeout = (typeof reviewConfig.poll_timeout === 'number' ? reviewConfig.poll_timeout : defaultPollTimeoutSec) * SECONDS_TO_MS;
+                    const deadline = Date.now() + pollTimeout;
+
+                    let attempts = 0;
+                    let firstTriggeredAt: number | null = null;
+
+                    const reactionsConfig = (configRecord.reactions as import("./utils/reactions.js").ReactionsConfig) || {};
+
+                    const prNum = await getPrNumberFromBranch(t.githubRepo, `feature/task-${tid}`, process.env.GITHUB_TOKEN);
+
+                    if (prNum) {
+                        while (Date.now() < deadline) {
+                            await new Promise(resolve => { setTimeout(resolve, pollInterval); });
+
+                            const rawDecision = await fetchReviewDecision(t.githubRepo, prNum, process.env.GITHUB_TOKEN);
+                            const decision = parseReviewDecision(rawDecision);
+
+                            if (decision === "approved") {
+                                addTerminalLine(t.assignedTo, tid, "system", `✅ PR aprovado!`);
+                                const reaction = resolveReaction("approved", reactionsConfig);
+                                if (reaction.action === "notify") {
+                                    addEvent(`PR #${prNum} aprovado para Tarefa #${tid}.`);
+                                }
+                                break;
+                            }
+
+                            if (decision === "changes_requested") {
+                                if (firstTriggeredAt === null) {
+                                    firstTriggeredAt = Date.now();
+                                }
+
+                                const reaction = resolveReaction("changes_requested", reactionsConfig);
+
+                                if (shouldEscalate(reaction, attempts, firstTriggeredAt)) {
+                                    addTerminalLine(t.assignedTo, tid, "stderr", `❌ Max retries or timeout exceeded for review fixes.`);
+                                    handleBugFound(tid, `Falha em resolver review comments após limite de tentativas.`);
+                                    break;
+                                }
+
+                                if (reaction.action === "skip") {
+                                    addTerminalLine(t.assignedTo, tid, "system", `⏭️ Pulando review loop por configuração.`);
+                                    break;
+                                }
+
+                                if (reaction.action === "notify") {
+                                    addEvent(`Mudanças solicitadas no PR #${prNum} da Tarefa #${tid}.`);
+                                    break;
+                                }
+
+                                const comments = await fetchReviewComments(t.githubRepo, prNum, process.env.GITHUB_TOKEN);
+                                if (comments.length === 0) {
+                                    continue; // Retry, maybe comments aren't available via API yet
+                                }
+
+                                attempts++;
+                                addTerminalLine(t.assignedTo, tid, "system", `🔄 Corrigindo apontamentos de Review... (tentativa ${attempts})`);
+
+                                const recoveryPrompt = buildReviewRecoveryPrompt(t, comments, `feature/task-${tid}`);
+
+                                try {
+                                    const recoveryDriver = activeTaskDrivers.get(tid) || drivers[executionAgent.tool];
+                                    await recoveryDriver.executeTask({ ...t, description: recoveryPrompt }, executionAgent, {
+                                        onLog: (r_tid, msg) => {
+                                            if (t.assignedTo) addTerminalLine(t.assignedTo, tid, "stdout", msg);
+                                        },
+                                        onComplete: () => {
+                                            // Handled by outer loop
+                                        },
+                                        onBugFound: (r_tid, desc) => { handleBugFound(r_tid, desc); },
+                                        onInterrupt: () => {
+                                            // no-op for recovery
+                                        },
+                                        memory: Memory.getInstance()
+                                    });
+
+                                    // Give GitHub Actions time to register the new commit before polling again
+                                    const CI_DELAY_MS = 5000;
+                                    await new Promise(resolve => { setTimeout(resolve, CI_DELAY_MS); });
+                                } catch (recoveryErr: unknown) {
+                                    const errMsg = recoveryErr instanceof Error ? recoveryErr.message : String(recoveryErr);
+                                    addTerminalLine(t.assignedTo, tid, "stderr", `❌ Falha ao acionar agente para Review Fixes: ${errMsg}`);
+                                    break;
+                                }
+                            }
+                        }
+                    } else {
+                        addTerminalLine(t.assignedTo, tid, "stderr", `❌ Falha ao encontrar número do PR para branch feature/task-${tid}`);
                     }
                 }
             } catch (prError: unknown) {
