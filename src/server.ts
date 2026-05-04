@@ -105,8 +105,8 @@ function initializeState(): State {
       { id: `agent-sec`, role: "Segurança", model: "gemini-1.5-flash", category: "security", status: "idle", assignedTask: null, tool: "gemini", terminalId: `term-sec` },
       { id: `agent-perf`, role: "Performance", model: "gpt-4o", category: "performance", status: "idle", assignedTask: null, tool: "copilot", terminalId: `term-perf` },
       { id: `agent-func`, role: "Novas Funcionalidades", model: "claude-3-5-sonnet-20241022", category: "feature", status: "idle", assignedTask: null, tool: "claude", terminalId: `term-func` },
-      { id: `agent-test`, role: "Testes", model: "gpt-4o", category: "test", status: "idle", assignedTask: null, tool: "opencode", terminalId: `term-test` },
-      { id: `agent-bug`, role: "Correções", model: "gpt-4o", category: "bug", status: "idle", assignedTask: null, tool: "codex", terminalId: `term-bug` }
+      { id: `agent-test`, role: "Testes", model: "opencode", category: "test", status: "idle", assignedTask: null, tool: "opencode", terminalId: `term-test` },
+      { id: `agent-bug`, role: "Correções", model: "codex", category: "bug", status: "idle", assignedTask: null, tool: "codex", terminalId: `term-bug` }
     ];
     for (const agent of defaultAgents) {
       DB.saveAgent(agent);
