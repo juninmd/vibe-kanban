@@ -979,7 +979,7 @@ async function generateRoadmapTasks() {
 Current agents: ${roles}.
 Categories: "roadmap", "security", "performance", "feature", "test", "bug".
 Priorities: "alta", "media", "baixa".
-Generate 1 new feature task inspired by the Jules changelog (https://jules.google/docs/changelog/) as roadmap of development.
+Generate 1 new feature task inspired by https://docs.codegen.com/introduction/overview as roadmap of development.
 The category must be "feature". Return ONLY a JSON array: [{"title":"...","category":"feature","priority":"...","description":"..."}]`;
 
   const processTasks = (raw: string) => {
