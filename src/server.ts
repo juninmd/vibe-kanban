@@ -1852,6 +1852,58 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
     return jsonResponse(res, 400, { error: "Invalid driver" });
   }
 
+  // GET /api/analytics
+  if (url === "/api/analytics" && method === "GET") {
+    const tasks = DB.getTasks();
+    const agents = DB.getAgents();
+
+    const tasksPerLane = tasks.reduce((acc: Record<string, number>, t) => {
+      acc[t.lane] = (acc[t.lane] || 0) + 1;
+      return acc;
+    }, {});
+
+    const agentUtilization = agents.reduce((acc: Record<string, number>, a) => {
+      acc[a.status] = (acc[a.status] || 0) + 1;
+      return acc;
+    }, {});
+
+    return jsonResponse(res, 200, {
+      totalTasks: tasks.length,
+      tasksPerLane,
+      totalAgents: agents.length,
+      agentUtilization
+    });
+  }
+
+  // POST /api/webhooks/trufflehog
+  if (url === "/api/webhooks/trufflehog" && method === "POST") {
+    try {
+      const body = await parseBody(req);
+      const title = `Vulnerabilidade Detectada: ${(body as any)?.vulnerability || "Segredo Exposto"}`;
+      const description = `Detectado pelo Trufflehog.\n\nDetalhes:\n${JSON.stringify(body, null, 2)}`;
+
+      const task = DB.createTask({
+        title,
+        source: "trufflehog",
+        category: "security",
+        priority: "alta",
+        lane: "backlog",
+        assignedTo: null,
+        interrupted: false,
+        logs: [],
+        description
+      });
+
+      addEvent(`[Security] Nova vulnerabilidade reportada via Trufflehog: ${task.title}`);
+      sendSlackNotification(process.env.SLACK_WEBHOOK_URL || "", `🚨 [Segurança] ${task.title}`);
+
+      return jsonResponse(res, 201, { task });
+    } catch (e: unknown) {
+      const errorMessage = e instanceof Error ? e.message : String(e);
+      return jsonResponse(res, 400, { error: errorMessage });
+    }
+  }
+
   // POST /api/tasks/clear-done
   if (url === "/api/tasks/clear-done" && method === "POST") {
     DB.clearDoneTasks();

@@ -221,6 +221,45 @@ describe('Vibe Kanban API', async () => {
     assert.ok(Array.isArray(data.businessRecommendations));
   });
 
+  test('GET /api/analytics returns correct system metrics', async () => {
+    // 1. Create a task in backlog
+    await fetch(`${API_URL}/api/tasks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: 'Analytics Task', source: 'test', category: 'roadmap' })
+    });
+
+    const res = await fetch(`${API_URL}/api/analytics`);
+    assert.equal(res.status, 200);
+    const data = await res.json();
+
+    assert.ok(typeof data.totalTasks === 'number');
+    assert.ok(data.tasksPerLane && typeof data.tasksPerLane === 'object');
+    assert.ok(data.tasksPerLane['backlog'] >= 1);
+
+    assert.ok(typeof data.totalAgents === 'number');
+    assert.ok(data.agentUtilization && typeof data.agentUtilization === 'object');
+  });
+
+  test('POST /api/webhooks/trufflehog creates security task from webhook payload', async () => {
+    const res = await fetch(`${API_URL}/api/webhooks/trufflehog`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        vulnerability: "AWS Access Key",
+        location: "src/server.ts"
+      })
+    });
+
+    assert.equal(res.status, 201);
+    const data = await res.json();
+    assert.ok(data.task);
+    assert.equal(data.task.title, "Vulnerabilidade Detectada: AWS Access Key");
+    assert.equal(data.task.category, "security");
+    assert.equal(data.task.priority, "alta");
+    assert.equal(data.task.source, "trufflehog");
+  });
+
   test('POST /api/demands/intake enriches remote demand with business requirements', async () => {
     const res = await fetch(`${API_URL}/api/demands/intake`, {
       method: 'POST',
