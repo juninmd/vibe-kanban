@@ -866,7 +866,9 @@ async function openAgentEditModal(agent: Agent) {
     if (data.tools && data.tools.length > 0) {
       els.agentTool.innerHTML = '<option value="">Selecione a ferramenta</option>' + data.tools.map((t) => `<option value="${t.id}"${t.id === agent.tool ? ' selected' : ''}>${t.name}</option>`).join("");
     }
-  } catch (e) { console.error(e); }
+  } catch (e) {
+    console.error(e);
+  }
   // Load models for the tool
   if (agent.tool) {
     try {
@@ -875,7 +877,9 @@ async function openAgentEditModal(agent: Agent) {
       if (data.models && data.models.length > 0) {
         els.agentModelDropdown.innerHTML = data.models.map((m: string) => `<option value="${m}"${m === agent.model ? ' selected' : ''}>${m}</option>`).join("");
       }
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+    }
   } else {
     els.agentModelDropdown.innerHTML = `<option value="${agent.model}" selected>${agent.model}</option>`;
   }
@@ -1162,7 +1166,9 @@ els.agentTool.addEventListener("change", async (e: Event) => {
     } else {
       els.agentModelDropdown.innerHTML = '<option value="">Nenhum modelo encontrado</option>';
     }
-  } catch (e) { console.error(e); }
+  } catch (e) {
+    console.error(e);
+  }
 });
 
 els.agentForm.addEventListener("submit", async (e) => {
@@ -1194,7 +1200,9 @@ els.settingsBtn.addEventListener("click", async () => {
     const res = await fetch(`${API_URL}/api/config/clone-dir`);
     const data = await res.json();
     els.configCloneDir.value = data.cloneDir || "";
-  } catch (e) { console.error(e); }
+  } catch (e) {
+    console.error(e);
+  }
 });
 
 els.closeTaskCreateBtn.addEventListener("click", () => closeTaskCreateModal());

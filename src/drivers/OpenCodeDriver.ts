@@ -1,6 +1,7 @@
 import { buildSystemPrompt } from "../utils/promptUtils.js";
 import { Task, Agent, LLMDriver, DriverContext } from "../types.js";
-import { spawn, type ChildProcess } from "child_process";
+import { type ChildProcess } from "child_process";
+import { execa } from "execa";
 import * as fs from "fs";
 import * as path from "path";
 import { resolveOpenCodeCommand } from "../utils/commandUtils.js";
@@ -35,19 +36,19 @@ export function buildOpenCodeArgs(task: Task, agent: Agent, prompt: string): str
 }
 
 function spawnOpenCode(executable: string, args: string[], cwd: string, env: NodeJS.ProcessEnv): ChildProcess {
-   const stdio: ["ignore", "pipe", "pipe"] = ["ignore", "pipe", "pipe"];
-   const options = {
+   const execaOptions = {
       cwd,
       env,
-      stdio,
       windowsHide: true,
+      stdout: "pipe" as const,
+      stderr: "pipe" as const,
+      stdin: "ignore" as const,
+      reject: false // Required to prevent Unhandled Promise Rejections if process exits with error code
    };
 
-   if (process.platform === "win32" && /\.(cmd|bat)$/i.test(executable)) {
-      return spawn(process.env.comspec || "cmd.exe", ["/d", "/s", "/c", executable, ...args], options);
-   }
-
-   return spawn(executable, args, options);
+   // execa returns an ExecaChildProcess which implements ChildProcess.
+   // To mimic `spawn` closely without crashing on failure, reject: false is vital.
+   return execa(executable, args, execaOptions) as unknown as ChildProcess;
 }
 
 export class OpenCodeDriver implements LLMDriver {
