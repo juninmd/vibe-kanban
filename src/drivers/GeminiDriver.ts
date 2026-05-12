@@ -4,7 +4,7 @@ import * as path from "path";
 import { getProjectContext, extractAndWriteFiles } from "../utils/fileUtils.js";
 import { logDebugBlock } from "./debugLogging.js";
 import { streamText } from "ai";
-import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import { createGeminiProvider } from "ai-sdk-provider-gemini-cli";
 
 export class GeminiDriver implements LLMDriver {
    name: string = "Gemini SDK Driver";
@@ -90,12 +90,13 @@ content
       const prompt = `${systemPrompt}\n\n${projectContext}`;
 
       const geminiApiKey = process.env.GEMINI_API_KEY || "";
-      const google = createGoogleGenerativeAI({
+      const gemini = createGeminiProvider({
+         authType: 'api-key',
          apiKey: geminiApiKey
       });
 
       const modelName = agent.model || "gemini-2.5-pro";
-      const model = google(modelName);
+      const model = gemini(modelName);
 
       logDebugBlock(ctx, task.id, "AGENT PROMPT", prompt);
       ctx.onLog(task.id, `[SYSTEM] Iniciando Gemini Provider para Tarefa #${task.id}`);

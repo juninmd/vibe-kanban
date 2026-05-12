@@ -1,6 +1,6 @@
 import { generateText } from "ai";
 import { openai } from "@ai-sdk/openai";
-import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import { createGeminiProvider } from "ai-sdk-provider-gemini-cli";
 
 export async function callLLM(prompt: string, systemPrompt?: string): Promise<string | undefined> {
   try {
@@ -12,11 +12,12 @@ export async function callLLM(prompt: string, systemPrompt?: string): Promise<st
       });
       return text;
     } else if (process.env.GEMINI_API_KEY) {
-      const google = createGoogleGenerativeAI({
+      const gemini = createGeminiProvider({
+        authType: 'api-key',
         apiKey: process.env.GEMINI_API_KEY,
       });
       const { text } = await generateText({
-        model: google("gemini-2.5-pro"),
+        model: gemini("gemini-2.5-pro"),
         system: systemPrompt,
         prompt,
       });
