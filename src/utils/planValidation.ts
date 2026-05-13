@@ -90,6 +90,63 @@ export function detectDependencyCycles(tasks: GeneratedTask[]): string[] | null 
 }
 
 /**
+ * Group tasks into execution waves based on dependencies.
+ * Tasks in the same wave can be executed in parallel.
+ * Inspired by the LISA project's buildExecutionWaves algorithm.
+ */
+export function buildExecutionWaves(tasks: GeneratedTask[]): GeneratedTask[][] {
+  const waves: GeneratedTask[][] = [];
+  const taskByOrder = new Map<number, GeneratedTask>();
+  const inDegree = new Map<number, number>();
+  const adjacency = new Map<number, number[]>();
+
+  // Initialize maps
+  for (const task of tasks) {
+    if (typeof task.order === "number") {
+      taskByOrder.set(task.order, task);
+      inDegree.set(task.order, 0);
+      adjacency.set(task.order, []);
+    }
+  }
+
+  // Build graph
+  for (const task of tasks) {
+    if (typeof task.order === "number" && task.dependsOn && Array.isArray(task.dependsOn)) {
+      for (const dep of task.dependsOn) {
+        if (adjacency.has(dep)) {
+          adjacency.get(dep)!.push(task.order);
+          inDegree.set(task.order, (inDegree.get(task.order) ?? 0) + 1);
+        }
+      }
+    }
+  }
+
+  // Initial wave (tasks with no dependencies)
+  let currentWave: number[] = [];
+  for (const [order, degree] of inDegree) {
+    if (degree === 0) currentWave.push(order);
+  }
+
+  // Process waves iteratively
+  while (currentWave.length > 0) {
+    const waveTasks = currentWave.map(order => taskByOrder.get(order)!);
+    waves.push(waveTasks);
+
+    const nextWave: number[] = [];
+    for (const order of currentWave) {
+      for (const neighbor of adjacency.get(order) ?? []) {
+        const newDegree = (inDegree.get(neighbor) ?? 1) - 1;
+        inDegree.set(neighbor, newDegree);
+        if (newDegree === 0) nextWave.push(neighbor);
+      }
+    }
+    currentWave = nextWave;
+  }
+
+  return waves;
+}
+
+/**
  * Detect files that appear in the \`relevantFiles\` of 2+ issues.
  * Returns entries where a file is touched by multiple issues (merge conflict risk).
  */

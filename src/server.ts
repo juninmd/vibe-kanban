@@ -1,4 +1,4 @@
-import { detectDependencyCycles, detectFileOverlaps, GeneratedTask, buildPlanValidationPrompt, parsePlanValidationResponse } from "./utils/planValidation.js";
+import { detectDependencyCycles, detectFileOverlaps, GeneratedTask, buildPlanValidationPrompt, parsePlanValidationResponse, buildExecutionWaves } from "./utils/planValidation.js";
 import { createServer, ServerResponse, IncomingMessage } from "http";
 import * as fs from "fs";
 import * as path from "path";
@@ -1463,7 +1463,20 @@ Return ONLY a JSON array with this structure:
     }
 
     if (createdTasks.length > 0) {
-      addEvent(`[DemandIntake] Planejamento concluído: ${createdTasks.length} tarefas criadas.`);
+      // Calculate execution waves and append to tasks context (Lisa inspired)
+      const waves = buildExecutionWaves(generatedTasks);
+      let waveStr = "### Plano de Execução (Waves)\n\nEsta demanda foi dividida em etapas de execução para otimizar o paralelismo:\n\n";
+      waves.forEach((wave, i) => {
+        waveStr += `**Onda ${i + 1}**: ${wave.map(w => w.title).join(", ")}\n`;
+      });
+
+      // Update each task description with the wave context
+      createdTasks.forEach(task => {
+        task.description = (task.description || "") + "\n\n" + waveStr;
+        DB.updateTask(task.id, task);
+      });
+
+      addEvent(`[DemandIntake] Planejamento concluído: ${createdTasks.length} tarefas organizadas em ${waves.length} ondas de execução.`);
       broadcastState();
     } else {
       addEvent(`[DemandIntake] Falha ao planejar tarefas para: ${body.title}.`);
