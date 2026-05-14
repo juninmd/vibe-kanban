@@ -92,58 +92,52 @@ export function detectDependencyCycles(tasks: GeneratedTask[]): string[] | null 
 /**
  * Group tasks into execution waves based on dependencies.
  * Tasks in the same wave can be executed in parallel.
- * Inspired by the LISA project's buildExecutionWaves algorithm.
+ * Implements the LISA project's buildExecutionWaves defensive algorithm.
  */
 export function buildExecutionWaves(tasks: GeneratedTask[]): GeneratedTask[][] {
-  const waves: GeneratedTask[][] = [];
-  const taskByOrder = new Map<number, GeneratedTask>();
-  const inDegree = new Map<number, number>();
-  const adjacency = new Map<number, number[]>();
+  if (tasks.length === 0) return [];
 
-  // Initialize maps
+  const taskByOrder = new Map<number, GeneratedTask>();
+  const remaining = new Map<number, Set<number>>();
+
   for (const task of tasks) {
     if (typeof task.order === "number") {
       taskByOrder.set(task.order, task);
-      inDegree.set(task.order, 0);
-      adjacency.set(task.order, []);
+      const deps = task.dependsOn && Array.isArray(task.dependsOn) ? task.dependsOn : [];
+      remaining.set(task.order, new Set(deps));
     }
   }
 
-  // Build graph
-  for (const task of tasks) {
-    if (typeof task.order === "number" && task.dependsOn && Array.isArray(task.dependsOn)) {
-      for (const dep of task.dependsOn) {
-        if (adjacency.has(dep)) {
-          adjacency.get(dep)!.push(task.order);
-          inDegree.set(task.order, (inDegree.get(task.order) ?? 0) + 1);
-        }
+  const waves: number[][] = [];
+
+  while (remaining.size > 0) {
+    const wave: number[] = [];
+    for (const [order, deps] of remaining) {
+      if (deps.size === 0) {
+        wave.push(order);
+      }
+    }
+
+    if (wave.length === 0) {
+      waves.push([...remaining.keys()].sort((a, b) => a - b));
+      break;
+    }
+
+    wave.sort((a, b) => a - b);
+    waves.push(wave);
+
+    const assigned = new Set(wave);
+    for (const order of wave) {
+      remaining.delete(order);
+    }
+    for (const deps of remaining.values()) {
+      for (const a of assigned) {
+        deps.delete(a);
       }
     }
   }
 
-  // Initial wave (tasks with no dependencies)
-  let currentWave: number[] = [];
-  for (const [order, degree] of inDegree) {
-    if (degree === 0) currentWave.push(order);
-  }
-
-  // Process waves iteratively
-  while (currentWave.length > 0) {
-    const waveTasks = currentWave.map(order => taskByOrder.get(order)!);
-    waves.push(waveTasks);
-
-    const nextWave: number[] = [];
-    for (const order of currentWave) {
-      for (const neighbor of adjacency.get(order) ?? []) {
-        const newDegree = (inDegree.get(neighbor) ?? 1) - 1;
-        inDegree.set(neighbor, newDegree);
-        if (newDegree === 0) nextWave.push(neighbor);
-      }
-    }
-    currentWave = nextWave;
-  }
-
-  return waves;
+  return waves.map(wave => wave.map(order => taskByOrder.get(order)!));
 }
 
 /**
@@ -156,14 +150,13 @@ export function detectFileOverlaps(
   const fileMap = new Map<string, number[]>();
 
   for (const task of tasks) {
-    if (typeof task.order === "number" && task.relevantFiles && Array.isArray(task.relevantFiles)) {
-      for (const file of task.relevantFiles) {
-        const existing = fileMap.get(file);
-        if (existing) {
-          existing.push(task.order);
-        } else {
-          fileMap.set(file, [task.order]);
-        }
+    if (typeof task.order !== "number" || !Array.isArray(task.relevantFiles)) continue;
+    for (const file of task.relevantFiles) {
+      const existing = fileMap.get(file);
+      if (existing) {
+        existing.push(task.order);
+      } else {
+        fileMap.set(file, [task.order]);
       }
     }
   }
