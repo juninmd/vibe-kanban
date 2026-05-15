@@ -2251,3 +2251,4 @@ async function loadAvailableTools() {
 loadAvailableTools();
 updateTaskAgentModels();
 tick();
+// Test change to trigger review
