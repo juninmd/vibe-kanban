@@ -1403,10 +1403,25 @@ Return ONLY a JSON array with this structure:
     const createdTasks: Task[] = [];
     if (Array.isArray(generatedTasks)) {
       const groupId = crypto.randomUUID();
+
+      // Calculate execution waves and append to tasks context (Lisa inspired)
+      // We do this first to flatten and guarantee strict taskOrder topology.
+      const waves = buildExecutionWaves(generatedTasks);
+      let waveStr = "### Plano de Execução (Waves)\n\nEsta demanda foi dividida em etapas de execução para otimizar o paralelismo:\n\n";
+      waves.forEach((wave, i) => {
+        waveStr += `**Onda ${i + 1}**: ${wave.map(w => w.title).join(", ")}\n`;
+      });
+
+      // Flatten waves to assign strict chronological taskOrder based on topological execution order.
+      const topologicalOrder = waves.flat();
+
       // First pass: Create tasks
-      for (const t of generatedTasks) {
+      let sequentialOrder = 1;
+      for (const t of topologicalOrder) {
         if (t.title && t.category) {
           let finalDescription = t.description || "";
+          finalDescription += "\n\n" + waveStr;
+
           if (t.acceptanceCriteria && Array.isArray(t.acceptanceCriteria)) {
             finalDescription += "\n\n### Acceptance Criteria\n" + t.acceptanceCriteria.map((c: string) => `- [ ] ${c}`).join("\n");
           }
@@ -1436,20 +1451,23 @@ Return ONLY a JSON array with this structure:
             githubRepo: typeof body.repoUrl === "string" ? body.repoUrl : undefined,
             dependencies: [], // Initialize empty
             groupId: groupId,
-            taskOrder: t.order || 0
+            taskOrder: sequentialOrder
           });
+          sequentialOrder++;
           createdTasks.push(task);
         }
       }
 
       // Second pass: Map dependsOn orders to database IDs
-      for (let i = 0; i < generatedTasks.length; i++) {
-        const localDeps = generatedTasks[i].dependsOn;
+      for (let i = 0; i < topologicalOrder.length; i++) {
+        const localDeps = topologicalOrder[i].dependsOn;
         if (Array.isArray(localDeps) && localDeps.length > 0 && i < createdTasks.length) {
           const dbDeps = localDeps
             .filter((order: unknown): order is number => typeof order === 'number')
             .map((order) => {
-              const depTask = createdTasks.find(t => t.taskOrder === order);
+              const depTaskInGenerated = generatedTasks.find(gt => gt.order === order);
+              if (!depTaskInGenerated) return null;
+              const depTask = createdTasks.find(t => t.title === depTaskInGenerated.title);
               return depTask ? depTask.id : null;
             })
             .filter((id): id is number => id !== null);
@@ -1463,20 +1481,8 @@ Return ONLY a JSON array with this structure:
     }
 
     if (createdTasks.length > 0) {
-      // Calculate execution waves and append to tasks context (Lisa inspired)
-      const waves = buildExecutionWaves(generatedTasks);
-      let waveStr = "### Plano de Execução (Waves)\n\nEsta demanda foi dividida em etapas de execução para otimizar o paralelismo:\n\n";
-      waves.forEach((wave, i) => {
-        waveStr += `**Onda ${i + 1}**: ${wave.map(w => w.title).join(", ")}\n`;
-      });
-
-      // Update each task description with the wave context
-      createdTasks.forEach(task => {
-        task.description = (task.description || "") + "\n\n" + waveStr;
-        DB.updateTask(task.id, task);
-      });
-
-      addEvent(`[DemandIntake] Planejamento concluído: ${createdTasks.length} tarefas organizadas em ${waves.length} ondas de execução.`);
+      const totalWaves = buildExecutionWaves(generatedTasks).length;
+      addEvent(`[DemandIntake] Planejamento concluído: ${createdTasks.length} tarefas organizadas em ${totalWaves} ondas de execução.`);
       broadcastState();
     } else {
       addEvent(`[DemandIntake] Falha ao planejar tarefas para: ${body.title}.`);
