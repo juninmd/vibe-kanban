@@ -24,6 +24,7 @@ import { enrichDemand } from "./utils/demandIntake.js";
 import { enrichContext } from "./utils/enrichment.js";
 import { prepareWorktree, cleanupWorktree } from "./utils/worktreeUtils.js";
 import { callLLM } from "./utils/llmUtils.js";
+import { ensureProjectContext } from "./utils/projectContext.js";
 import { sendSlackNotification } from "./utils/slackUtils.js";
 import { verifySpecCompliance, formatSpecCompliance } from "./utils/specCompliance.js";
 import { buildComplianceRecoveryPrompt } from "./utils/specCompliance.js";
@@ -356,6 +357,18 @@ ${taskList}
 The following sibling tasks may be running concurrently. Do NOT duplicate their work:
 
 ${siblings}`;
+    }
+  }
+
+  // Project Context Integration (Lisa inspired)
+  if (finalWorkDir) {
+    try {
+      const projectContext = await ensureProjectContext(finalWorkDir);
+      if (projectContext) {
+        updatedTask.description = (updatedTask.description || "") + "\n\n## Project Context\n\n" + projectContext;
+      }
+    } catch (err: unknown) {
+      console.warn(`Project context generation failed for task #${task.id}:`, err);
     }
   }
 
