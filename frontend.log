@@ -1,9 +1,7 @@
-127.0.0.1 - - [17/Feb/2026 01:59:09] "GET / HTTP/1.1" 200 -
-127.0.0.1 - - [17/Feb/2026 01:59:09] "GET /dist/app.js HTTP/1.1" 200 -
-127.0.0.1 - - [17/Feb/2026 01:59:09] "GET /styles.css HTTP/1.1" 200 -
-127.0.0.1 - - [17/Feb/2026 00:07:38] "GET / HTTP/1.1" 200 -
-127.0.0.1 - - [17/Feb/2026 00:07:38] "GET /dist/app.js HTTP/1.1" 200 -
-127.0.0.1 - - [17/Feb/2026 00:07:38] "GET /styles.css HTTP/1.1" 200 -
-127.0.0.1 - - [17/Feb/2026 00:08:08] "GET / HTTP/1.1" 200 -
-127.0.0.1 - - [17/Feb/2026 00:08:08] "GET /styles.css HTTP/1.1" 200 -
-127.0.0.1 - - [17/Feb/2026 00:08:08] "GET /dist/app.js HTTP/1.1" 200 -
+
+> vibe-kanban@0.1.0 start /app
+> node dist/server.js
+
+Server listening on http://localhost:5174
+Terminated
+ ELIFECYCLE  Command failed with exit code 143.

@@ -4,7 +4,7 @@ export interface OfficeData {
     padPositions: THREE.Vector3[];
 }
 
-export function createOffice(scene: THREE.Scene, agentCount: number = 6): OfficeData {
+export function createOffice(scene: THREE.Scene, agentCount: number = 7): OfficeData {
     const padPositions: THREE.Vector3[] = [];
 
     // 1. Floor (Cybergrid)
