@@ -22,6 +22,8 @@ import { isEligibleForFallback, isCompleteProviderExhaustion, ModelAttempt } fro
 import { getToolingLandscape } from "./utils/toolingLandscape.js";
 import { enrichDemand } from "./utils/demandIntake.js";
 import { enrichContext } from "./utils/enrichment.js";
+import { generateProjectContext } from "./utils/projectContext.js";
+
 import { prepareWorktree, cleanupWorktree } from "./utils/worktreeUtils.js";
 import { callLLM } from "./utils/llmUtils.js";
 import { sendSlackNotification } from "./utils/slackUtils.js";
@@ -356,6 +358,18 @@ ${taskList}
 The following sibling tasks may be running concurrently. Do NOT duplicate their work:
 
 ${siblings}`;
+    }
+  }
+
+  // Project Context Generation (Lisa inspired)
+  if (finalWorkDir) {
+    try {
+      const projectContext = await generateProjectContext(finalWorkDir);
+      if (projectContext) {
+        updatedTask.description = (updatedTask.description || "") + "\n\n## Project Context\n\n" + projectContext;
+      }
+    } catch (err: unknown) {
+      console.warn(`Project context generation failed for task #${task.id}:`, err);
     }
   }
 
