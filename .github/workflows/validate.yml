@@ -12,3 +12,4 @@ concurrency:
 jobs:
   check:
     uses: juninmd/base-actions/.github/workflows/reusable-validate.yml@main
+    secrets: inherit
