@@ -1,5 +1,5 @@
-import { existsSync, readFileSync, mkdirSync, writeFileSync } from "fs";
-import { join } from "path";
+import { existsSync, readFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { callLLM } from "./llmUtils.js";
 import { getProjectContext } from "./fileUtils.js";
 
