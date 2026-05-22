@@ -188,7 +188,9 @@ export class TerminalSession extends EventEmitter {
 
     private cleanup(): void {
         for (const d of this.disposables) {
-            try { d.dispose(); } catch { }
+            try { d.dispose(); } catch {
+                // ignore error during dispose
+            }
         }
         this.disposables = [];
         this.pty = null;
