@@ -1,5 +1,5 @@
-import fs from "fs";
-import path from "path";
+import { existsSync, readFileSync, mkdirSync, writeFileSync } from "fs";
+import { join } from "path";
 import { callLLM } from "./llmUtils.js";
 import { getProjectContext } from "./fileUtils.js";
 
@@ -21,10 +21,10 @@ Rules:
 - If nothing non-obvious exists (e.g., a plain Node.js project with no special tooling), write a single line: "No special tooling conventions."`;
 
 export async function generateProjectContext(workDir: string): Promise<string | null> {
-  const contextPath = path.join(workDir, ".lisa", "context.md");
+  const contextPath = join(workDir, ".lisa", "context.md");
 
-  if (fs.existsSync(contextPath)) {
-    return fs.readFileSync(contextPath, "utf-8");
+  if (existsSync(contextPath)) {
+    return readFileSync(contextPath, "utf-8");
   }
 
   // Need to read structure, package.json, README.md
@@ -36,11 +36,11 @@ export async function generateProjectContext(workDir: string): Promise<string | 
   const llmResult = await callLLM(prompt, "You are a senior project analyst.");
 
   if (llmResult) {
-      const lisaDir = path.join(workDir, ".lisa");
-      if (!fs.existsSync(lisaDir)) {
-          fs.mkdirSync(lisaDir, { recursive: true });
+      const lisaDir = join(workDir, ".lisa");
+      if (!existsSync(lisaDir)) {
+          mkdirSync(lisaDir, { recursive: true });
       }
-      fs.writeFileSync(contextPath, llmResult);
+      writeFileSync(contextPath, llmResult);
       return llmResult;
   }
 
