@@ -12,4 +12,3 @@ env:
 jobs:
   gitleaks:
     uses: juninmd/base-actions/.github/workflows/reusable-security-scan.yml@main
-    secrets: inherit
