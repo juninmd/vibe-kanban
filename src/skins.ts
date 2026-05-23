@@ -26,8 +26,7 @@ const roleColors: Record<string, string> = {
     "Performance": "#475569",     // Slate
     "Novas Funcionalidades": "#0284c7", // Blue
     "Testes": "#15803d",          // Dark Green
-    "Correções": "#b91c1c",       // Red
-    "Novas features": "#8b5cf6"   // Purple
+    "Correções": "#b91c1c"        // Red
 };
 
 export function getHeadMaterials(role: string): THREE.Material[] {
