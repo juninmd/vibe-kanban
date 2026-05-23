@@ -9,6 +9,9 @@ concurrency:
   group: validate-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
 jobs:
   check:
     uses: juninmd/base-actions/.github/workflows/reusable-validate.yml@main

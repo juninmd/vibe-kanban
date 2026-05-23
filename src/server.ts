@@ -1911,11 +1911,15 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
         if (!issue.title) continue;
         const exists = DB.getTasks().find(t => t.description?.includes(issue.url) || t.title === issue.title);
         if (!exists) {
+          let priority: Task["priority"] = "baixa";
+          if (issue.priority === 1) priority = "alta";
+          else if (issue.priority === 2) priority = "media";
+
           DB.createTask({
             title: issue.title,
             source: "linear_integration",
             category: "feature",
-            priority: issue.priority === 1 ? "alta" : issue.priority === 2 ? "media" : "baixa",
+            priority,
             lane: "backlog",
             assignedTo: null,
             interrupted: false,
