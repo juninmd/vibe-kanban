@@ -21,6 +21,7 @@ import { getAvailableTools } from "./providers.js";
 import { isEligibleForFallback, isCompleteProviderExhaustion, ModelAttempt } from "./utils/fallbackUtils.js";
 import { getToolingLandscape } from "./utils/toolingLandscape.js";
 import { enrichDemand } from "./utils/demandIntake.js";
+import { fetchLinearIssues } from "./utils/linearUtils.js";
 import { enrichContext } from "./utils/enrichment.js";
 import { prepareWorktree, cleanupWorktree } from "./utils/worktreeUtils.js";
 import { callLLM } from "./utils/llmUtils.js";
@@ -1904,7 +1905,6 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
     if (!apiKey) return jsonResponse(res, 400, { error: "Missing Linear API Key" });
 
     try {
-      const { fetchLinearIssues } = await import("./utils/linearUtils.js");
       const issues = await fetchLinearIssues(apiKey);
       let count = 0;
       for (const issue of issues) {
