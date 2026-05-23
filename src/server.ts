@@ -1897,6 +1897,46 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
     return jsonResponse(res, 200, { ok: true });
   }
 
+  // POST /api/integrations/linear/sync (Import issues from Linear)
+  if (url === "/api/integrations/linear/sync" && method === "POST") {
+    const body = await parseBody(req);
+    const apiKey = (body.apiKey as string) || process.env.LINEAR_API_KEY || "";
+    if (!apiKey) return jsonResponse(res, 400, { error: "Missing Linear API Key" });
+
+    try {
+      const { fetchLinearIssues } = await import("./utils/linearUtils.js");
+      const issues = await fetchLinearIssues(apiKey);
+      let count = 0;
+      for (const issue of issues) {
+        if (!issue.title) continue;
+        const exists = DB.getTasks().find(t => t.description?.includes(issue.url) || t.title === issue.title);
+        if (!exists) {
+          DB.createTask({
+            title: issue.title,
+            source: "linear_integration",
+            category: "feature",
+            priority: issue.priority === 1 ? "alta" : issue.priority === 2 ? "media" : "baixa",
+            lane: "backlog",
+            assignedTo: null,
+            interrupted: false,
+            logs: [],
+            description: `${issue.description || ""}\n\nLinear: ${issue.url}`
+          });
+          count++;
+        }
+      }
+      addEvent(`[Linear Integration] Sincronizadas ${count} novas issues.`);
+      broadcastState();
+      return jsonResponse(res, 200, { ok: true, count });
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        console.error("Linear Sync error:", err.message);
+        return jsonResponse(res, 500, { error: err.message });
+      }
+      return jsonResponse(res, 500, { error: "Unknown error syncing Linear issues" });
+    }
+  }
+
   // Reset
   if (url === "/api/reset" && method === "POST") {
     DB.reset();
