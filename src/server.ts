@@ -23,6 +23,7 @@ import { getToolingLandscape } from "./utils/toolingLandscape.js";
 import { enrichDemand } from "./utils/demandIntake.js";
 import { fetchLinearIssues } from "./utils/linearUtils.js";
 import { enrichContext } from "./utils/enrichment.js";
+import { generateProjectContext } from "./utils/projectContext.js";
 import { prepareWorktree, cleanupWorktree } from "./utils/worktreeUtils.js";
 import { callLLM } from "./utils/llmUtils.js";
 import { sendSlackNotification } from "./utils/slackUtils.js";
@@ -358,6 +359,18 @@ ${taskList}
 The following sibling tasks may be running concurrently. Do NOT duplicate their work:
 
 ${siblings}`;
+    }
+  }
+
+  // Project Context Generation
+  if (finalWorkDir) {
+    try {
+      const projectContextText = await generateProjectContext(finalWorkDir);
+      if (projectContextText) {
+        updatedTask.description = (updatedTask.description || "") + "\n\n" + projectContextText;
+      }
+    } catch (err: unknown) {
+      console.warn(`Project context generation failed for task #${task.id}:`, err);
     }
   }
 
