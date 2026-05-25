@@ -52,7 +52,12 @@ export function detectDependencyCycles(tasks: GeneratedTask[]): string[] | null 
   for (const task of tasks) {
     if (typeof task.order === "number" && task.dependsOn && Array.isArray(task.dependsOn)) {
       for (const dep of task.dependsOn) {
-        if (!adjacency.has(dep)) continue; // skip unknown dependencies
+        if (!adjacency.has(dep)) {
+          // If the dependency points to an unknown node, we can either
+          // ignore it or handle it. Based on lisa's implementation,
+          // we only process valid internal dependencies:
+          continue;
+        }
         adjacency.get(dep)!.push(task.order);
         inDegree.set(task.order, (inDegree.get(task.order) ?? 0) + 1);
       }
@@ -77,8 +82,7 @@ export function detectDependencyCycles(tasks: GeneratedTask[]): string[] | null 
   }
 
   // If not all nodes were sorted, cycles exist
-  const totalNodesWithOrder = Array.from(taskByOrder.keys()).length;
-  if (sorted.length === totalNodesWithOrder) return null;
+  if (sorted.length === tasks.length) return null;
 
   // Identify nodes involved in cycles
   const sortedSet = new Set(sorted);
