@@ -17,8 +17,8 @@
   },
   "devDependencies": {
     "@commitlint/cli": "^20.5.3",
-    "@commitlint/config-conventional": "^20.5.3",
-    "@commitlint/types": "^20.5.0",
+    "@commitlint/config-conventional": "^21.0.1",
+    "@commitlint/types": "^21.0.1",
     "@playwright/test": "^1.60.0",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^25.8.0",
@@ -31,12 +31,12 @@
     "typescript": "5.4.5"
   },
   "dependencies": {
-    "@ai-sdk/google": "^3.0.74",
+    "@ai-sdk/google": "^3.0.79",
     "@ai-sdk/openai": "^3.0.53",
     "@google/genai": "^2.3.0",
     "@opeoginni/github-copilot-openai-compatible": "^1.0.0",
     "ai": "^6.0.174",
-    "better-sqlite3": "^12.8.0",
+    "better-sqlite3": "^12.10.0",
     "dotenv": "^17.4.2",
     "execa": "^9.6.0",
     "node-fetch": "^3.3.2",
