@@ -44,7 +44,7 @@ importers:
     devDependencies:
       '@commitlint/cli':
         specifier: ^20.5.3
-        version: 20.5.3(@types/node@25.8.0)(conventional-commits-parser@6.4.0)(typescript@5.4.5)
+        version: 20.5.3(@types/node@25.9.1)(conventional-commits-parser@6.4.0)(typescript@5.4.5)
       '@commitlint/config-conventional':
         specifier: ^21.0.1
         version: 21.0.1
@@ -58,8 +58,8 @@ importers:
         specifier: ^7.6.13
         version: 7.6.13
       '@types/node':
-        specifier: ^25.8.0
-        version: 25.8.0
+        specifier: ^25.9.1
+        version: 25.9.1
       '@types/node-fetch':
         specifier: ^2.6.11
         version: 2.6.13
@@ -74,7 +74,7 @@ importers:
         version: 0.183.2
       ts-node:
         specifier: ^10.9.2
-        version: 10.9.2(@types/node@25.8.0)(typescript@5.4.5)
+        version: 10.9.2(@types/node@25.9.1)(typescript@5.4.5)
       tsx:
         specifier: ^4.22.0
         version: 4.22.0
@@ -490,8 +490,8 @@ packages:
   '@types/node-fetch@2.6.13':
     resolution: {integrity: sha512-QGpRVpzSaUs30JBSGPjOg4Uveu384erbHBoT1zeONvyCfwQxIkUshLAOqN/k9EjGviPRmWTTe6aH2qySWKTVSw==}
 
-  '@types/node@25.8.0':
-    resolution: {integrity: sha512-TCFSk8IZh+iLX1xtksoBVtdmgL+1IX0fC9BeU4QqFSuNdN/K+HUlhqOzEmSYYpZUVsLYcPqc9KX+60iDuninSQ==}
+  '@types/node@25.9.1':
+    resolution: {integrity: sha512-xfrlY7UD5rMJk3ZVJP8BNzS28J36YJg+xp+LPXV1TdWxr8uMH5A860QNxYDGQe/ylDSgjxE52Q9VnO7p75tJxg==}
 
   '@types/retry@0.12.0':
     resolution: {integrity: sha512-wWKOClTTiizcZhXnPY4wikVAwmdYHp8q6DmC+EJUzAMsycb7HB32Kh9RN4+0gExjmPmZSAQjgURXIGATPegAvA==}
@@ -1308,11 +1308,11 @@ snapshots:
 
   '@babel/helper-validator-identifier@7.28.5': {}
 
-  '@commitlint/cli@20.5.3(@types/node@25.8.0)(conventional-commits-parser@6.4.0)(typescript@5.4.5)':
+  '@commitlint/cli@20.5.3(@types/node@25.9.1)(conventional-commits-parser@6.4.0)(typescript@5.4.5)':
     dependencies:
       '@commitlint/format': 20.5.0
       '@commitlint/lint': 20.5.3
-      '@commitlint/load': 20.5.3(@types/node@25.8.0)(typescript@5.4.5)
+      '@commitlint/load': 20.5.3(@types/node@25.9.1)(typescript@5.4.5)
       '@commitlint/read': 20.5.0(conventional-commits-parser@6.4.0)
       '@commitlint/types': 20.5.0
       tinyexec: 1.1.2
@@ -1357,14 +1357,14 @@ snapshots:
       '@commitlint/rules': 20.5.3
       '@commitlint/types': 20.5.0
 
-  '@commitlint/load@20.5.3(@types/node@25.8.0)(typescript@5.4.5)':
+  '@commitlint/load@20.5.3(@types/node@25.9.1)(typescript@5.4.5)':
     dependencies:
       '@commitlint/config-validator': 20.5.0
       '@commitlint/execute-rule': 20.0.0
       '@commitlint/resolve-extends': 20.5.3
       '@commitlint/types': 20.5.0
       cosmiconfig: 9.0.1(typescript@5.4.5)
-      cosmiconfig-typescript-loader: 6.3.0(@types/node@25.8.0)(cosmiconfig@9.0.1(typescript@5.4.5))(typescript@5.4.5)
+      cosmiconfig-typescript-loader: 6.3.0(@types/node@25.9.1)(cosmiconfig@9.0.1(typescript@5.4.5))(typescript@5.4.5)
       es-toolkit: 1.46.1
       is-plain-obj: 4.1.0
       picocolors: 1.1.1
@@ -1595,14 +1595,14 @@ snapshots:
 
   '@types/better-sqlite3@7.6.13':
     dependencies:
-      '@types/node': 25.8.0
+      '@types/node': 25.9.1
 
   '@types/node-fetch@2.6.13':
     dependencies:
-      '@types/node': 25.8.0
+      '@types/node': 25.9.1
       form-data: 4.0.5
 
-  '@types/node@25.8.0':
+  '@types/node@25.9.1':
     dependencies:
       undici-types: 7.24.6
 
@@ -1734,9 +1734,9 @@ snapshots:
       '@simple-libs/stream-utils': 1.2.0
       meow: 13.2.0
 
-  cosmiconfig-typescript-loader@6.3.0(@types/node@25.8.0)(cosmiconfig@9.0.1(typescript@5.4.5))(typescript@5.4.5):
+  cosmiconfig-typescript-loader@6.3.0(@types/node@25.9.1)(cosmiconfig@9.0.1(typescript@5.4.5))(typescript@5.4.5):
     dependencies:
-      '@types/node': 25.8.0
+      '@types/node': 25.9.1
       cosmiconfig: 9.0.1(typescript@5.4.5)
       jiti: 2.6.1
       typescript: 5.4.5
@@ -2177,7 +2177,7 @@ snapshots:
       '@protobufjs/path': 1.1.2
       '@protobufjs/pool': 1.1.0
       '@protobufjs/utf8': 1.1.1
-      '@types/node': 25.8.0
+      '@types/node': 25.9.1
       long: 5.3.2
 
   pump@3.0.4:
@@ -2267,14 +2267,14 @@ snapshots:
 
   tinyexec@1.1.2: {}
 
-  ts-node@10.9.2(@types/node@25.8.0)(typescript@5.4.5):
+  ts-node@10.9.2(@types/node@25.9.1)(typescript@5.4.5):
     dependencies:
       '@cspotcode/source-map-support': 0.8.1
       '@tsconfig/node10': 1.0.12
       '@tsconfig/node12': 1.0.11
       '@tsconfig/node14': 1.0.3
       '@tsconfig/node16': 1.0.4
-      '@types/node': 25.8.0
+      '@types/node': 25.9.1
       acorn: 8.16.0
       acorn-walk: 8.3.5
       arg: 4.1.3
