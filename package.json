@@ -21,7 +21,7 @@
     "@commitlint/types": "^21.0.1",
     "@playwright/test": "^1.60.0",
     "@types/better-sqlite3": "^7.6.13",
-    "@types/node": "^25.9.1",
+    "@types/node": "^25.9.2",
     "@types/node-fetch": "^2.6.11",
     "@types/three": "^0.183.1",
     "commander": "^15.0.0",
