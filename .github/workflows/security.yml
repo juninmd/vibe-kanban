@@ -6,6 +6,9 @@ on:
   schedule:
     - cron: '0 0 * * 1' # Weekly scan on Mondays
 
+permissions:
+  contents: read
+
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
