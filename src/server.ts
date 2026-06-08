@@ -21,7 +21,9 @@ import { getAvailableTools } from "./providers.js";
 import { isEligibleForFallback, isCompleteProviderExhaustion, ModelAttempt } from "./utils/fallbackUtils.js";
 import { getToolingLandscape } from "./utils/toolingLandscape.js";
 import { enrichDemand } from "./utils/demandIntake.js";
+import { fetchLinearIssues } from "./utils/linearUtils.js";
 import { enrichContext } from "./utils/enrichment.js";
+import { generateProjectContext } from "./utils/projectContext.js";
 import { prepareWorktree, cleanupWorktree } from "./utils/worktreeUtils.js";
 import { callLLM } from "./utils/llmUtils.js";
 import { sendSlackNotification } from "./utils/slackUtils.js";
@@ -357,6 +359,18 @@ ${taskList}
 The following sibling tasks may be running concurrently. Do NOT duplicate their work:
 
 ${siblings}`;
+    }
+  }
+
+  // Project Context Generation
+  if (finalWorkDir) {
+    try {
+      const projectContextText = await generateProjectContext(finalWorkDir);
+      if (projectContextText) {
+        updatedTask.description = (updatedTask.description || "") + "\n\n" + projectContextText;
+      }
+    } catch (err: unknown) {
+      console.warn(`Project context generation failed for task #${task.id}:`, err);
     }
   }
 
@@ -1896,6 +1910,49 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
     autoAssign();
     addEvent("Orquestração manual executada via API.");
     return jsonResponse(res, 200, { ok: true });
+  }
+
+  // POST /api/integrations/linear/sync (Import issues from Linear)
+  if (url === "/api/integrations/linear/sync" && method === "POST") {
+    const body = await parseBody(req);
+    const apiKey = (body.apiKey as string) || process.env.LINEAR_API_KEY || "";
+    if (!apiKey) return jsonResponse(res, 400, { error: "Missing Linear API Key" });
+
+    try {
+      const issues = await fetchLinearIssues(apiKey);
+      let count = 0;
+      for (const issue of issues) {
+        if (!issue.title) continue;
+        const exists = DB.getTasks().find(t => t.description?.includes(issue.url) || t.title === issue.title);
+        if (!exists) {
+          let priority: Task["priority"] = "baixa";
+          if (issue.priority === 1) priority = "alta";
+          else if (issue.priority === 2) priority = "media";
+
+          DB.createTask({
+            title: issue.title,
+            source: "linear_integration",
+            category: "feature",
+            priority,
+            lane: "backlog",
+            assignedTo: null,
+            interrupted: false,
+            logs: [],
+            description: `${issue.description || ""}\n\nLinear: ${issue.url}`
+          });
+          count++;
+        }
+      }
+      addEvent(`[Linear Integration] Sincronizadas ${count} novas issues.`);
+      broadcastState();
+      return jsonResponse(res, 200, { ok: true, count });
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        console.error("Linear Sync error:", err.message);
+        return jsonResponse(res, 500, { error: err.message });
+      }
+      return jsonResponse(res, 500, { error: "Unknown error syncing Linear issues" });
+    }
   }
 
   // Reset
