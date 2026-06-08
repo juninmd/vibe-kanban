@@ -109,7 +109,7 @@ function initializeState(): State {
       { id: `agent-func`, role: "Novas Funcionalidades", model: "claude-3-5-sonnet-20241022", category: "feature", status: "idle", assignedTask: null, tool: "claude", terminalId: `term-func` },
       { id: `agent-test`, role: "Testes", model: "opencode", category: "test", status: "idle", assignedTask: null, tool: "opencode", terminalId: `term-test` },
       { id: `agent-bug`, role: "Correções", model: "codex", category: "bug", status: "idle", assignedTask: null, tool: "codex", terminalId: `term-bug` },
-      { id: `agent-feature`, role: "Novas features", model: "openai", category: "feature", status: "idle", assignedTask: null, tool: "openai", terminalId: `term-feature` }
+      { id: `agent-feature`, role: "Novas features", model: "gpt-4o", category: "feature", status: "idle", assignedTask: null, tool: "openai", terminalId: `term-feature` }
     ];
     for (const agent of defaultAgents) {
       DB.saveAgent(agent);
