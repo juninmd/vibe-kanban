@@ -2,6 +2,7 @@
   "name": "vibe-kanban",
   "packageManager": "pnpm@9.15.4",
   "version": "0.1.0",
+  "packageManager": "pnpm@9.15.9",
   "type": "module",
   "scripts": {
     "build": "tsc || exit 0",
@@ -22,7 +23,7 @@
     "@commitlint/types": "^21.0.1",
     "@playwright/test": "^1.60.0",
     "@types/better-sqlite3": "^7.6.13",
-    "@types/node": "^25.9.1",
+    "@types/node": "^25.9.2",
     "@types/node-fetch": "^2.6.11",
     "@types/three": "^0.183.1",
     "commander": "^15.0.0",
@@ -34,9 +35,9 @@
   "dependencies": {
     "@ai-sdk/google": "^3.0.80",
     "@ai-sdk/openai": "^3.0.67",
-    "@google/genai": "^2.3.0",
+    "@google/genai": "^2.8.0",
     "@opeoginni/github-copilot-openai-compatible": "^1.0.0",
-    "ai": "^6.0.174",
+    "ai": "^6.0.197",
     "better-sqlite3": "^12.10.0",
     "dotenv": "^17.4.2",
     "execa": "^9.6.0",
