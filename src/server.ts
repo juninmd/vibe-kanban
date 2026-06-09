@@ -1897,6 +1897,124 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
     return jsonResponse(res, 200, { ok: true });
   }
 
+
+  // POST /api/integrations/linear/sync
+  if (url === "/api/integrations/linear/sync" && method === "POST") {
+    const body = await parseBody(req);
+    const apiKey = body.LINEAR_API_KEY || process.env.LINEAR_API_KEY;
+    if (!apiKey) {
+      return jsonResponse(res, 400, { error: "LINEAR_API_KEY is required" });
+    }
+
+    try {
+      const response = await fetch("https://api.linear.app/graphql", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": String(apiKey)
+        },
+        body: JSON.stringify({
+          query: `
+            query {
+              issues(filter: { state: { type: { eq: "unstarted" } } }) {
+                nodes {
+                  title
+                  description
+                  priority
+                }
+              }
+            }
+          `
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Linear API error: ${response.statusText}`);
+      }
+
+      const data = await response.json() as any;
+      const issues = data?.data?.issues?.nodes || [];
+
+      let count = 0;
+      for (const issue of issues) {
+        let priority: "baixa" | "media" | "alta" = "media";
+        if (issue.priority === 1) priority = "alta";
+        if (issue.priority === 4) priority = "baixa";
+
+        DB.createTask({
+          title: issue.title,
+          source: "linear",
+          category: "feature",
+          priority: priority,
+          lane: "backlog",
+          description: issue.description || ""
+        });
+        count++;
+      }
+
+      addEvent(`[Linear] Sincronizou ${count} issues não iniciadas.`);
+      broadcastState();
+      return jsonResponse(res, 200, { ok: true, imported: count });
+    } catch (e: any) {
+      return jsonResponse(res, 500, { error: "Failed to sync with Linear", details: e.message });
+    }
+  }
+
+  // POST /api/webhooks/trufflehog
+  if (url === "/api/webhooks/trufflehog" && method === "POST") {
+    const body = await parseBody(req);
+
+    let description = "Vulnerability detected by Trufflehog.\n";
+    if (body.DetectorName) description += `Detector: ${body.DetectorName}\n`;
+    if (body.DecoderName) description += `Decoder: ${body.DecoderName}\n`;
+    if (body.Raw) description += `Secret: [REDACTED]\n`;
+    if ((body.SourceMetadata as any)?.Data?.Github?.file) description += `File: ${(body.SourceMetadata as any).Data.Github.file}\n`;
+    if ((body.SourceMetadata as any)?.Data?.Github?.commit) description += `Commit: ${(body.SourceMetadata as any).Data.Github.commit}\n`;
+
+    const title = `Trufflehog: ${body.DetectorName || "Secret"} vulnerability detected`;
+
+    DB.createTask({
+      title: title,
+      source: "trufflehog",
+      category: "security",
+      priority: "alta",
+      lane: "backlog",
+      description: description
+    });
+
+    addEvent(`[Trufflehog] Criada tarefa de segurança de alta prioridade.`);
+    broadcastState();
+    return jsonResponse(res, 200, { ok: true });
+  }
+
+  // GET /api/analytics
+  if (url === "/api/analytics" && method === "GET") {
+    const tasks = DB.getTasks();
+    const agents = DB.getAgents();
+
+    const taskDistribution: Record<string, number> = {};
+    const priorityDistribution: Record<string, number> = {};
+
+    tasks.forEach(task => {
+      taskDistribution[task.lane] = (taskDistribution[task.lane] || 0) + 1;
+      priorityDistribution[task.priority] = (priorityDistribution[task.priority] || 0) + 1;
+    });
+
+    const agentUtilization: Record<string, number> = {};
+    agents.forEach(agent => {
+      const assignedTasks = tasks.filter(t => t.assignedTo === agent.id).length;
+      agentUtilization[agent.id] = assignedTasks;
+    });
+
+    return jsonResponse(res, 200, {
+      taskDistribution,
+      priorityDistribution,
+      agentUtilization,
+      totalTasks: tasks.length,
+      totalAgents: agents.length
+    });
+  }
+
   // Reset
   if (url === "/api/reset" && method === "POST") {
     DB.reset();
