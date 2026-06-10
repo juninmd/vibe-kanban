@@ -1119,7 +1119,8 @@ function updateAgentColorBadge() {
     "Performance": "#475569",
     "Novas Funcionalidades": "#0284c7",
     "Testes": "#15803d",
-  "Correções": "#b91c1c"
+  "Correções": "#b91c1c",
+  "Novas features": "#9333ea"
   };
 
   els.agentColorBadge.style.background = roleColors[role] || "#888888";
@@ -1638,7 +1639,8 @@ function createAgentMesh(agent: Agent, index: number) {
     "Performance": "#475569",     // Slate
     "Novas Funcionalidades": "#0284c7", // Blue
     "Testes": "#15803d",          // Dark Green
-    "Correções": "#b91c1c"        // Red
+    "Correções": "#b91c1c",       // Red
+    "Novas features": "#9333ea"   // Purple
   };
   const color = new THREE.Color(roleColors[agent.role] || "#888888");
 

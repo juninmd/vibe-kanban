@@ -1,4 +1,4 @@
-﻿name: Validate
+name: Validate
 
 on:
   pull_request:
@@ -8,6 +8,9 @@ on:
 concurrency:
   group: validate-${{ github.ref }}
   cancel-in-progress: true
+
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 jobs:
   check:

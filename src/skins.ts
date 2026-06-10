@@ -21,12 +21,13 @@ function createTexture(width: number, height: number, drawFn: (ctx: CanvasRender
 }
 
 const roleColors: Record<string, string> = {
-    "Product Manager": "#111111", // Black turtleneck
-    "Segurança": "#1e3a8a",       // Navy Blue
-    "Performance": "#475569",     // Slate
-    "Novas Funcionalidades": "#0284c7", // Blue
-    "Testes": "#15803d",          // Dark Green
-    "Correções": "#b91c1c"        // Red
+    \"Product Manager\": \"#111111\", // Black turtleneck
+    \"Segurança\": \"#1e3a8a\",       // Navy Blue
+    \"Performance\": \"#475569\",     // Slate
+    \"Novas Funcionalidades\": \"#0284c7\", // Blue
+    \"Testes\": \"#15803d\",          // Dark Green
+    \"Correções\": \"#b91c1c\",       // Red
+    \"Novas features\": \"#8b5cf6\"   // Purple
 };
 
 export function getHeadMaterials(role: string): THREE.Material[] {
@@ -67,8 +68,8 @@ export function getHeadMaterials(role: string): THREE.Material[] {
     ];
 }
 
-export function getBodyMaterials(role: string, modelName?: string, badgeColorFallback: string = "#555555"): THREE.Material[] {
-    const primaryColor = "#1e293b";
+export function getBodyMaterials(role: string, modelName?: string, badgeColorFallback: string = \"#555555\"): THREE.Material[] {
+    const primaryColor = \"#1e293b\";
 
     const frontTex = createTexture(256, 256, (ctx) => {
         // Shirt base
@@ -85,9 +86,9 @@ export function getBodyMaterials(role: string, modelName?: string, badgeColorFal
             ctx.fillRect(128 - rectWidth / 2, rectY, rectWidth, rectHeight);
 
             // Text on chest
-            ctx.fillStyle = "#ffffff";
-            ctx.textAlign = "center";
-            ctx.textBaseline = "middle";
+            ctx.fillStyle = \"#ffffff\";
+            ctx.textAlign = \"center\";
+            ctx.textBaseline = \"middle\";
 
             const makeFont = (size: number) => `bold ${size}px Arial, sans-serif`;
 
@@ -101,8 +102,8 @@ export function getBodyMaterials(role: string, modelName?: string, badgeColorFal
 
                 // naive split
                 const mid = Math.floor(modelName.length / 2);
-                let splitIdx = modelName.lastIndexOf("-", mid);
-                if (splitIdx === -1) splitIdx = modelName.indexOf("-", mid);
+                let splitIdx = modelName.lastIndexOf(\"-\", mid);
+                if (splitIdx === -1) splitIdx = modelName.indexOf(\"-\", mid);
                 if (splitIdx === -1) splitIdx = mid;
 
                 const line1 = modelName.substring(0, splitIdx + 1);
