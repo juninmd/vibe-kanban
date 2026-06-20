@@ -37,7 +37,7 @@
     "@ai-sdk/openai": "^3.0.71",
     "@google/genai": "^2.8.0",
     "@opeoginni/github-copilot-openai-compatible": "^1.0.0",
-    "ai": "^6.0.204",
+    "ai": "^6.0.208",
     "better-sqlite3": "^12.10.0",
     "dotenv": "^17.4.2",
     "execa": "^9.6.0",
