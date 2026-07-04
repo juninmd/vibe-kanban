@@ -34,7 +34,7 @@
   },
   "dependencies": {
     "@ai-sdk/google": "^4.0.8",
-    "@ai-sdk/openai": "^3.0.73",
+    "@ai-sdk/openai": "^4.0.7",
     "@google/genai": "^2.8.0",
     "@opeoginni/github-copilot-openai-compatible": "^1.0.0",
     "ai": "^6.0.208",
