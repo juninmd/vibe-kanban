@@ -33,7 +33,7 @@
     "typescript": "5.4.5"
   },
   "dependencies": {
-    "@ai-sdk/google": "^3.0.83",
+    "@ai-sdk/google": "^4.0.8",
     "@ai-sdk/openai": "^3.0.73",
     "@google/genai": "^2.8.0",
     "@opeoginni/github-copilot-openai-compatible": "^1.0.0",
