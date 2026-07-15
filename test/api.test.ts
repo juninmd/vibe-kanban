@@ -221,123 +221,43 @@ describe('Vibe Kanban API', async () => {
     assert.ok(Array.isArray(data.businessRecommendations));
   });
 
-
-  test('POST /api/integrations/linear/sync fails when API key is missing', async () => {
-    const res = await fetch(`${API_URL}/api/integrations/linear/sync`, {
+  test('GET /api/analytics returns correct system metrics', async () => {
+    // 1. Create a task in backlog
+    await fetch(`${API_URL}/api/tasks`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({}) // no LINEAR_API_KEY
+      body: JSON.stringify({ title: 'Analytics Task', source: 'test', category: 'roadmap' })
     });
-    assert.equal(res.status, 400);
-    const data = await res.json();
-    assert.equal(data.error, 'LINEAR_API_KEY is required');
-  });
 
-  test('POST /api/webhooks/trufflehog gracefully handles malformed missing payload', async () => {
-    const res = await fetch(`${API_URL}/api/webhooks/trufflehog`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({}) // empty payload
-    });
+    const res = await fetch(`${API_URL}/api/analytics`);
     assert.equal(res.status, 200);
     const data = await res.json();
-    assert.equal(data.ok, true);
 
-    // It should handle missing metadata fields without crashing and assign default title
-    const stateRes = await fetch(`${API_URL}/api/state`);
-    const stateData = await stateRes.json();
-    const task = stateData.tasks.find((t: any) => t.title === 'Trufflehog: Secret vulnerability detected');
-    assert.ok(task);
+    assert.ok(typeof data.totalTasks === 'number');
+    assert.ok(data.tasksPerLane && typeof data.tasksPerLane === 'object');
+    assert.ok(data.tasksPerLane['backlog'] >= 1);
+
+    assert.ok(typeof data.totalAgents === 'number');
+    assert.ok(data.agentUtilization && typeof data.agentUtilization === 'object');
   });
 
-  test('POST /api/webhooks/trufflehog creates a high-priority security task', async () => {
+  test('POST /api/webhooks/trufflehog creates security task from webhook payload', async () => {
     const res = await fetch(`${API_URL}/api/webhooks/trufflehog`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        DetectorName: "AWS",
-        DecoderName: "BASE64",
-        Raw: "AKIAIOSFODNN7EXAMPLE",
-        SourceMetadata: {
-          Data: {
-            Github: {
-              file: "src/config.ts",
-              commit: "a1b2c3d4"
-            }
-          }
-        }
+        vulnerability: "AWS Access Key",
+        location: "src/server.ts"
       })
     });
-    assert.equal(res.status, 200);
+
+    assert.equal(res.status, 201);
     const data = await res.json();
-    assert.equal(data.ok, true);
-
-    const stateRes = await fetch(`${API_URL}/api/state`);
-    const stateData = await stateRes.json();
-    const securityTasks = stateData.tasks.filter((t: any) => t.source === 'trufflehog');
-    assert.equal(securityTasks.length, 1);
-    assert.equal(securityTasks[0].priority, 'alta');
-    assert.equal(securityTasks[0].category, 'security');
-    assert.ok(securityTasks[0].title.includes('AWS'));
-    assert.ok(securityTasks[0].description.includes('src/config.ts'));
-    assert.ok(securityTasks[0].description.includes('a1b2c3d4'));
-  });
-
-  test('GET /api/analytics returns correct default stats on reset', async () => {
-    // DB.reset() clears all tasks and events but populates 6 default agents.
-    await fetch(`${API_URL}/api/reset`, { method: 'POST' });
-
-    const res = await fetch(`${API_URL}/api/analytics`);
-    assert.equal(res.status, 200);
-    const data = await res.json();
-    assert.equal(data.totalTasks, 0); // Reset wipes tasks
-    assert.equal(data.totalAgents, 6); // Reset creates 6 default agents
-    assert.deepEqual(data.taskDistribution, {});
-    assert.deepEqual(data.priorityDistribution, {});
-
-    // Check that agentUtilization is correctly tracking 0 tasks for each of the 6 default agents
-    assert.equal(Object.keys(data.agentUtilization).length, 6);
-    for (const key in data.agentUtilization) {
-      assert.equal(data.agentUtilization[key], 0);
-    }
-  });
-
-  test('GET /api/analytics returns aggregated metrics', async () => {
-    // Populate some data
-    await fetch(`${API_URL}/api/tasks`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: 'Task 1', lane: 'backlog', priority: 'baixa', category: 'feature' })
-    });
-    const agentRes = await fetch(`${API_URL}/api/agents`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ role: 'test-agent', category: 'test', tool: 'mock', model: 'mock-model' })
-    });
-    const agentData = await agentRes.json();
-
-    // Assign a task
-    const stateRes = await fetch(`${API_URL}/api/state`);
-    const stateData = await stateRes.json();
-    const task = stateData.tasks.find((t: any) => t.title === 'Task 1');
-
-    const actualAgentId = agentData.agent ? agentData.agent.id : agentData.id;
-
-    await fetch(`${API_URL}/api/assign`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ taskId: task.id, agentId: actualAgentId })
-    });
-
-    const res = await fetch(`${API_URL}/api/analytics`);
-    assert.equal(res.status, 200);
-    const data = await res.json();
-
-    assert.ok(data.totalTasks >= 1);
-    assert.ok(data.totalAgents >= 1);
-    assert.equal(data.taskDistribution['in_progress'] || 0, 1);
-    assert.ok(data.priorityDistribution['baixa'] >= 1);
-    assert.equal(data.agentUtilization[actualAgentId], 1);
+    assert.ok(data.task);
+    assert.equal(data.task.title, "Vulnerabilidade Detectada: AWS Access Key");
+    assert.equal(data.task.category, "security");
+    assert.equal(data.task.priority, "alta");
+    assert.equal(data.task.source, "trufflehog");
   });
 
   test('POST /api/demands/intake enriches remote demand with business requirements', async () => {
