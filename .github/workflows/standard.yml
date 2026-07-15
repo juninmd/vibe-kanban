@@ -1,0 +1,36 @@
+name: Standard CI/CD
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  gitleaks:
+    uses: juninmd/github-actions-base/.github/workflows/gitleaks.yml@main
+  commit-lint:
+    uses: juninmd/github-actions-base/.github/workflows/commit-lint.yml@main
+  build:
+    uses: juninmd/github-actions-base/.github/workflows/node-ci.yml@main
+    with:
+      run-typecheck: false
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      - uses: pnpm/action-setup@26f6d4f2c533a43e6b5da0b4a5dd983f98f7b49a
+        with:
+          version: 9
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: 20
+          cache: 'pnpm'
+      - run: pnpm install
+      - run: pnpm run typecheck
+  release:
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    needs: [build, gitleaks]
+    uses: juninmd/github-actions-base/.github/workflows/release.yml@main
+    secrets: inherit

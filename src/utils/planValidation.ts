@@ -52,12 +52,7 @@ export function detectDependencyCycles(tasks: GeneratedTask[]): string[] | null 
   for (const task of tasks) {
     if (typeof task.order === "number" && task.dependsOn && Array.isArray(task.dependsOn)) {
       for (const dep of task.dependsOn) {
-        if (!adjacency.has(dep)) {
-          // If the dependency points to an unknown node, we can either
-          // ignore it or handle it. Based on lisa's implementation,
-          // we only process valid internal dependencies:
-          continue;
-        }
+        if (!adjacency.has(dep)) continue; // skip unknown dependencies
         adjacency.get(dep)!.push(task.order);
         inDegree.set(task.order, (inDegree.get(task.order) ?? 0) + 1);
       }
@@ -82,7 +77,8 @@ export function detectDependencyCycles(tasks: GeneratedTask[]): string[] | null 
   }
 
   // If not all nodes were sorted, cycles exist
-  if (sorted.length === tasks.length) return null;
+  const totalNodesWithOrder = Array.from(taskByOrder.keys()).length;
+  if (sorted.length === totalNodesWithOrder) return null;
 
   // Identify nodes involved in cycles
   const sortedSet = new Set(sorted);
@@ -91,57 +87,6 @@ export function detectDependencyCycles(tasks: GeneratedTask[]): string[] | null 
     .map((t) => `#${t.order} "${t.title}"`);
 
   return [`Circular dependency involving: ${cycleNodes.join(" -> ")}`];
-}
-
-/**
- * Group tasks into execution waves based on dependencies.
- * Tasks in the same wave can be executed in parallel.
- * Implements the LISA project's buildExecutionWaves defensive algorithm.
- */
-export function buildExecutionWaves(tasks: GeneratedTask[]): GeneratedTask[][] {
-  if (tasks.length === 0) return [];
-
-  const taskByOrder = new Map<number, GeneratedTask>();
-  const remaining = new Map<number, Set<number>>();
-
-  for (const task of tasks) {
-    if (typeof task.order === "number") {
-      taskByOrder.set(task.order, task);
-      const deps = task.dependsOn && Array.isArray(task.dependsOn) ? task.dependsOn : [];
-      remaining.set(task.order, new Set(deps));
-    }
-  }
-
-  const waves: number[][] = [];
-
-  while (remaining.size > 0) {
-    const wave: number[] = [];
-    for (const [order, deps] of remaining) {
-      if (deps.size === 0) {
-        wave.push(order);
-      }
-    }
-
-    if (wave.length === 0) {
-      waves.push([...remaining.keys()].sort((a, b) => a - b));
-      break;
-    }
-
-    wave.sort((a, b) => a - b);
-    waves.push(wave);
-
-    const assigned = new Set(wave);
-    for (const order of wave) {
-      remaining.delete(order);
-    }
-    for (const deps of remaining.values()) {
-      for (const a of assigned) {
-        deps.delete(a);
-      }
-    }
-  }
-
-  return waves.map(wave => wave.map(order => taskByOrder.get(order)!));
 }
 
 /**
@@ -154,13 +99,14 @@ export function detectFileOverlaps(
   const fileMap = new Map<string, number[]>();
 
   for (const task of tasks) {
-    if (typeof task.order !== "number" || !Array.isArray(task.relevantFiles)) continue;
-    for (const file of task.relevantFiles) {
-      const existing = fileMap.get(file);
-      if (existing) {
-        existing.push(task.order);
-      } else {
-        fileMap.set(file, [task.order]);
+    if (typeof task.order === "number" && task.relevantFiles && Array.isArray(task.relevantFiles)) {
+      for (const file of task.relevantFiles) {
+        const existing = fileMap.get(file);
+        if (existing) {
+          existing.push(task.order);
+        } else {
+          fileMap.set(file, [task.order]);
+        }
       }
     }
   }

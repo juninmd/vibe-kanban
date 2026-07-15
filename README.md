@@ -97,4 +97,4 @@ curl -X POST http://localhost:5174/api/demands/intake \
 3. [x] Execução real de agentes via CLIs/SDKs (sem drivers de simulação).
 4. WebSocket para atualizações em tempo real multiusuário (atualmente usa SSE).
 5. Simulação de movimento no espaço 3D com animação por pathfinding (atualmente interpolação simples).
-6. [x] Integração com backlog externo (GitHub/Jira/Linear).
+6. Integração com backlog externo (GitHub/Jira/Linear).
