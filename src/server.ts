@@ -1,3 +1,4 @@
+import { fetchLinearIssues } from "./utils/linearUtils.js";
 import { detectDependencyCycles, detectFileOverlaps, GeneratedTask, buildPlanValidationPrompt, parsePlanValidationResponse } from "./utils/planValidation.js";
 import { createServer, ServerResponse, IncomingMessage } from "http";
 import * as fs from "fs";
@@ -1928,6 +1929,50 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
     autoAssign();
     addEvent("Orquestração manual executada via API.");
     return jsonResponse(res, 200, { ok: true });
+  }
+
+  // POST /api/integrations/linear/sync
+  if (url === "/api/integrations/linear/sync" && method === "POST") {
+    try {
+      const body = await parseBody(req);
+      const apiKey = body.apiKey || process.env.LINEAR_API_KEY;
+
+      if (!apiKey || typeof apiKey !== 'string') {
+        return jsonResponse(res, 400, { error: "LINEAR_API_KEY is required" });
+      }
+
+      const issues = await fetchLinearIssues(apiKey);
+      let count = 0;
+
+      for (const issue of issues) {
+        if (issue && issue.id && issue.title) {
+          DB.createTask({
+            title: `[Linear] ${issue.title}`,
+            source: "linear",
+            category: "feature",
+            priority: issue.priority === 1 ? "alta" : (issue.priority === 2 ? "media" : "baixa"),
+            lane: "backlog",
+            assignedTo: null,
+            interrupted: false,
+            logs: [],
+            description: issue.description ? issue.description + `
+
+Linear URL: ${issue.url || ''}` : `Linear URL: ${issue.url || ''}`
+          });
+          count++;
+        }
+      }
+
+      if (count > 0) {
+        addEvent(`Sincronizados ${count} cards do Linear.`);
+        broadcastState();
+      }
+
+      return jsonResponse(res, 200, { syncedTasks: count });
+    } catch (e: unknown) {
+      const errorMessage = e instanceof Error ? e.message : String(e);
+      return jsonResponse(res, 500, { error: errorMessage });
+    }
   }
 
   // Reset
