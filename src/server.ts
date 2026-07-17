@@ -1,4 +1,5 @@
 import { fetchLinearIssues } from "./utils/linearUtils.js";
+import { fetchJiraIssues } from "./utils/jiraUtils.js";
 import { detectDependencyCycles, detectFileOverlaps, GeneratedTask, buildPlanValidationPrompt, parsePlanValidationResponse } from "./utils/planValidation.js";
 import { createServer, ServerResponse, IncomingMessage } from "http";
 import * as fs from "fs";
@@ -1552,6 +1553,55 @@ Return ONLY a JSON array with this structure:
     req.on("close", () => {
       clients = clients.filter(c => c.id !== clientId);
     });
+    return;
+  }
+
+  // POST /api/integrations/jira/sync
+  if (url === "/api/integrations/jira/sync" && method === "POST") {
+    try {
+      const body = await parseBody(req);
+      const domain = body.domain || process.env.JIRA_DOMAIN;
+      const email = body.email || process.env.JIRA_EMAIL;
+      const apiToken = body.apiToken || process.env.JIRA_API_TOKEN;
+
+      if (!domain || !email || !apiToken) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        return res.end(JSON.stringify({ error: "JIRA_DOMAIN, JIRA_EMAIL, and JIRA_API_TOKEN are required" }));
+      }
+
+      const issues = await fetchJiraIssues(domain, email, apiToken);
+      let count = 0;
+      for (const issue of issues) {
+        const title = issue.fields?.summary || issue.key;
+        const existing = DB.getTasks().find(t => t.title.includes(title));
+        if (!existing) {
+          const description = issue.fields?.description?.content?.[0]?.content?.[0]?.text || `Synchronized from Jira: ${issue.key}`;
+          const priorityName = issue.fields?.priority?.name?.toLowerCase() || 'medium';
+
+          let mappedPriority: "baixa" | "media" | "alta" = "media";
+          if (priorityName.includes('high') || priorityName.includes('highest')) mappedPriority = "alta";
+          if (priorityName.includes('low') || priorityName.includes('lowest')) mappedPriority = "baixa";
+
+          DB.createTask({
+            title: `[Jira] ${title}`,
+            description: description,
+            category: "feature", // default
+            priority: mappedPriority,
+            source: "jira",
+            lane: "backlog"
+          });
+          count++;
+        }
+      }
+
+      addEvent(`[Jira] Sincronizou ${count} novas issues para o backlog`);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ success: true, synced: count }));
+    } catch (e: any) {
+      console.error(e);
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Sync failed" }));
+    }
     return;
   }
 
