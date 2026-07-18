@@ -1,5 +1,6 @@
 import { fetchLinearIssues } from "./utils/linearUtils.js";
 import { fetchJiraIssues } from "./utils/jiraUtils.js";
+import { fetchClickupTasks } from "./utils/clickupUtils.js";
 import { detectDependencyCycles, detectFileOverlaps, GeneratedTask, buildPlanValidationPrompt, parsePlanValidationResponse } from "./utils/planValidation.js";
 import { createServer, ServerResponse, IncomingMessage } from "http";
 import * as fs from "fs";
@@ -1564,7 +1565,7 @@ Return ONLY a JSON array with this structure:
       const email = body.email || process.env.JIRA_EMAIL;
       const apiToken = body.apiToken || process.env.JIRA_API_TOKEN;
 
-      if (!domain || !email || !apiToken) {
+      if (!domain || !email || !apiToken || typeof domain !== 'string' || typeof email !== 'string' || typeof apiToken !== 'string') {
         res.writeHead(400, { "Content-Type": "application/json" });
         return res.end(JSON.stringify({ error: "JIRA_DOMAIN, JIRA_EMAIL, and JIRA_API_TOKEN are required" }));
       }
@@ -1979,6 +1980,49 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
     autoAssign();
     addEvent("Orquestração manual executada via API.");
     return jsonResponse(res, 200, { ok: true });
+  }
+
+  // POST /api/integrations/clickup/sync
+  if (url === "/api/integrations/clickup/sync" && method === "POST") {
+    try {
+      const body = await parseBody(req);
+      const listId = body.listId || process.env.CLICKUP_LIST_ID;
+      const apiToken = body.apiToken || process.env.CLICKUP_API_TOKEN;
+
+      if (!listId || !apiToken || typeof listId !== 'string' || typeof apiToken !== 'string') {
+        return jsonResponse(res, 400, { error: "CLICKUP_LIST_ID and CLICKUP_API_TOKEN are required" });
+      }
+
+      const tasks = await fetchClickupTasks(listId, apiToken);
+      let count = 0;
+
+      for (const task of tasks) {
+        if (task && task.id && task.name) {
+          DB.createTask({
+            title: `[ClickUp] ${task.name}`,
+            source: "clickup",
+            category: "feature",
+            priority: task.priority?.priority === 'high' ? 'alta' : (task.priority?.priority === 'low' ? 'baixa' : 'media'),
+            lane: "backlog",
+            assignedTo: null,
+            interrupted: false,
+            logs: [],
+            description: task.description ? task.description + `\n\nClickUp URL: ${task.url || ''}` : `ClickUp URL: ${task.url || ''}`
+          });
+          count++;
+        }
+      }
+
+      if (count > 0) {
+        addEvent(`Sincronizados ${count} cards do ClickUp.`);
+        broadcastState();
+      }
+
+      return jsonResponse(res, 200, { syncedTasks: count });
+    } catch (e: unknown) {
+      const errorMessage = e instanceof Error ? e.message : String(e);
+      return jsonResponse(res, 500, { error: errorMessage });
+    }
   }
 
   // POST /api/integrations/linear/sync

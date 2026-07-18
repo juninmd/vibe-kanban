@@ -282,6 +282,17 @@ describe('Vibe Kanban API', async () => {
     assert.equal(data.error, "JIRA_DOMAIN, JIRA_EMAIL, and JIRA_API_TOKEN are required");
   });
 
+  test('POST /api/integrations/clickup/sync fails with 400 if missing data', async () => {
+    const res = await fetch(`${API_URL}/api/integrations/clickup/sync`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}) // Missing listId, token
+    });
+    assert.equal(res.status, 400);
+    const data = await res.json();
+    assert.equal(data.error, "CLICKUP_LIST_ID and CLICKUP_API_TOKEN are required");
+  });
+
   test('POST /api/demands/intake enriches remote demand with business requirements', async () => {
     const res = await fetch(`${API_URL}/api/demands/intake`, {
       method: 'POST',
