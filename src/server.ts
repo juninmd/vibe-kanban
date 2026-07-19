@@ -1,6 +1,7 @@
 import { fetchLinearIssues } from "./utils/linearUtils.js";
 import { fetchJiraIssues } from "./utils/jiraUtils.js";
 import { fetchClickupTasks } from "./utils/clickupUtils.js";
+import { fetchMondayTasks } from "./utils/mondayUtils.js";
 import { detectDependencyCycles, detectFileOverlaps, GeneratedTask, buildPlanValidationPrompt, parsePlanValidationResponse } from "./utils/planValidation.js";
 import { createServer, ServerResponse, IncomingMessage } from "http";
 import * as fs from "fs";
@@ -1980,6 +1981,49 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
     autoAssign();
     addEvent("Orquestração manual executada via API.");
     return jsonResponse(res, 200, { ok: true });
+  }
+
+  // POST /api/integrations/monday/sync
+  if (url === "/api/integrations/monday/sync" && method === "POST") {
+    try {
+      const body = await parseBody(req);
+      const boardId = body.boardId || process.env.MONDAY_BOARD_ID;
+      const apiToken = body.apiToken || process.env.MONDAY_API_TOKEN;
+
+      if (!boardId || !apiToken || typeof boardId !== 'string' || typeof apiToken !== 'string') {
+        return jsonResponse(res, 400, { error: "MONDAY_BOARD_ID and MONDAY_API_TOKEN are required" });
+      }
+
+      const tasks = await fetchMondayTasks(boardId, apiToken);
+      let count = 0;
+
+      for (const task of tasks) {
+        if (task && task.id && task.name) {
+          DB.createTask({
+            title: `[Monday] ${task.name}`,
+            source: "monday",
+            category: "feature",
+            priority: "media",
+            lane: "backlog",
+            assignedTo: null,
+            interrupted: false,
+            logs: [],
+            description: `Monday.com Item ID: ${task.id}`
+          });
+          count++;
+        }
+      }
+
+      if (count > 0) {
+        addEvent(`Sincronizados ${count} cards do Monday.com.`);
+        broadcastState();
+      }
+
+      return jsonResponse(res, 200, { syncedTasks: count });
+    } catch (e: unknown) {
+      const errorMessage = e instanceof Error ? e.message : String(e);
+      return jsonResponse(res, 500, { error: errorMessage });
+    }
   }
 
   // POST /api/integrations/clickup/sync
