@@ -260,6 +260,27 @@ describe('Vibe Kanban API', async () => {
     assert.equal(data.task.source, "trufflehog");
   });
 
+  test('POST /api/webhooks/sentry creates bug task from webhook payload', async () => {
+    const res = await fetch(`${API_URL}/api/webhooks/sentry`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: "ReferenceError: require is not defined",
+        project_name: "vibe-kanban",
+        culprit: "src/server.ts",
+        url: "https://sentry.io/organizations/vibe/issues/12345/"
+      })
+    });
+
+    assert.equal(res.status, 201);
+    const data = await res.json();
+    assert.ok(data.success);
+    assert.ok(data.task);
+    assert.equal(data.task.category, "bug");
+    assert.equal(data.task.priority, "alta");
+    assert.equal(data.task.source, "sentry");
+  });
+
   test('POST /api/integrations/linear/sync syncs Linear issues', async () => {
     const res = await fetch(`${API_URL}/api/integrations/linear/sync`, {
       method: 'POST',

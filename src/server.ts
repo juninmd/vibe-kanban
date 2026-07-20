@@ -2069,6 +2069,40 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
     }
   }
 
+  // POST /api/webhooks/sentry
+  if (url === "/api/webhooks/sentry" && method === "POST") {
+    try {
+      const body = await parseBody(req);
+      const message = (body as any)?.message || "Erro desconhecido";
+      const project = (body as any)?.project_name || "Projeto Desconhecido";
+      const culprit = (body as any)?.culprit || "Local desconhecido";
+      const issueUrl = (body as any)?.url || "";
+
+      const title = `Erro em ${project}: ${message}`;
+      const description = `Detectado pelo Sentry.\n\nLocal: ${culprit}\nURL: ${issueUrl}\n\nDetalhes:\n${JSON.stringify(body, null, 2)}`;
+
+      const task = DB.createTask({
+        title,
+        source: "sentry",
+        category: "bug",
+        priority: "alta",
+        lane: "backlog",
+        assignedTo: null,
+        interrupted: false,
+        logs: [],
+        description
+      });
+
+      addEvent(`[Bug] Novo erro reportado via Sentry: ${task.title}`);
+      sendSlackNotification(process.env.SLACK_WEBHOOK_URL || "", `🐞 [Bug] ${task.title}`);
+
+      return jsonResponse(res, 201, { success: true, task });
+    } catch (e) {
+      console.error("Sentry webhook error:", e);
+      return jsonResponse(res, 500, { error: "Failed to process webhook" });
+    }
+  }
+
   // POST /api/integrations/linear/sync
   if (url === "/api/integrations/linear/sync" && method === "POST") {
     try {
