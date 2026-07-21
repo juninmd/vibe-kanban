@@ -2,6 +2,7 @@ import { fetchLinearIssues } from "./utils/linearUtils.js";
 import { fetchJiraIssues } from "./utils/jiraUtils.js";
 import { fetchClickupTasks } from "./utils/clickupUtils.js";
 import { fetchMondayTasks } from "./utils/mondayUtils.js";
+import { fetchNotionTasks } from "./utils/notionUtils.js";
 import { detectDependencyCycles, detectFileOverlaps, GeneratedTask, buildPlanValidationPrompt, parsePlanValidationResponse } from "./utils/planValidation.js";
 import { createServer, ServerResponse, IncomingMessage } from "http";
 import * as fs from "fs";
@@ -2100,6 +2101,50 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
     } catch (e) {
       console.error("Sentry webhook error:", e);
       return jsonResponse(res, 500, { error: "Failed to process webhook" });
+    }
+  }
+
+  // POST /api/integrations/notion/sync
+  if (url === "/api/integrations/notion/sync" && method === "POST") {
+    try {
+      const body = await parseBody(req);
+      const databaseId = body.databaseId || process.env.NOTION_DATABASE_ID;
+      const apiToken = body.apiToken || process.env.NOTION_API_TOKEN;
+
+      if (!databaseId || !apiToken || typeof databaseId !== 'string' || typeof apiToken !== 'string') {
+        return jsonResponse(res, 400, { error: "NOTION_DATABASE_ID and NOTION_API_TOKEN are required" });
+      }
+
+      const tasks = await fetchNotionTasks(databaseId, apiToken);
+      let count = 0;
+
+      for (const task of tasks) {
+        if (task && task.id) {
+          const title = task.properties?.Name?.title?.[0]?.plain_text || task.id;
+          DB.createTask({
+            title: `[Notion] ${title}`,
+            source: "notion",
+            category: "feature",
+            priority: "media", // Defaulting to medium as Notion properties can vary greatly
+            lane: "backlog",
+            assignedTo: null,
+            interrupted: false,
+            logs: [],
+            description: `Notion Item ID: ${task.id}\nURL: ${task.url || ''}`
+          });
+          count++;
+        }
+      }
+
+      if (count > 0) {
+        addEvent(`Sincronizados ${count} cards do Notion.`);
+        broadcastState();
+      }
+
+      return jsonResponse(res, 200, { syncedTasks: count });
+    } catch (e: unknown) {
+      const errorMessage = e instanceof Error ? e.message : String(e);
+      return jsonResponse(res, 500, { error: errorMessage });
     }
   }
 
