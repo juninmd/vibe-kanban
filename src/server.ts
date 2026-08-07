@@ -3,6 +3,7 @@ import { fetchJiraIssues } from "./utils/jiraUtils.js";
 import { fetchClickupTasks } from "./utils/clickupUtils.js";
 import { fetchMondayTasks } from "./utils/mondayUtils.js";
 import { fetchNotionTasks } from "./utils/notionUtils.js";
+import { fetchFigmaComments } from "./utils/figmaUtils.js";
 import { detectDependencyCycles, detectFileOverlaps, GeneratedTask, buildPlanValidationPrompt, parsePlanValidationResponse } from "./utils/planValidation.js";
 import { createServer, ServerResponse, IncomingMessage } from "http";
 import * as fs from "fs";
@@ -2101,6 +2102,46 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
     } catch (e) {
       console.error("Sentry webhook error:", e);
       return jsonResponse(res, 500, { error: "Failed to process webhook" });
+    }
+  }
+
+  // POST /api/integrations/figma/sync
+  if (url === "/api/integrations/figma/sync" && method === "POST") {
+    try {
+      const body = await parseBody(req);
+      const fileKey = body.fileKey || process.env.FIGMA_FILE_KEY;
+      const apiToken = body.apiToken || process.env.FIGMA_API_TOKEN;
+
+      if (!fileKey || !apiToken || typeof fileKey !== 'string' || typeof apiToken !== 'string') {
+        return jsonResponse(res, 400, { error: "FIGMA_FILE_KEY and FIGMA_API_TOKEN are required" });
+      }
+
+      const comments = await fetchFigmaComments(fileKey, apiToken);
+      let count = 0;
+
+      for (const comment of comments) {
+        if (comment && comment.id && comment.message) {
+          const userName = comment.user?.handle || 'Unknown User';
+          DB.createTask({
+            title: `[Figma] Comment by ${userName}`,
+            source: "figma",
+            category: "feature",
+            priority: "media",
+            lane: "backlog",
+            assignedTo: null,
+            interrupted: false,
+            logs: [],
+            description: `Figma Comment:\n\n${comment.message}`
+          });
+          count++;
+        }
+      }
+
+      addEvent(`[Figma Sync] Importou ${count} comentários como tarefas.`);
+      return jsonResponse(res, 200, { message: `Imported ${count} tasks from Figma` });
+    } catch (e: any) {
+      console.error("Figma sync error:", e);
+      return jsonResponse(res, 500, { error: e.message || "Failed to sync with Figma" });
     }
   }
 
