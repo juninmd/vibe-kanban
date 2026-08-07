@@ -981,12 +981,26 @@ async function generateRoadmapTasks() {
   const existingAgents = DB.getAgents();
   const roles = existingAgents.map(a => a.role).join(", ") || "Nenhum agente configurado";
 
+  let codegenDocs = "";
+  try {
+    const res = await fetch("https://docs.codegen.com/introduction/overview");
+    if (res.ok) {
+      const html = await res.text();
+      // Remove HTML tags to get plain text, keeping it somewhat clean
+      codegenDocs = html.replace(/<[^>]*>?/gm, ' ').replace(/\s+/g, ' ').substring(0, 4000);
+    }
+  } catch (err) {
+    console.warn("PM: Failed to fetch codegen docs", err);
+  }
+
   const prompt = `You are a Product Manager for "Vibe Kanban 3D", a 3D Task Orchestrator with AI agents.
 Current agents: ${roles}.
 Categories: "roadmap", "security", "performance", "feature", "test", "bug".
 Priorities: "alta", "media", "baixa".
-Generate 1 new feature task inspired by https://docs.codegen.com/introduction/overview as roadmap of development.
-The category must be "feature". Return ONLY a JSON array: [{"title":"...","category":"feature","priority":"...","description":"..."}]`;
+Generate 1 new feature task inspired by the following documentation overview of Codegen:
+${codegenDocs}
+
+As roadmap of development, the category must be "feature". Return ONLY a JSON array: [{"title":"...","category":"feature","priority":"...","description":"..."}]`;
 
   const processTasks = (raw: string) => {
     try {
