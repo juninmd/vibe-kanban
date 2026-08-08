@@ -260,6 +260,55 @@ describe('Vibe Kanban API', async () => {
     assert.equal(data.task.source, "trufflehog");
   });
 
+  test('POST /api/webhooks/slack creates feature task from slack event', async () => {
+
+    const stateRes = await fetch("http://localhost:5174/api/state");
+    const state = await stateRes.json();
+    const beforeCount = state.tasks.length;
+
+     // Get initial count since DB.reset() populates defaults
+
+    // First, test the URL verification challenge
+    const resVerify = await fetch("http://localhost:5174/api/webhooks/slack", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "url_verification", challenge: "test_challenge" })
+    });
+
+    assert.strictEqual(resVerify.status, 200);
+    const verifyData = await resVerify.json();
+    assert.strictEqual(verifyData.challenge, "test_challenge");
+
+    // Second, test a regular message event
+    const resMessage = await fetch("http://localhost:5174/api/webhooks/slack", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        event: {
+          type: "message",
+          user: "U12345",
+          text: "Implement codegen feature",
+          bot_id: undefined
+        }
+      })
+    });
+
+    assert.strictEqual(resMessage.status, 200);
+    const messageData = await resMessage.json();
+    assert.strictEqual(messageData.ok, true);
+
+
+    const stateResAfter = await fetch("http://localhost:5174/api/state");
+    const stateAfter = await stateResAfter.json();
+    const tasks = stateAfter.tasks;
+
+    const newTasks = tasks.slice(beforeCount);
+    assert.strictEqual(newTasks.length, 1);
+    assert.strictEqual(newTasks[0].source, "slack");
+    assert.strictEqual(newTasks[0].category, "feature");
+    assert.match(newTasks[0].title, /Mensagem de Slack:/);
+  });
+
   test('POST /api/webhooks/sentry creates bug task from webhook payload', async () => {
     const res = await fetch(`${API_URL}/api/webhooks/sentry`, {
       method: 'POST',

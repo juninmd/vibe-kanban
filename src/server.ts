@@ -2085,6 +2085,42 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
     }
   }
 
+  // POST /api/webhooks/slack
+  if (url === "/api/webhooks/slack" && method === "POST") {
+    try {
+      const body = await parseBody(req);
+
+      // Handle URL verification challenge for Slack Event API
+      if ((body as any).type === "url_verification") {
+        return jsonResponse(res, 200, { challenge: (body as any).challenge });
+      }
+
+      const event = (body as any).event;
+      if (event && event.type === "message" && !event.bot_id) {
+        const text = event.text || "Sem descrição";
+        const user = event.user || "Usuário desconhecido";
+
+        DB.createTask({
+          title: `Mensagem de Slack: ${text.substring(0, 30)}...`,
+          source: "slack",
+          category: "feature",
+          priority: "media",
+          lane: "backlog",
+          assignedTo: null,
+          interrupted: false,
+          logs: [],
+          description: `Mensagem enviada por ${user} no Slack:\n\n${text}`
+        });
+        addEvent(`[Slack] Nova tarefa criada a partir de mensagem de ${user}.`);
+      }
+
+      return jsonResponse(res, 200, { ok: true });
+    } catch (e: unknown) {
+      const errorMsg = e instanceof Error ? e.message : String(e);
+      return jsonResponse(res, 500, { error: errorMsg });
+    }
+  }
+
   // POST /api/webhooks/sentry
   if (url === "/api/webhooks/sentry" && method === "POST") {
     try {
