@@ -2121,6 +2121,45 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
     }
   }
 
+  // POST /api/webhooks/circleci
+  if (url === "/api/webhooks/circleci" && method === "POST") {
+    try {
+      const body = await parseBody(req);
+      const payload = (body as any)?.payload || body;
+      const status = payload?.status || payload?.outcome || "failed";
+      const reponame = payload?.reponame || payload?.project_name || "Projeto Desconhecido";
+      const buildNum = payload?.build_num || "Desconhecido";
+      const buildUrl = payload?.build_url || "";
+
+      if (status === "failed" || status === "error") {
+        const title = `Falha no CircleCI: ${reponame} (#${buildNum})`;
+        const description = `Detectado pelo Webhook do CircleCI.\n\nBuild URL: ${buildUrl}\nStatus: ${status}\n\nDetalhes:\n${JSON.stringify(payload, null, 2)}`;
+
+        const task = DB.createTask({
+          title,
+          source: "circleci",
+          category: "bug",
+          priority: "alta",
+          lane: "backlog",
+          assignedTo: null,
+          interrupted: false,
+          logs: [],
+          description
+        });
+
+        addEvent(`[CI] Falha no CircleCI reportada: ${task.title}`);
+        sendSlackNotification(process.env.SLACK_WEBHOOK_URL || "", `🚨 [CI] ${task.title}`);
+
+        return jsonResponse(res, 201, { success: true, task });
+      }
+
+      return jsonResponse(res, 200, { success: true });
+    } catch (e) {
+      console.error("CircleCI webhook error:", e);
+      return jsonResponse(res, 500, { error: "Failed to process webhook" });
+    }
+  }
+
   // POST /api/webhooks/sentry
   if (url === "/api/webhooks/sentry" && method === "POST") {
     try {
