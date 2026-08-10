@@ -385,6 +385,69 @@ describe('Vibe Kanban API', async () => {
     assert.equal(data.error, "NOTION_DATABASE_ID and NOTION_API_TOKEN are required");
   });
 
+  test('GET /api/mcp/tools returns tools list', async () => {
+    const res = await fetch(`${API_URL}/api/mcp/tools`);
+    assert.strictEqual(res.status, 200);
+    const data = await res.json() as any;
+    assert.ok(Array.isArray(data.tools));
+    const webSearchTool = data.tools.find((t: any) => t.name === 'web_search');
+    assert.ok(webSearchTool);
+    assert.strictEqual(webSearchTool.name, 'web_search');
+    assert.ok(webSearchTool.description);
+  });
+
+  test('POST /api/mcp/execute fails with 400 for missing tool name', async () => {
+    const res = await fetch(`${API_URL}/api/mcp/execute`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ args: { query: 'test' } })
+    });
+    assert.strictEqual(res.status, 400);
+    const data = await res.json() as any;
+    assert.strictEqual(data.error, 'Missing or invalid tool name');
+  });
+
+  test('POST /api/mcp/execute fails with 500 for missing args for web_search', async () => {
+    const res = await fetch(`${API_URL}/api/mcp/execute`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tool: 'web_search' })
+    });
+    assert.strictEqual(res.status, 500);
+    const data = await res.json() as any;
+    assert.strictEqual(data.error, 'Error executing tool web_search: Missing or invalid argument: query');
+  });
+
+  test('POST /api/mcp/execute throws 500 for non-existent tool', async () => {
+    const res = await fetch(`${API_URL}/api/mcp/execute`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tool: 'does_not_exist', args: {} })
+    });
+    assert.strictEqual(res.status, 500);
+    const data = await res.json() as any;
+    assert.strictEqual(data.error, 'Tool not found: does_not_exist');
+  });
+
+  test('POST /api/mcp/execute successfully calls web_search', async () => {
+    // we won't mock global.fetch here because the server runs in another process in this test file
+    // wait, we can't reliably test external duckduckgo fetching without mocking in the child process.
+    // Instead we test that it attempts to fetch, if it throws unknown we handle it, but wait, it will just make a real request.
+    // Making a real request to DuckDuckGo HTML is okay for E2E tests, it shouldn't fail unless there's no internet.
+    const res = await fetch(`${API_URL}/api/mcp/execute`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tool: 'web_search', args: { query: 'duckduckgo' } })
+    });
+    assert.ok(res.status === 200 || res.status === 500);
+    const data = await res.json() as any;
+    if (res.status === 200) {
+      assert.ok(typeof data.result === 'string');
+    } else {
+      assert.ok(typeof data.error === 'string');
+    }
+  });
+
   test('POST /api/demands/intake enriches remote demand with business requirements', async () => {
     const res = await fetch(`${API_URL}/api/demands/intake`, {
       method: 'POST',

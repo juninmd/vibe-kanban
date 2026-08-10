@@ -36,6 +36,8 @@ import { buildComplianceRecoveryPrompt } from "./utils/specCompliance.js";
 import { monitorCi, buildCiRecoveryPrompt } from "./utils/ciMonitor.js";
 import { fetchReviewDecision, fetchReviewComments, getPrNumberFromBranch, buildReviewRecoveryPrompt, parseReviewDecision } from "./utils/reviewMonitor.js";
 import { resolveReaction, shouldEscalate } from "./utils/reactions.js";
+import { globalMCPRegistry } from "./utils/mcpUtils.js";
+import "./utils/webSearchUtils.js";
 
 function buildValidationRecoveryPrompt(title: string, failures: { name: string; output: string }[]): string {
     const failureSections = failures
@@ -1207,6 +1209,33 @@ const server = createServer(async (req, res) => {
   // GET /api/tools
   if (url === "/api/tools" && method === "GET") {
     return jsonResponse(res, 200, { tools: getAvailableTools() });
+  }
+
+  // GET /api/mcp/tools
+  if (url === "/api/mcp/tools" && method === "GET") {
+    const tools = globalMCPRegistry.getAllTools().map(t => ({
+      name: t.name,
+      description: t.description
+    }));
+    return jsonResponse(res, 200, { tools });
+  }
+
+  // POST /api/mcp/execute
+  if (url === "/api/mcp/execute" && method === "POST") {
+    try {
+      const body = await parseBody(req);
+      if (!body || typeof body.tool !== "string") {
+        return jsonResponse(res, 400, { error: "Missing or invalid tool name" });
+      }
+      const args = (body.args as Record<string, unknown>) || {};
+      const result = await globalMCPRegistry.executeTool(body.tool, args);
+      return jsonResponse(res, 200, { result });
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        return jsonResponse(res, 500, { error: err.message });
+      }
+      return jsonResponse(res, 500, { error: "Unknown error executing tool" });
+    }
   }
 
   // GET /api/models?tool=xxx
