@@ -64,6 +64,8 @@ IMPORTANT:
 
 import { execa } from "execa";
 import "dotenv/config";
+import pg from "pg";
+const { Client } = pg;
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 5174;
 
@@ -2304,6 +2306,50 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
     } catch (e: unknown) {
       const errorMessage = e instanceof Error ? e.message : String(e);
       return jsonResponse(res, 500, { error: errorMessage });
+    }
+  }
+
+  // POST /api/integrations/postgres/sync
+  if (url === "/api/integrations/postgres/sync" && method === "POST") {
+    try {
+      const body = await parseBody(req);
+      const connectionString = (body.connectionString as string) || process.env.POSTGRES_CONNECTION_STRING;
+      const query = (body.query as string) || "SELECT * FROM tasks WHERE status = 'open'";
+
+      if (!connectionString) {
+        return jsonResponse(res, 400, { error: "connectionString or POSTGRES_CONNECTION_STRING not configured." });
+      }
+
+      const client = new Client({ connectionString });
+      await client.connect();
+      const dbRes = await client.query(query);
+      await client.end();
+
+      const tasks = dbRes.rows as any[];
+
+      let added = 0;
+      for (const item of tasks) {
+        const title = item.title || item.name || `Task ${item.id}`;
+        const description = item.description || `Imported from Postgres\nID: ${item.id}\nData: ${JSON.stringify(item)}`;
+        DB.createTask({
+          title,
+          source: "postgres",
+          category: "feature",
+          priority: "media",
+          lane: "backlog",
+          assignedTo: null,
+          interrupted: false,
+          logs: [],
+          description
+        });
+        added++;
+      }
+
+      addEvent(`[Postgres] Sincronização concluída: ${added} tarefas importadas.`);
+      return jsonResponse(res, 200, { success: true, count: added });
+    } catch (e) {
+      console.error("Postgres Sync error:", e);
+      return jsonResponse(res, 500, { error: String(e) });
     }
   }
 

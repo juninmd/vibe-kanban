@@ -385,6 +385,23 @@ describe('Vibe Kanban API', async () => {
     assert.equal(data.error, "NOTION_DATABASE_ID and NOTION_API_TOKEN are required");
   });
 
+  test('POST /api/integrations/postgres/sync fails with 400 if missing connectionString', async () => {
+    // Override POSTGRES_CONNECTION_STRING in case it's set in the environment
+    const prevEnv = process.env.POSTGRES_CONNECTION_STRING;
+    delete process.env.POSTGRES_CONNECTION_STRING;
+
+    const res = await fetch(`${API_URL}/api/integrations/postgres/sync`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}) // Missing connectionString
+    });
+    assert.equal(res.status, 400);
+
+    if (prevEnv !== undefined) {
+      process.env.POSTGRES_CONNECTION_STRING = prevEnv;
+    }
+  });
+
   test('GET /api/mcp/tools returns tools list', async () => {
     const res = await fetch(`${API_URL}/api/mcp/tools`);
     assert.strictEqual(res.status, 200);
