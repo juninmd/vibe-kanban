@@ -708,7 +708,9 @@ const executeDriver = (Object.prototype.hasOwnProperty.call(drivers, tool) ? dri
                             pollTimeout,
                             (msg) => {
                                 if (t.assignedTo) addTerminalLine(t.assignedTo, tid, "system", msg);
-                            }
+                            },
+                            process.env.CIRCLECI_TOKEN,
+                            process.env.CIRCLECI_PROJECT_SLUG
                         );
 
                         if (ciResult.passed || ciResult.skipped) {

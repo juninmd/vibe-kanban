@@ -120,6 +120,96 @@ ${ciLogs}
 - One fix at a time. If there are multiple errors, fix them all in a single commit.`;
 }
 
+export async function pollCircleCi(projectSlug: string, branch: string, circleToken: string): Promise<CiRun | null> {
+    try {
+        const pipelineUrl = `https://circleci.com/api/v2/project/${projectSlug}/pipeline?branch=${branch}`;
+        const pRes = await fetch(pipelineUrl, {
+            headers: {
+                "Circle-Token": circleToken,
+                "Accept": "application/json"
+            }
+        });
+        if (!pRes.ok) return null;
+        const pData = await pRes.json() as { items?: any[] };
+        const pipelines = pData.items || [];
+        if (pipelines.length === 0) return null;
+
+        const pipeline = pipelines[0];
+
+        const workflowUrl = `https://circleci.com/api/v2/pipeline/${pipeline.id}/workflow`;
+        const wRes = await fetch(workflowUrl, {
+            headers: {
+                "Circle-Token": circleToken,
+                "Accept": "application/json"
+            }
+        });
+        if (!wRes.ok) return null;
+        const wData = await wRes.json() as { items?: any[] };
+        const workflows = wData.items || [];
+        if (workflows.length === 0) return null;
+
+        const allSuccessful = workflows.every(w => w.status === "success");
+        const anyFailed = workflows.some(w => w.status === "failed" || w.status === "failing" || w.status === "error");
+
+        let ciStatus: CiStatus = "pending";
+        if (allSuccessful) {
+            ciStatus = "success";
+        } else if (anyFailed) {
+            ciStatus = "failure";
+        }
+
+        return {
+            status: ciStatus,
+            id: String(pipeline.id),
+            name: `Pipeline ${pipeline.number}`,
+            url: `https://app.circleci.com/pipelines/${projectSlug}/${pipeline.number}`,
+        };
+    } catch {
+        return null;
+    }
+}
+
+export async function extractCircleCiLogs(projectSlug: string, pipelineId: string, circleToken: string): Promise<string> {
+    try {
+        const workflowUrl = `https://circleci.com/api/v2/pipeline/${pipelineId}/workflow`;
+        const wRes = await fetch(workflowUrl, {
+            headers: {
+                "Circle-Token": circleToken,
+                "Accept": "application/json"
+            }
+        });
+        if (!wRes.ok) return `Failed to extract CircleCI workflows: ${wRes.status}`;
+
+        const wData = await wRes.json() as { items?: any[] };
+        const failedWorkflows = (wData.items || []).filter(w => w.status === "failed" || w.status === "failing" || w.status === "error");
+
+        let logs = "";
+        for (const wf of failedWorkflows) {
+            const jobsUrl = `https://circleci.com/api/v2/workflow/${wf.id}/job`;
+            const jRes = await fetch(jobsUrl, {
+                headers: {
+                    "Circle-Token": circleToken,
+                    "Accept": "application/json"
+                }
+            });
+            if (!jRes.ok) continue;
+
+            const jData = await jRes.json() as { items?: any[] };
+            const failedJobs = (jData.items || []).filter(j => j.status === "failed");
+            for (const job of failedJobs) {
+                logs += `Job: ${job.name}\nStatus: ${job.status}\nURL: https://app.circleci.com/pipelines/${projectSlug}/${job.pipeline_number}/workflows/${wf.id}/jobs/${job.job_number}\n\n`;
+            }
+        }
+
+        if (logs) {
+            return `Failed Jobs:\n${logs}Note: Full logs are available at the URLs above.`;
+        }
+        return "See CircleCI run URL for details.";
+    } catch (err: any) {
+        return `Failed to extract CircleCI logs: ${err.message}`;
+    }
+}
+
 export async function monitorCi(
     githubRepo: string,
     branch: string,
@@ -127,7 +217,9 @@ export async function monitorCi(
     maxRetries: number = 3,
     pollIntervalSeconds: number = 30,
     pollTimeoutSeconds: number = 600,
-    onLog?: (msg: string) => void
+    onLog?: (msg: string) => void,
+    circleCiToken?: string,
+    circleCiProjectSlug?: string
 ): Promise<{ passed: boolean; skipped: boolean; ciLogs?: string }> {
     const pollInterval = pollIntervalSeconds * 1000;
     const pollTimeout = pollTimeoutSeconds * 1000;
@@ -139,7 +231,11 @@ export async function monitorCi(
     if (onLog) onLog(`Aguardando CI pipeline...`);
 
     while (Date.now() - startTime < pollTimeout) {
-        lastRun = await pollGitHubCi(githubRepo, branch, githubToken);
+        if (circleCiToken && circleCiProjectSlug) {
+            lastRun = await pollCircleCi(circleCiProjectSlug, branch, circleCiToken);
+        } else {
+            lastRun = await pollGitHubCi(githubRepo, branch, githubToken);
+        }
 
         if (!lastRun) {
             // CI runs often take a few seconds to appear after push/PR.
@@ -168,7 +264,12 @@ export async function monitorCi(
 
     // Extraction
     if (onLog) onLog(`🔄 Extraindo logs do CI falho...`);
-    const ciLogs = await extractGitHubCiLogs(githubRepo, lastRun.id, githubToken);
+    let ciLogs: string;
+    if (circleCiToken && circleCiProjectSlug) {
+        ciLogs = await extractCircleCiLogs(circleCiProjectSlug, lastRun.id, circleCiToken);
+    } else {
+        ciLogs = await extractGitHubCiLogs(githubRepo, lastRun.id, githubToken);
+    }
 
     return { passed: false, skipped: false, ciLogs };
 }
