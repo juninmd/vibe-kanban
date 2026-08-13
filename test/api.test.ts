@@ -260,6 +260,69 @@ describe('Vibe Kanban API', async () => {
     assert.equal(data.task.source, "trufflehog");
   });
 
+  test('POST /api/webhooks/github creates task when @vibe-agent is mentioned', async () => {
+    const stateRes = await fetch("http://localhost:5174/api/state");
+    const state = await stateRes.json();
+    const beforeCount = state.tasks.length;
+
+    const res = await fetch(`${API_URL}/api/webhooks/github`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: "created",
+        issue: {
+          number: 42
+        },
+        repository: {
+          full_name: "acme/test-repo",
+          html_url: "https://github.com/acme/test-repo"
+        },
+        comment: {
+          body: "Please check this, @vibe-agent!",
+          html_url: "https://github.com/acme/test-repo/issues/42#comment",
+          user: {
+            login: "octocat"
+          }
+        }
+      })
+    });
+
+    assert.equal(res.status, 201);
+    const data = await res.json();
+    assert.ok(data.success);
+    assert.ok(data.task);
+    assert.equal(data.task.title, "[GitHub] Responder comentário no #42");
+    assert.equal(data.task.category, "feature");
+    assert.equal(data.task.source, "github");
+    assert.equal(data.task.githubRepo, "https://github.com/acme/test-repo");
+
+    const stateResAfter = await fetch("http://localhost:5174/api/state");
+    const stateAfter = await stateResAfter.json();
+    const tasks = stateAfter.tasks;
+    const newTasks = tasks.slice(beforeCount);
+
+    assert.equal(newTasks.length, 1);
+    assert.equal(newTasks[0].source, "github");
+  });
+
+  test('POST /api/webhooks/github ignores comments without @vibe-agent', async () => {
+    const res = await fetch(`${API_URL}/api/webhooks/github`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: "created",
+        issue: { number: 43 },
+        repository: { full_name: "acme/test-repo" },
+        comment: { body: "Just a normal comment." }
+      })
+    });
+
+    assert.equal(res.status, 200);
+    const data = await res.json();
+    assert.equal(data.success, true);
+    assert.equal(data.message, "Ignored or not a mention");
+  });
+
   test('POST /api/webhooks/slack creates feature task from slack event', async () => {
 
     const stateRes = await fetch("http://localhost:5174/api/state");

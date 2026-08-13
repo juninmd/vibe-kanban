@@ -2118,6 +2118,53 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
     }
   }
 
+  // POST /api/webhooks/github
+  if (url === "/api/webhooks/github" && method === "POST") {
+    try {
+      const body = await parseBody(req);
+      const action = (body as any)?.action;
+
+      // We only care about created comments
+      if (action === "created") {
+        const comment = (body as any)?.comment;
+        const issue = (body as any)?.issue || (body as any)?.pull_request;
+        const repo = (body as any)?.repository;
+
+        if (comment && comment.body && repo && issue) {
+          if (comment.body.includes("@vibe-agent")) {
+            const issueNumber = issue.number;
+            const repoUrl = repo.html_url || repo.url;
+            const title = `[GitHub] Responder comentário no #${issueNumber}`;
+            const description = `Detectado pelo Webhook do GitHub.\n\nRepositório: ${repo.full_name}\nIssue/PR: #${issueNumber}\nURL: ${comment.html_url}\nAutor: ${comment.user?.login}\n\nComentário:\n${comment.body}`;
+
+            const task = DB.createTask({
+              title,
+              source: "github",
+              category: "feature",
+              priority: "alta",
+              lane: "backlog",
+              assignedTo: null,
+              interrupted: false,
+              logs: [],
+              description,
+              githubRepo: repoUrl
+            });
+
+            addEvent(`[GitHub] Tarefa criada a partir de menção em PR/Issue #${issueNumber}.`);
+            sendSlackNotification(process.env.SLACK_WEBHOOK_URL || "", `🐙 [GitHub] ${task.title}`);
+
+            return jsonResponse(res, 201, { success: true, task });
+          }
+        }
+      }
+
+      return jsonResponse(res, 200, { success: true, message: "Ignored or not a mention" });
+    } catch (e) {
+      console.error("GitHub webhook error:", e);
+      return jsonResponse(res, 500, { error: "Failed to process GitHub webhook" });
+    }
+  }
+
   // POST /api/webhooks/slack
   if (url === "/api/webhooks/slack" && method === "POST") {
     try {
