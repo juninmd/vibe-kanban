@@ -1051,6 +1051,7 @@ As roadmap of development, the category must be "feature". Return ONLY a JSON ar
 }
 
 // PM loop (every day)
+setTimeout(generateRoadmapTasks, 5000); // initial run after 5s to let DB init
 setInterval(generateRoadmapTasks, 86400000);
 
 function sanitizeCloneDir(input: unknown): string {
