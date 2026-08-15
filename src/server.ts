@@ -993,7 +993,9 @@ async function generateRoadmapTasks() {
     if (res.ok) {
       const html = await res.text();
       // Remove HTML tags to get plain text, keeping it somewhat clean
-      codegenDocs = html.replace(/<[^>]*>?/gm, ' ').replace(/\s+/g, ' ').substring(0, 4000);
+      const cleanHtml = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, ' ')
+                          .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, ' ');
+      codegenDocs = cleanHtml.replace(/<[^>]*>?/gm, ' ').replace(/\s+/g, ' ').substring(0, 4000);
     }
   } catch (err) {
     console.warn("PM: Failed to fetch codegen docs", err);
