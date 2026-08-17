@@ -1,0 +1,3 @@
+{
+  "rules": "1. All code must pass linting\n2. Use TypeScript strict mode"
+}

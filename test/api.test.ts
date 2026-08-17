@@ -528,6 +528,26 @@ describe('Vibe Kanban API', async () => {
     }
   });
 
+  test('POST /api/settings/repo-rules updates and gets repo rules', async () => {
+    const rules = "1. All code must pass linting\n2. Use TypeScript strict mode";
+
+    // Set rules
+    const postRes = await fetch(`${API_URL}/api/settings/repo-rules`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rules })
+    });
+    assert.equal(postRes.status, 200);
+    const postData = await postRes.json();
+    assert.equal(postData.ok, true);
+
+    // Get rules
+    const getRes = await fetch(`${API_URL}/api/settings/repo-rules`);
+    assert.equal(getRes.status, 200);
+    const getData = await getRes.json();
+    assert.equal(getData.rules, rules);
+  });
+
   test('POST /api/demands/intake enriches remote demand with business requirements', async () => {
     const res = await fetch(`${API_URL}/api/demands/intake`, {
       method: 'POST',

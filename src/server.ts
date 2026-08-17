@@ -381,6 +381,20 @@ ${siblings}`;
     }
   }
 
+  // Inject Agent Rules
+  try {
+    const rulesPath = path.resolve(process.cwd(), "repo_rules.json");
+    if (fs.existsSync(rulesPath)) {
+      const content = fs.readFileSync(rulesPath, "utf-8");
+      const parsed = JSON.parse(content);
+      if (parsed.rules && typeof parsed.rules === "string") {
+        updatedTask.description = (updatedTask.description || "") + "\n\n## Repository Rules\n" + parsed.rules;
+      }
+    }
+  } catch (err: unknown) {
+    console.warn(`Failed to inject agent rules for task #${task.id}:`, err);
+  }
+
   const attempt = (fallbackAttempts.get(task.id) || 0) + 1;
   const attemptStr = attempt > 1 ? ` (Tentativa de Fallback ${attempt}/${MAX_FALLBACK_ATTEMPTS})` : "";
   addEvent(`[AutoPilot] ${agent.role} iniciou a tarefa #${task.id}${attemptStr}`);
@@ -1902,6 +1916,36 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
     }
 
     return jsonResponse(res, 200, { tasks: DB.getTasks() });
+  }
+
+  // GET /api/settings/repo-rules
+  if (url === "/api/settings/repo-rules" && method === "GET") {
+    try {
+      const rulesPath = path.resolve(process.cwd(), "repo_rules.json");
+      if (fs.existsSync(rulesPath)) {
+        const content = fs.readFileSync(rulesPath, "utf-8");
+        return jsonResponse(res, 200, JSON.parse(content));
+      }
+    } catch (e) {
+      console.warn("Failed to read repo_rules.json:", e);
+    }
+    return jsonResponse(res, 200, { rules: "" });
+  }
+
+  // POST /api/settings/repo-rules
+  if (url === "/api/settings/repo-rules" && method === "POST") {
+    const body = await parseBody(req);
+    if (typeof body.rules !== "string") {
+      return jsonResponse(res, 400, { error: "rules must be a string" });
+    }
+    try {
+      const rulesPath = path.resolve(process.cwd(), "repo_rules.json");
+      fs.writeFileSync(rulesPath, JSON.stringify({ rules: body.rules }, null, 2));
+      addEvent("Regras do repositório atualizadas.");
+      return jsonResponse(res, 200, { ok: true });
+    } catch (e) {
+      return jsonResponse(res, 500, { error: "Failed to write repo_rules.json" });
+    }
   }
 
   // POST /api/settings/env
