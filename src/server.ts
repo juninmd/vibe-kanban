@@ -1005,7 +1005,7 @@ async function generateRoadmapTasks() {
 Current agents: ${roles}.
 Categories: "roadmap", "security", "performance", "feature", "test", "bug".
 Priorities: "alta", "media", "baixa".
-Generate 1 new feature task inspired by the following documentation overview of Codegen:
+Generate 1 new feature task inspired by the following documentation of Codegen:
 ${codegenDocs}
 
 As roadmap of development, the category must be "feature". Return ONLY a JSON array: [{"title":"...","category":"feature","priority":"...","description":"..."}]`;
