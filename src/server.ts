@@ -111,12 +111,12 @@ function initializeState(): State {
   const existingAgents = DB.getAgents();
   if (existingAgents.length === 0) {
     const defaultAgents: Agent[] = [
-      { id: `agent-pm`, role: "Product Manager", model: "gpt-4o", category: "roadmap", status: "idle", assignedTask: null, tool: "openai", terminalId: `term-pm` },
-      { id: `agent-sec`, role: "Segurança", model: "gemini-1.5-flash", category: "security", status: "idle", assignedTask: null, tool: "gemini", terminalId: `term-sec` },
-      { id: `agent-perf`, role: "Performance", model: "gpt-4o", category: "performance", status: "idle", assignedTask: null, tool: "copilot", terminalId: `term-perf` },
-      { id: `agent-func`, role: "Novas Funcionalidades", model: "claude-3-5-sonnet-20241022", category: "feature", status: "idle", assignedTask: null, tool: "claude", terminalId: `term-func` },
-      { id: `agent-test`, role: "Testes", model: "opencode", category: "test", status: "idle", assignedTask: null, tool: "opencode", terminalId: `term-test` },
-      { id: `agent-bug`, role: "Correções", model: "codex", category: "bug", status: "idle", assignedTask: null, tool: "codex", terminalId: `term-bug` }
+      { id: `agent-pm`, role: "Product Manager", model: "gpt-4o", category: "roadmap", status: "idle", assignedTask: null, tool: "openai", terminalId: `term-pm`, instructions: undefined },
+      { id: `agent-sec`, role: "Segurança", model: "gemini-1.5-flash", category: "security", status: "idle", assignedTask: null, tool: "gemini", terminalId: `term-sec`, instructions: undefined },
+      { id: `agent-perf`, role: "Performance", model: "gpt-4o", category: "performance", status: "idle", assignedTask: null, tool: "copilot", terminalId: `term-perf`, instructions: undefined },
+      { id: `agent-func`, role: "Novas Funcionalidades", model: "claude-3-5-sonnet-20241022", category: "feature", status: "idle", assignedTask: null, tool: "claude", terminalId: `term-func`, instructions: undefined },
+      { id: `agent-test`, role: "Testes", model: "opencode", category: "test", status: "idle", assignedTask: null, tool: "opencode", terminalId: `term-test`, instructions: undefined },
+      { id: `agent-bug`, role: "Correções", model: "codex", category: "bug", status: "idle", assignedTask: null, tool: "codex", terminalId: `term-bug`, instructions: undefined }
     ];
     for (const agent of defaultAgents) {
       DB.saveAgent(agent);
@@ -1536,6 +1536,7 @@ Return ONLY a JSON array with this structure:
     if (body.model && (typeof body.model !== 'string' || body.model.length > 255)) return jsonResponse(res, 400, { error: "Invalid model" });
     if (body.category && (typeof body.category !== 'string' || body.category.length > 255)) return jsonResponse(res, 400, { error: "Invalid category" });
     if (body.tool && (typeof body.tool !== 'string' || body.tool.length > 255)) return jsonResponse(res, 400, { error: "Invalid tool" });
+    if (body.instructions && typeof body.instructions !== 'string') return jsonResponse(res, 400, { error: "Invalid instructions" });
 
     const newAgent: Agent = {
       id: `agent-${Date.now()}`,
@@ -1545,7 +1546,8 @@ Return ONLY a JSON array with this structure:
       status: "idle",
       assignedTask: null,
       tool: body.tool as string | undefined,
-      terminalId: `term-${Date.now()}`
+      terminalId: `term-${Date.now()}`,
+      instructions: body.instructions as string | undefined
     };
     DB.saveAgent(newAgent);
     addEvent(`Novo agente criado: ${newAgent.role} (${newAgent.tool} - ${newAgent.model})`);
@@ -1564,6 +1566,7 @@ Return ONLY a JSON array with this structure:
     if (body.model !== undefined) updates.model = body.model as string;
     if (body.category !== undefined) updates.category = body.category as string;
     if (body.tool !== undefined) updates.tool = body.tool as string;
+    if (body.instructions !== undefined) updates.instructions = body.instructions as string;
     DB.updateAgent(agentId, updates);
     addEvent(`Agente atualizado: ${(body.role as string) || existing.role}`);
     broadcastState();

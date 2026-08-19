@@ -32,6 +32,7 @@ export interface Agent {
   tool?: string;
   terminalId?: string;
   env?: Record<string, string>;
+  instructions?: string;
 }
 
 export interface EventLog {

@@ -18,6 +18,7 @@ export class ClaudeDriver implements LLMDriver {
          task.description ? `Description: ${task.description}` : "",
          `Category: ${task.category} | Priority: ${task.priority}`,
          `Work directory: ${taskDir}`,
+         agent.instructions ? `[BEHAVIOR INSTRUCTIONS]\n${agent.instructions}` : "",
          "Complete the task by writing, editing, and committing code. Work autonomously without asking for input.",
       ].filter(Boolean).join("\n");
 
