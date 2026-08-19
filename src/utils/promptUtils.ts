@@ -14,6 +14,7 @@ CATEGORY: ${task.category}
 PRIORITY: ${task.priority}
 
 ${task.siblingContext ? `[LINEAGE CONTEXT]\n${task.siblingContext}\n` : ""}
+${agent.instructions ? `[BEHAVIOR INSTRUCTIONS]\n${agent.instructions}\n` : ""}
 INSTRUCTIONS:
 1. Explore the codebase if necessary.
 2. Implement the requested changes.

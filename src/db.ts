@@ -33,7 +33,8 @@ db.exec(`
     status TEXT NOT NULL,
     assignedTask INTEGER,
     tool TEXT,
-    terminalId TEXT
+    terminalId TEXT,
+    instructions TEXT
   );
 
   CREATE TABLE IF NOT EXISTS events (
@@ -83,6 +84,13 @@ try {
 // Migration: add taskOrder column if missing
 try {
   db.exec(`ALTER TABLE tasks ADD COLUMN taskOrder INTEGER`);
+} catch (e) {
+  // Ignored because column may already exist
+}
+
+// Migration: add instructions column if missing
+try {
+  db.exec(`ALTER TABLE agents ADD COLUMN instructions TEXT`);
 } catch (e) {
   // Ignored because column may already exist
 }
@@ -182,8 +190,8 @@ export const DB = {
 
   saveAgent(agent: Agent): void {
     db.prepare(`
-      INSERT OR REPLACE INTO agents (id, role, model, category, status, assignedTask, tool, terminalId)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT OR REPLACE INTO agents (id, role, model, category, status, assignedTask, tool, terminalId, instructions)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       agent.id,
       agent.role,
@@ -192,7 +200,8 @@ export const DB = {
       agent.status,
       agent.assignedTask,
       agent.tool,
-      agent.terminalId
+      agent.terminalId,
+      agent.instructions || null
     );
   },
 
@@ -278,13 +287,13 @@ export const DB = {
 
     // Add default agents in test environment as well, so test passes
     const defaultAgents: Agent[] = [
-      { id: `agent-pm`, role: "Product Manager", model: "gpt-4o", category: "roadmap", status: "idle", assignedTask: null, tool: "openai", terminalId: `term-pm` },
-      { id: `agent-sec`, role: "Segurança", model: "gemini-1.5-flash", category: "security", status: "idle", assignedTask: null, tool: "gemini", terminalId: `term-sec` },
-      { id: `agent-perf`, role: "Performance", model: "gpt-4o", category: "performance", status: "idle", assignedTask: null, tool: "copilot", terminalId: `term-perf` },
-      { id: `agent-func`, role: "Novas Funcionalidades", model: "claude-3-5-sonnet-20241022", category: "feature", status: "idle", assignedTask: null, tool: "claude", terminalId: `term-func` },
-      { id: `agent-test`, role: "Testes", model: "opencode", category: "test", status: "idle", assignedTask: null, tool: "opencode", terminalId: `term-test` },
-      { id: `agent-bug`, role: "Correções", model: "codex", category: "bug", status: "idle", assignedTask: null, tool: "codex", terminalId: `term-bug` },
-      { id: `agent-feature`, role: "Novas features", model: "gpt-4o", category: "feature", status: "idle", assignedTask: null, tool: "openai", terminalId: `term-feature` }
+      { id: `agent-pm`, role: "Product Manager", model: "gpt-4o", category: "roadmap", status: "idle", assignedTask: null, tool: "openai", terminalId: `term-pm`, instructions: undefined },
+      { id: `agent-sec`, role: "Segurança", model: "gemini-1.5-flash", category: "security", status: "idle", assignedTask: null, tool: "gemini", terminalId: `term-sec`, instructions: undefined },
+      { id: `agent-perf`, role: "Performance", model: "gpt-4o", category: "performance", status: "idle", assignedTask: null, tool: "copilot", terminalId: `term-perf`, instructions: undefined },
+      { id: `agent-func`, role: "Novas Funcionalidades", model: "claude-3-5-sonnet-20241022", category: "feature", status: "idle", assignedTask: null, tool: "claude", terminalId: `term-func`, instructions: undefined },
+      { id: `agent-test`, role: "Testes", model: "opencode", category: "test", status: "idle", assignedTask: null, tool: "opencode", terminalId: `term-test`, instructions: undefined },
+      { id: `agent-bug`, role: "Correções", model: "codex", category: "bug", status: "idle", assignedTask: null, tool: "codex", terminalId: `term-bug`, instructions: undefined },
+      { id: `agent-feature`, role: "Novas features", model: "gpt-4o", category: "feature", status: "idle", assignedTask: null, tool: "openai", terminalId: `term-feature`, instructions: undefined }
     ];
     for (const agent of defaultAgents) {
       this.saveAgent(agent);

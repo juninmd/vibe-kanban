@@ -66,7 +66,7 @@ Do not output hypothetical logs. Output the actual file content needed to solve 
               body: JSON.stringify({
                   model: agent.model || "gpt-4o",
                   messages: [
-                      { role: "system", content: "You are a helpful coding assistant." },
+                      { role: "system", content: "You are a helpful coding assistant." + (agent.instructions ? `\n\n[BEHAVIOR INSTRUCTIONS]\n${agent.instructions}` : "") },
                       { role: "user", content: prompt }
                   ]
               })
