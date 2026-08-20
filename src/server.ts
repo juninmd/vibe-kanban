@@ -1053,7 +1053,7 @@ As roadmap of development, the category must be "feature". Return ONLY a JSON ar
       });
       if (count > 0) addEvent(`[PM] Adicionou ${count} novas tarefas ao backlog.`);
     } catch (e: unknown) {
-      console.warn("PM: Failed to parse response JSON");
+      console.warn("PM: Failed to parse response JSON", e);
     }
   };
 
@@ -1957,6 +1957,7 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
       addEvent("Variáveis de ambiente atualizadas.");
       return jsonResponse(res, 200, { ok: true });
     } catch (e: unknown) {
+      console.error("Failed to write .env file", e);
       return jsonResponse(res, 500, { error: "Failed to write .env file" });
     }
   }
