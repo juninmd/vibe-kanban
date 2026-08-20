@@ -75,7 +75,7 @@ try {
   if (fs.existsSync(CONFIG_FILE)) {
     appConfig = JSON.parse(fs.readFileSync(CONFIG_FILE, "utf-8"));
   }
-} catch (e) { }
+} catch (e: unknown) { }
 
 // --- State and Persistence ---
 function formatProofOfWork(results: { name: string; success: boolean; duration: number; output: string }[]): string {
@@ -173,7 +173,7 @@ function addTerminalLine(agentId: string, taskId: number | null, type: string, c
   DB.addTerminalLog(agentId, taskId, type, content);
   // Broadcast terminal update to SSE clients
   const termData = JSON.stringify({ terminalUpdate: { agentId, taskId, ...entry } });
-  clients.forEach(c => { try { c.res.write(`data: ${termData}\n\n`); } catch (e) { } });
+  clients.forEach(c => { try { c.res.write(`data: ${termData}\n\n`); } catch (e: unknown) { } });
 }
 
 // Bug rate limiter & Fallback State
@@ -221,7 +221,7 @@ function broadcastState() {
   clients.forEach(client => {
     try {
       client.res.write(`data: ${data}\n\n`);
-    } catch (e) {
+    } catch (e: unknown) {
       console.error(`Error broadcasting to client ${client.id}:`, e);
     }
   });
@@ -280,7 +280,7 @@ function parseBody(req: IncomingMessage): Promise<Record<string, unknown>> {
     let data = "";
     req.on("data", (chunk: Buffer | string) => (data += chunk.toString()));
     req.on("end", () => {
-      try { resolve(data ? JSON.parse(data) : {}); } catch (e) { resolve({}); }
+      try { resolve(data ? JSON.parse(data) : {}); } catch (e: unknown) { resolve({}); }
     });
   });
 }
@@ -379,6 +379,19 @@ ${siblings}`;
     } catch (err: unknown) {
       console.warn(`Context enrichment failed for task #${task.id}:`, err);
     }
+  }
+
+  // Repository Rules injection
+  try {
+    if (fs.existsSync("repo_rules.json")) {
+      const fileContent = fs.readFileSync("repo_rules.json", "utf-8");
+      const parsed = JSON.parse(fileContent);
+      if (parsed.rules && parsed.rules.trim() !== "") {
+        updatedTask.description = (updatedTask.description || "") + "\n\n## Repository Rules\n" + parsed.rules;
+      }
+    }
+  } catch (e: unknown) {
+    console.error("Failed to inject repo rules:", e);
   }
 
   const attempt = (fallbackAttempts.get(task.id) || 0) + 1;
@@ -1039,15 +1052,15 @@ As roadmap of development, the category must be "feature". Return ONLY a JSON ar
         }
       });
       if (count > 0) addEvent(`[PM] Adicionou ${count} novas tarefas ao backlog.`);
-    } catch (e) {
-      console.warn("PM: Failed to parse response JSON");
+    } catch (e: unknown) {
+      console.warn("PM: Failed to parse response JSON", e);
     }
   };
 
   try {
     const content = await callLLM(prompt);
     if (content) processTasks(content);
-  } catch (e) {
+  } catch (e: unknown) {
     console.warn("PM Auto-create failed:", e);
   }
 }
@@ -1260,7 +1273,7 @@ const server = createServer(async (req, res) => {
     if (tool && drivers[tool] && typeof drivers[tool].listModels === "function") {
       try {
         models = await drivers[tool].listModels!();
-      } catch (e) {
+      } catch (e: unknown) {
         console.warn(`listModels failed for tool ${tool}:`, e);
       }
     }
@@ -1450,7 +1463,7 @@ Return ONLY a JSON array with this structure:
             break; // Success
           }
         }
-      } catch (e) {
+      } catch (e: unknown) {
         console.warn("Demand intake LLM planning failed:", e);
       }
       attempts++;
@@ -1918,7 +1931,7 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
       if (fs.existsSync(envPath)) {
         envContent = fs.readFileSync(envPath, "utf-8");
       }
-    } catch (e) { }
+    } catch (e: unknown) { }
 
     const newKeys = Object.keys(body).filter(k => ALLOWED_ENV_KEYS.includes(k));
 
@@ -1943,8 +1956,38 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
       fs.writeFileSync(envPath, envContent);
       addEvent("Variáveis de ambiente atualizadas.");
       return jsonResponse(res, 200, { ok: true });
-    } catch (e) {
+    } catch (e: unknown) {
+      console.error("Failed to write .env file", e);
       return jsonResponse(res, 500, { error: "Failed to write .env file" });
+    }
+  }
+
+  // GET /api/settings/repo-rules
+  if (url === "/api/settings/repo-rules" && method === "GET") {
+    let rules = "";
+    try {
+      if (fs.existsSync("repo_rules.json")) {
+        const fileContent = fs.readFileSync("repo_rules.json", "utf-8");
+        const parsed = JSON.parse(fileContent);
+        rules = parsed.rules || "";
+      }
+    } catch (e: unknown) {
+      console.error("Error reading repo_rules.json", e);
+    }
+    return jsonResponse(res, 200, { rules });
+  }
+
+  // POST /api/settings/repo-rules
+  if (url === "/api/settings/repo-rules" && method === "POST") {
+    try {
+      const body = await parseBody(req);
+      const rules = typeof body.rules === "string" ? body.rules : "";
+      fs.writeFileSync("repo_rules.json", JSON.stringify({ rules }, null, 2));
+      addEvent("Regras de repositório atualizadas.");
+      return jsonResponse(res, 200, { success: true });
+    } catch (e: unknown) {
+      console.error("Failed to write repo_rules.json", e);
+      return jsonResponse(res, 500, { error: "Failed to write repo_rules.json" });
     }
   }
 
@@ -2165,7 +2208,7 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
       }
 
       return jsonResponse(res, 200, { success: true, message: "Ignored or not a mention" });
-    } catch (e) {
+    } catch (e: unknown) {
       console.error("GitHub webhook error:", e);
       return jsonResponse(res, 500, { error: "Failed to process GitHub webhook" });
     }
@@ -2240,7 +2283,7 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
       }
 
       return jsonResponse(res, 200, { success: true });
-    } catch (e) {
+    } catch (e: unknown) {
       console.error("CircleCI webhook error:", e);
       return jsonResponse(res, 500, { error: "Failed to process webhook" });
     }
@@ -2274,7 +2317,7 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
       sendSlackNotification(process.env.SLACK_WEBHOOK_URL || "", `🐞 [Bug] ${task.title}`);
 
       return jsonResponse(res, 201, { success: true, task });
-    } catch (e) {
+    } catch (e: unknown) {
       console.error("Sentry webhook error:", e);
       return jsonResponse(res, 500, { error: "Failed to process webhook" });
     }
@@ -2402,7 +2445,7 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
 
       addEvent(`[Postgres] Sincronização concluída: ${added} tarefas importadas.`);
       return jsonResponse(res, 200, { success: true, count: added });
-    } catch (e) {
+    } catch (e: unknown) {
       console.error("Postgres Sync error:", e);
       return jsonResponse(res, 500, { error: String(e) });
     }
