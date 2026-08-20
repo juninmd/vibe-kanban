@@ -381,6 +381,19 @@ ${siblings}`;
     }
   }
 
+  // Repository Rules injection
+  try {
+    if (fs.existsSync("repo_rules.json")) {
+      const fileContent = fs.readFileSync("repo_rules.json", "utf-8");
+      const parsed = JSON.parse(fileContent);
+      if (parsed.rules && parsed.rules.trim() !== "") {
+        updatedTask.description = (updatedTask.description || "") + "\n\n## Repository Rules\n" + parsed.rules;
+      }
+    }
+  } catch (e) {
+    console.error("Failed to inject repo rules:", e);
+  }
+
   const attempt = (fallbackAttempts.get(task.id) || 0) + 1;
   const attemptStr = attempt > 1 ? ` (Tentativa de Fallback ${attempt}/${MAX_FALLBACK_ATTEMPTS})` : "";
   addEvent(`[AutoPilot] ${agent.role} iniciou a tarefa #${task.id}${attemptStr}`);
@@ -1945,6 +1958,34 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
       return jsonResponse(res, 200, { ok: true });
     } catch (e) {
       return jsonResponse(res, 500, { error: "Failed to write .env file" });
+    }
+  }
+
+  // GET /api/settings/repo-rules
+  if (url === "/api/settings/repo-rules" && method === "GET") {
+    let rules = "";
+    try {
+      if (fs.existsSync("repo_rules.json")) {
+        const fileContent = fs.readFileSync("repo_rules.json", "utf-8");
+        const parsed = JSON.parse(fileContent);
+        rules = parsed.rules || "";
+      }
+    } catch (e) {
+      console.error("Error reading repo_rules.json", e);
+    }
+    return jsonResponse(res, 200, { rules });
+  }
+
+  // POST /api/settings/repo-rules
+  if (url === "/api/settings/repo-rules" && method === "POST") {
+    try {
+      const body = await parseBody(req);
+      const rules = typeof body.rules === "string" ? body.rules : "";
+      fs.writeFileSync("repo_rules.json", JSON.stringify({ rules }, null, 2));
+      addEvent("Regras de repositório atualizadas.");
+      return jsonResponse(res, 200, { success: true });
+    } catch (e) {
+      return jsonResponse(res, 500, { error: "Failed to write repo_rules.json" });
     }
   }
 
