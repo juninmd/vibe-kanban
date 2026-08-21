@@ -2451,6 +2451,16 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
     }
   }
 
+  // POST /api/integrations/claude-code/log
+  if (url === "/api/integrations/claude-code/log" && method === "POST") {
+    const body = await parseBody(req);
+    if (!body?.instanceId || !body?.log) {
+      return jsonResponse(res, 400, { error: "instanceId and log are required" });
+    }
+    addEvent(`[ClaudeCode-${body.instanceId}] ${body.log}`);
+    return jsonResponse(res, 200, { success: true });
+  }
+
   // POST /api/integrations/linear/sync
   if (url === "/api/integrations/linear/sync" && method === "POST") {
     try {

@@ -393,6 +393,17 @@ describe('Vibe Kanban API', async () => {
     assert.equal(data.task.source, "sentry");
   });
 
+  test('POST /api/integrations/claude-code/log logs to event system', async () => {
+    const res = await fetch(`${API_URL}/api/integrations/claude-code/log`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ instanceId: 'local-dev', log: 'server started' })
+    });
+    assert.strictEqual(res.status, 200);
+    const json = await res.json();
+    assert.strictEqual(json.success, true);
+  });
+
   test('POST /api/integrations/linear/sync syncs Linear issues', async () => {
     const res = await fetch(`${API_URL}/api/integrations/linear/sync`, {
       method: 'POST',
