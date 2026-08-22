@@ -557,4 +557,20 @@ describe('Vibe Kanban API', async () => {
     assert.ok(data.businessRequirements.length >= 3);
     assert.ok(data.acceptanceCriteria.some((item: string) => item.includes('PR/MR')));
   });
+
+  test('POST and GET /api/settings/agent-permissions sets and gets permissions', async () => {
+    const postRes = await fetch(`${API_URL}/api/settings/agent-permissions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ permissions: ["read_only", "execute_code"] })
+    });
+    assert.strictEqual(postRes.status, 200);
+    const postData = await postRes.json();
+    assert.strictEqual(postData.success, true);
+
+    const getRes = await fetch(`${API_URL}/api/settings/agent-permissions`);
+    assert.strictEqual(getRes.status, 200);
+    const getData = await getRes.json();
+    assert.deepStrictEqual(getData.permissions, ["read_only", "execute_code"]);
+  });
 });
