@@ -1962,6 +1962,29 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
     }
   }
 
+  // GET /api/settings/agent-permissions
+  if (url === "/api/settings/agent-permissions" && method === "GET") {
+    try {
+      const data = await fs.promises.readFile("agent_permissions.json", "utf-8");
+      return jsonResponse(res, 200, JSON.parse(data));
+    } catch {
+      return jsonResponse(res, 200, {});
+    }
+  }
+
+  // POST /api/settings/agent-permissions
+  if (url === "/api/settings/agent-permissions" && method === "POST") {
+    try {
+      const body = await parseBody(req);
+      if (!body) return jsonResponse(res, 400, { error: "Missing body" });
+      await fs.promises.writeFile("agent_permissions.json", JSON.stringify(body, null, 2), "utf-8");
+      addEvent("Permissões dos agentes atualizadas via API.");
+      return jsonResponse(res, 200, { success: true });
+    } catch (e: unknown) {
+      return jsonResponse(res, 500, { error: String(e) });
+    }
+  }
+
   // GET /api/settings/repo-rules
   if (url === "/api/settings/repo-rules" && method === "GET") {
     let rules = "";
