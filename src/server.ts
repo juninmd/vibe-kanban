@@ -1047,7 +1047,7 @@ As roadmap of development, the category must be "feature". Return ONLY a JSON ar
       let count = 0;
       newTasks.forEach((t: Partial<Task>) => {
         if (t.title && t.category) {
-          DB.createTask({
+          const newTask = DB.createTask({
             title: t.title,
             source: "product_manager",
             category: t.category,
@@ -1059,6 +1059,12 @@ As roadmap of development, the category must be "feature". Return ONLY a JSON ar
             description: t.description
           });
           count++;
+
+          const freshAgents = DB.getAgents();
+          const availableAgent = freshAgents.find(a => a.status === "idle" && a.category === "feature");
+          if (availableAgent) {
+            startTask(newTask, availableAgent).catch(console.error);
+          }
         }
       });
       if (count > 0) addEvent(`[PM] Adicionou ${count} novas tarefas ao backlog.`);

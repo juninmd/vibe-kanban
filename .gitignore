@@ -19,4 +19,4 @@ vibe_config.json
 vibe_kanban.db
 *.log
 vibe_kanban.db-journal
-vibe_kanban.db
+vibe_kanban.dbagent_permissions.json
