@@ -1,4 +1,4 @@
-import { fetchLinearIssues } from "./utils/linearUtils.js";
+import { fetchLinearIssues, addLinearComment } from "./utils/linearUtils.js";
 import { fetchJiraIssues } from "./utils/jiraUtils.js";
 import { fetchClickupTasks } from "./utils/clickupUtils.js";
 import { fetchMondayTasks } from "./utils/mondayUtils.js";
@@ -1904,6 +1904,15 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
 
     if (lane === "done") {
       sendSlackNotification(process.env.SLACK_WEBHOOK_URL || "", `[Vibe Kanban] Tarefa concluída: ${task.title}`);
+
+      if (task.source === "linear" && task.description && process.env.LINEAR_API_KEY) {
+        const match = task.description.match(/Linear ID:\s*([a-zA-Z0-9-]+)/);
+        if (match && match[1]) {
+          addLinearComment(process.env.LINEAR_API_KEY, match[1], "Task completed in Vibe Kanban.").catch(e => {
+            console.error("Failed to add Linear comment on task complete:", e);
+          });
+        }
+      }
     }
 
     return jsonResponse(res, 200, { task: getTask(taskId) });
@@ -2526,7 +2535,8 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
             logs: [],
             description: issue.description ? issue.description + `
 
-Linear URL: ${issue.url || ''}` : `Linear URL: ${issue.url || ''}`
+Linear URL: ${issue.url || ''}
+Linear ID: ${issue.id}` : `Linear URL: ${issue.url || ''}\nLinear ID: ${issue.id}`
           });
           count++;
         }
