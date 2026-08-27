@@ -1,5 +1,5 @@
 import { fetchLinearIssues, addLinearComment } from "./utils/linearUtils.js";
-import { fetchJiraIssues } from "./utils/jiraUtils.js";
+import { fetchJiraIssues, addJiraComment } from "./utils/jiraUtils.js";
 import { fetchClickupTasks } from "./utils/clickupUtils.js";
 import { fetchMondayTasks } from "./utils/mondayUtils.js";
 import { fetchNotionTasks } from "./utils/notionUtils.js";
@@ -1910,6 +1910,15 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
         if (match && match[1]) {
           addLinearComment(process.env.LINEAR_API_KEY, match[1], "Task completed in Vibe Kanban.").catch(e => {
             console.error("Failed to add Linear comment on task complete:", e);
+          });
+        }
+      }
+
+      if (task.source === "jira" && task.description && process.env.JIRA_DOMAIN && process.env.JIRA_EMAIL && process.env.JIRA_API_TOKEN) {
+        const match = task.description.match(/Jira ID:\s*([a-zA-Z0-9-]+)/);
+        if (match && match[1]) {
+          addJiraComment(process.env.JIRA_DOMAIN, process.env.JIRA_EMAIL, process.env.JIRA_API_TOKEN, match[1], "Task completed in Vibe Kanban.").catch(e => {
+            console.error("Failed to add Jira comment on task complete:", e);
           });
         }
       }
