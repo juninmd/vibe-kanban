@@ -1017,7 +1017,7 @@ async function generateRoadmapTasks() {
   const recentFeatures = DB.getTasks()
     .filter(t => t.category === "feature")
     .map(t => t.title)
-    .slice(-10)
+    .slice(0, 10)
     .join(", ");
 
   const prompt = `You are a Product Manager for "Vibe Kanban 3D", a 3D Task Orchestrator with AI agents.
@@ -1063,7 +1063,9 @@ As roadmap of development, the category must be "feature". Return ONLY a JSON ar
           const freshAgents = DB.getAgents();
           const availableAgent = freshAgents.find(a => a.status === "idle" && a.category === "feature");
           if (availableAgent) {
-            startTask(newTask, availableAgent).catch(console.error);
+            if (DB.claimTask(newTask.id, availableAgent.id)) {
+              startTask(newTask, availableAgent).catch(console.error);
+            }
           }
         }
       });
