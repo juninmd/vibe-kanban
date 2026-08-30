@@ -323,6 +323,67 @@ describe('Vibe Kanban API', async () => {
     assert.equal(data.message, "Ignored or not a mention");
   });
 
+  test('POST /api/webhooks/gitlab creates task when @vibe-agent is mentioned', async () => {
+    const stateRes1 = await fetch(`${API_URL}/api/state`);
+    const state1 = await stateRes1.json() as any;
+    const initialTasksCount = state1.tasks.length;
+
+    const res = await fetch(`${API_URL}/api/webhooks/gitlab`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        object_kind: "note",
+        object_attributes: {
+          note: "Hey @vibe-agent, please fix this MR.",
+          url: "https://gitlab.com/acme/test-repo/-/merge_requests/42#note_1"
+        },
+        merge_request: { iid: 42 },
+        project: {
+          path_with_namespace: "acme/test-repo",
+          web_url: "https://gitlab.com/acme/test-repo"
+        },
+        user: { username: "gitlabuser" }
+      })
+    });
+
+    assert.equal(res.status, 201);
+    const data = await res.json() as any;
+    assert.equal(data.success, true);
+    assert.equal(data.task.title, "[GitLab] Responder comentário no #42");
+    assert.equal(data.task.source, "gitlab");
+    assert.equal(data.task.githubRepo, "https://gitlab.com/acme/test-repo");
+    assert.ok(data.task.description.includes("gitlabuser"));
+    assert.ok(data.task.description.includes("please fix this MR."));
+
+    const stateRes2 = await fetch(`${API_URL}/api/state`);
+    const state2 = await stateRes2.json() as any;
+    assert.equal(state2.tasks.length, initialTasksCount + 1);
+  });
+
+  test('POST /api/webhooks/gitlab ignores comments without @vibe-agent', async () => {
+    const res = await fetch(`${API_URL}/api/webhooks/gitlab`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        object_kind: "note",
+        object_attributes: {
+          note: "Just a regular comment here.",
+          url: "https://gitlab.com/acme/test-repo/-/merge_requests/43#note_2"
+        },
+        merge_request: { iid: 43 },
+        project: {
+          path_with_namespace: "acme/test-repo",
+          web_url: "https://gitlab.com/acme/test-repo"
+        },
+        user: { username: "anotheruser" }
+      })
+    });
+    assert.equal(res.status, 200);
+    const data = await res.json() as any;
+    assert.equal(data.success, true);
+    assert.equal(data.message, "Ignored or not a mention");
+  });
+
   test('POST /api/webhooks/slack creates feature task from slack event', async () => {
 
     const stateRes = await fetch("http://localhost:5174/api/state");

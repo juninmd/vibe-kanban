@@ -2226,6 +2226,35 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
     }
   }
 
+  function handleVcsMention(
+    source: string,
+    issueNumber: string | number,
+    repoUrl: string,
+    repoFullName: string,
+    commentUrl: string,
+    author: string,
+    commentBody: string,
+    emoji: string
+  ) {
+    const title = `[${source}] Responder comentário no #${issueNumber}`;
+    const description = `Detectado pelo Webhook do ${source}.\n\nRepositório: ${repoFullName}\nIssue/MR: #${issueNumber}\nURL: ${commentUrl}\nAutor: ${author}\n\nComentário:\n${commentBody}`;
+    const task = DB.createTask({
+      title,
+      source: source.toLowerCase(),
+      category: "feature",
+      priority: "alta",
+      lane: "backlog",
+      assignedTo: null,
+      interrupted: false,
+      logs: [],
+      description,
+      githubRepo: repoUrl
+    });
+    addEvent(`[${source}] Tarefa criada a partir de menção em PR/Issue/MR #${issueNumber}.`);
+    sendSlackNotification(process.env.SLACK_WEBHOOK_URL || "", `${emoji} [${source}] ${task.title}`);
+    return task;
+  }
+
   // POST /api/webhooks/github
   if (url === "/api/webhooks/github" && method === "POST") {
     try {
@@ -2240,27 +2269,16 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
 
         if (comment && comment.body && repo && issue) {
           if (comment.body.includes("@vibe-agent")) {
-            const issueNumber = issue.number;
-            const repoUrl = repo.html_url || repo.url;
-            const title = `[GitHub] Responder comentário no #${issueNumber}`;
-            const description = `Detectado pelo Webhook do GitHub.\n\nRepositório: ${repo.full_name}\nIssue/PR: #${issueNumber}\nURL: ${comment.html_url}\nAutor: ${comment.user?.login}\n\nComentário:\n${comment.body}`;
-
-            const task = DB.createTask({
-              title,
-              source: "github",
-              category: "feature",
-              priority: "alta",
-              lane: "backlog",
-              assignedTo: null,
-              interrupted: false,
-              logs: [],
-              description,
-              githubRepo: repoUrl
-            });
-
-            addEvent(`[GitHub] Tarefa criada a partir de menção em PR/Issue #${issueNumber}.`);
-            sendSlackNotification(process.env.SLACK_WEBHOOK_URL || "", `🐙 [GitHub] ${task.title}`);
-
+            const task = handleVcsMention(
+              "GitHub",
+              issue.number,
+              repo.html_url || repo.url,
+              repo.full_name,
+              comment.html_url,
+              comment.user?.login,
+              comment.body,
+              "🐙"
+            );
             return jsonResponse(res, 201, { success: true, task });
           }
         }
@@ -2270,6 +2288,42 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
     } catch (e: unknown) {
       console.error("GitHub webhook error:", e);
       return jsonResponse(res, 500, { error: "Failed to process GitHub webhook" });
+    }
+  }
+
+  // POST /api/webhooks/gitlab
+  if (url === "/api/webhooks/gitlab" && method === "POST") {
+    try {
+      const body = await parseBody(req);
+      const objectKind = (body as any)?.object_kind;
+
+      // GitLab note (comment) event
+      if (objectKind === "note") {
+        const objectAttributes = (body as any)?.object_attributes;
+        const project = (body as any)?.project;
+        const issue = (body as any)?.issue || (body as any)?.merge_request;
+
+        if (objectAttributes && objectAttributes.note && project && issue) {
+          if (objectAttributes.note.includes("@vibe-agent")) {
+            const task = handleVcsMention(
+              "GitLab",
+              issue.iid,
+              project.web_url || project.url,
+              project.path_with_namespace,
+              objectAttributes.url,
+              (body as any)?.user?.username,
+              objectAttributes.note,
+              "🦊"
+            );
+            return jsonResponse(res, 201, { success: true, task });
+          }
+        }
+      }
+
+      return jsonResponse(res, 200, { success: true, message: "Ignored or not a mention" });
+    } catch (e: unknown) {
+      console.error("GitLab webhook error:", e);
+      return jsonResponse(res, 500, { error: "Failed to process GitLab webhook" });
     }
   }
 
