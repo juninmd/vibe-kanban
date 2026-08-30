@@ -2273,6 +2273,53 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
     }
   }
 
+  // POST /api/webhooks/gitlab
+  if (url === "/api/webhooks/gitlab" && method === "POST") {
+    try {
+      const body = await parseBody(req);
+      const objectKind = (body as any)?.object_kind;
+
+      // GitLab note (comment) event
+      if (objectKind === "note") {
+        const objectAttributes = (body as any)?.object_attributes;
+        const project = (body as any)?.project;
+        const issue = (body as any)?.issue || (body as any)?.merge_request;
+
+        if (objectAttributes && objectAttributes.note && project && issue) {
+          if (objectAttributes.note.includes("@vibe-agent")) {
+            const issueNumber = issue.iid;
+            const repoUrl = project.web_url || project.url;
+            const title = `[GitLab] Responder comentário no #${issueNumber}`;
+            const description = `Detectado pelo Webhook do GitLab.\n\nRepositório: ${project.path_with_namespace}\nIssue/MR: #${issueNumber}\nURL: ${objectAttributes.url}\nAutor: ${(body as any)?.user?.username}\n\nComentário:\n${objectAttributes.note}`;
+
+            const task = DB.createTask({
+              title,
+              source: "gitlab",
+              category: "feature",
+              priority: "alta",
+              lane: "backlog",
+              assignedTo: null,
+              interrupted: false,
+              logs: [],
+              description,
+              githubRepo: repoUrl
+            });
+
+            addEvent(`[GitLab] Tarefa criada a partir de menção em MR/Issue #${issueNumber}.`);
+            sendSlackNotification(process.env.SLACK_WEBHOOK_URL || "", `🦊 [GitLab] ${task.title}`);
+
+            return jsonResponse(res, 201, { success: true, task });
+          }
+        }
+      }
+
+      return jsonResponse(res, 200, { success: true, message: "Ignored or not a mention" });
+    } catch (e: unknown) {
+      console.error("GitLab webhook error:", e);
+      return jsonResponse(res, 500, { error: "Failed to process GitLab webhook" });
+    }
+  }
+
   // POST /api/webhooks/slack
   if (url === "/api/webhooks/slack" && method === "POST") {
     try {
