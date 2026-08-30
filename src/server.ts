@@ -2226,6 +2226,35 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
     }
   }
 
+  function handleVcsMention(
+    source: string,
+    issueNumber: string | number,
+    repoUrl: string,
+    repoFullName: string,
+    commentUrl: string,
+    author: string,
+    commentBody: string,
+    emoji: string
+  ) {
+    const title = `[${source}] Responder comentário no #${issueNumber}`;
+    const description = `Detectado pelo Webhook do ${source}.\n\nRepositório: ${repoFullName}\nIssue/MR: #${issueNumber}\nURL: ${commentUrl}\nAutor: ${author}\n\nComentário:\n${commentBody}`;
+    const task = DB.createTask({
+      title,
+      source: source.toLowerCase(),
+      category: "feature",
+      priority: "alta",
+      lane: "backlog",
+      assignedTo: null,
+      interrupted: false,
+      logs: [],
+      description,
+      githubRepo: repoUrl
+    });
+    addEvent(`[${source}] Tarefa criada a partir de menção em PR/Issue/MR #${issueNumber}.`);
+    sendSlackNotification(process.env.SLACK_WEBHOOK_URL || "", `${emoji} [${source}] ${task.title}`);
+    return task;
+  }
+
   // POST /api/webhooks/github
   if (url === "/api/webhooks/github" && method === "POST") {
     try {
@@ -2240,27 +2269,16 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
 
         if (comment && comment.body && repo && issue) {
           if (comment.body.includes("@vibe-agent")) {
-            const issueNumber = issue.number;
-            const repoUrl = repo.html_url || repo.url;
-            const title = `[GitHub] Responder comentário no #${issueNumber}`;
-            const description = `Detectado pelo Webhook do GitHub.\n\nRepositório: ${repo.full_name}\nIssue/PR: #${issueNumber}\nURL: ${comment.html_url}\nAutor: ${comment.user?.login}\n\nComentário:\n${comment.body}`;
-
-            const task = DB.createTask({
-              title,
-              source: "github",
-              category: "feature",
-              priority: "alta",
-              lane: "backlog",
-              assignedTo: null,
-              interrupted: false,
-              logs: [],
-              description,
-              githubRepo: repoUrl
-            });
-
-            addEvent(`[GitHub] Tarefa criada a partir de menção em PR/Issue #${issueNumber}.`);
-            sendSlackNotification(process.env.SLACK_WEBHOOK_URL || "", `🐙 [GitHub] ${task.title}`);
-
+            const task = handleVcsMention(
+              "GitHub",
+              issue.number,
+              repo.html_url || repo.url,
+              repo.full_name,
+              comment.html_url,
+              comment.user?.login,
+              comment.body,
+              "🐙"
+            );
             return jsonResponse(res, 201, { success: true, task });
           }
         }
@@ -2287,27 +2305,16 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
 
         if (objectAttributes && objectAttributes.note && project && issue) {
           if (objectAttributes.note.includes("@vibe-agent")) {
-            const issueNumber = issue.iid;
-            const repoUrl = project.web_url || project.url;
-            const title = `[GitLab] Responder comentário no #${issueNumber}`;
-            const description = `Detectado pelo Webhook do GitLab.\n\nRepositório: ${project.path_with_namespace}\nIssue/MR: #${issueNumber}\nURL: ${objectAttributes.url}\nAutor: ${(body as any)?.user?.username}\n\nComentário:\n${objectAttributes.note}`;
-
-            const task = DB.createTask({
-              title,
-              source: "gitlab",
-              category: "feature",
-              priority: "alta",
-              lane: "backlog",
-              assignedTo: null,
-              interrupted: false,
-              logs: [],
-              description,
-              githubRepo: repoUrl
-            });
-
-            addEvent(`[GitLab] Tarefa criada a partir de menção em MR/Issue #${issueNumber}.`);
-            sendSlackNotification(process.env.SLACK_WEBHOOK_URL || "", `🦊 [GitLab] ${task.title}`);
-
+            const task = handleVcsMention(
+              "GitLab",
+              issue.iid,
+              project.web_url || project.url,
+              project.path_with_namespace,
+              objectAttributes.url,
+              (body as any)?.user?.username,
+              objectAttributes.note,
+              "🦊"
+            );
             return jsonResponse(res, 201, { success: true, task });
           }
         }
