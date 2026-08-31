@@ -1010,7 +1010,7 @@ async function generateRoadmapTasks() {
                           .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, ' ');
       codegenDocs = cleanHtml.replace(/<[^>]*>?/gm, ' ').replace(/\s+/g, ' ').substring(0, 4000);
     }
-  } catch (err) {
+  } catch (err: unknown) {
     console.warn("PM: Failed to fetch codegen docs", err);
   }
 
