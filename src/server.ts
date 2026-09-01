@@ -990,7 +990,6 @@ setInterval(() => {
 // --- PM Auto-Create Logic ---
 async function generateRoadmapTasks() {
   const backlogTasks = DB.getTasks().filter(t => t.lane === "backlog");
-  if (backlogTasks.length >= 3) return;
 
   if (!process.env.OPENAI_API_KEY && !process.env.GEMINI_API_KEY) {
     addEvent("[PM] API key não configurada. Configure OPENAI_API_KEY ou GEMINI_API_KEY nas configurações.");
