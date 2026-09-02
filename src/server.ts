@@ -1030,6 +1030,12 @@ ${recentFeatures || "None"}
 Generate 1 new unique feature task inspired by the following documentation of Codegen:
 ${codegenDocs}
 
+Focus on core Codegen capabilities such as:
+- Auto-fixing broken tests
+- Automating PR reviews
+- Deep Slack and Ticket Management integrations
+- Safely Executing Code
+
 As roadmap of development, the category must be "feature". Return ONLY a JSON array: [{"title":"...","category":"feature","priority":"...","description":"..."}]`;
 
   const processTasks = (raw: string) => {
