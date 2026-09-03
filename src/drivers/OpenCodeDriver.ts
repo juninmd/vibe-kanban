@@ -6,6 +6,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { resolveOpenCodeCommand } from "../utils/commandUtils.js";
 import { stripAnsi } from "../utils/ptyUtils.js";
+import { getRawSecrets } from "../utils/secretsUtils.js";
 import { createErrorLoopDetector, createSessionTimeout, createStallDetector, handleOverseerResults, startOverseer } from "../utils/overseerUtils.js";
 import { extractAndWriteFiles } from "../utils/fileUtils.js";
 import { logDebugBlock, logDebugCommand } from "./debugLogging.js";
@@ -82,7 +83,8 @@ export class OpenCodeDriver implements LLMDriver {
    ctx.onLog(task.id, `[SYSTEM] OpenCode executable: ${openCode.command} (${openCode.source})`);
    ctx.onLog(task.id, `Running: ${visibleArgs} in ${taskDir}`);
 
-   const proc = spawnOpenCode(openCode.command, args, taskDir, process.env);
+   const secrets = getRawSecrets();
+   const proc = spawnOpenCode(openCode.command, args, taskDir, { ...process.env, ...secrets });
 
       const sessionTimeout = createSessionTimeout(proc, 5 * 60); // 5 minutes timeout
       const errorLoopDetector = createErrorLoopDetector(proc, OPENCODE_ERROR_PATTERN);
