@@ -619,6 +619,20 @@ describe('Vibe Kanban API', async () => {
     assert.ok(data.acceptanceCriteria.some((item: string) => item.includes('PR/MR')));
   });
 
+  test('POST and GET /api/settings/secrets sets and gets secrets', async () => {
+    const postRes = await fetch(`${API_URL}/api/settings/secrets`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ MY_SECRET_KEY: "super_secret_value" })
+    });
+    assert.strictEqual(postRes.status, 200);
+
+    const getRes = await fetch(`${API_URL}/api/settings/secrets`);
+    assert.strictEqual(getRes.status, 200);
+    const data = await getRes.json() as any;
+    assert.strictEqual(data.MY_SECRET_KEY, "[REDACTED]");
+  });
+
   test('POST and GET /api/settings/agent-permissions sets and gets permissions', async () => {
     const postRes = await fetch(`${API_URL}/api/settings/agent-permissions`, {
       method: 'POST',

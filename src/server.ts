@@ -38,6 +38,7 @@ import { fetchReviewDecision, fetchReviewComments, getPrNumberFromBranch, buildR
 import { resolveReaction, shouldEscalate } from "./utils/reactions.js";
 import { globalMCPRegistry } from "./utils/mcpUtils.js";
 import "./utils/webSearchUtils.js";
+import { getMaskedSecrets, setSecrets } from "./utils/secretsUtils.js";
 
 function buildValidationRecoveryPrompt(title: string, failures: { name: string; output: string }[]): string {
     const failureSections = failures
@@ -2000,6 +2001,28 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
     } catch (e: unknown) {
       console.error("Failed to write .env file", e);
       return jsonResponse(res, 500, { error: "Failed to write .env file" });
+    }
+  }
+
+  // GET /api/settings/secrets
+  if (url === "/api/settings/secrets" && method === "GET") {
+    const secrets = getMaskedSecrets();
+    return jsonResponse(res, 200, secrets);
+  }
+
+  // POST /api/settings/secrets
+  if (url === "/api/settings/secrets" && method === "POST") {
+    try {
+      const body = await parseBody(req);
+      if (typeof body !== 'object' || body === null) {
+        return jsonResponse(res, 400, { error: "Invalid body" });
+      }
+      setSecrets(body as Record<string, string>);
+      addEvent(`[Settings] Secrets atualizados.`);
+      broadcastState();
+      return jsonResponse(res, 200, { ok: true });
+    } catch (e: unknown) {
+      return jsonResponse(res, 500, { error: String(e) });
     }
   }
 
