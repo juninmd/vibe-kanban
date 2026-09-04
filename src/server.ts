@@ -2161,6 +2161,89 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
     return jsonResponse(res, 400, { error: "Invalid body. Expected { enabled: boolean }" });
   }
 
+
+  // POST /api/sandbox/execute
+  if (url === "/api/sandbox/execute" && method === "POST") {
+    try {
+      const body = await parseBody(req);
+      const { code, language } = body;
+
+      if (!code || typeof code !== 'string') {
+        return jsonResponse(res, 400, { error: "Missing or invalid code" });
+      }
+
+      if (!language || typeof language !== 'string') {
+        return jsonResponse(res, 400, { error: "Missing or invalid language" });
+      }
+
+      const allowedLanguages = ['javascript', 'js', 'python', 'py', 'bash', 'sh'];
+      if (!allowedLanguages.includes(language.toLowerCase())) {
+        return jsonResponse(res, 400, { error: "Unsupported language" });
+      }
+
+      const tempId = crypto.randomUUID();
+      const tmpDir = path.join(process.cwd(), 'tmp', tempId);
+      fs.mkdirSync(tmpDir, { recursive: true });
+
+      let ext = 'txt';
+      let dockerImage = 'alpine';
+      let bin = 'echo';
+      const args: string[] = [];
+      const langLower = language.toLowerCase();
+
+      if (langLower === 'javascript' || langLower === 'js') {
+        ext = 'js';
+        dockerImage = 'node:18-alpine';
+        bin = 'node';
+        args.push(`script.${ext}`);
+      } else if (langLower === 'python' || langLower === 'py') {
+        ext = 'py';
+        dockerImage = 'python:3.9-alpine';
+        bin = 'python';
+        args.push(`script.${ext}`);
+      } else if (langLower === 'bash' || langLower === 'sh') {
+        ext = 'sh';
+        dockerImage = 'alpine';
+        bin = 'sh';
+        args.push(`script.${ext}`);
+      }
+
+      const scriptPath = path.join(tmpDir, `script.${ext}`);
+      fs.writeFileSync(scriptPath, code);
+
+      try {
+        const result = await execa('docker', [
+          'run',
+          '--rm',
+          '--network', 'none', // Disable network access
+          '--memory', '128m',  // Limit memory
+          '--cpus', '0.5',     // Limit CPU
+          '-v', `${tmpDir}:/sandbox`,
+          '-w', '/sandbox',
+          dockerImage,
+          bin,
+          `script.${ext}`
+        ], { reject: false, timeout: 5000 }); // 5s timeout
+
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+
+        return jsonResponse(res, 200, {
+          stdout: result.stdout || "",
+          stderr: result.stderr || "",
+          exitCode: result.exitCode || 0
+        });
+      } catch (execErr: unknown) {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+        const errMsg = execErr instanceof Error ? execErr.message : String(execErr);
+        return jsonResponse(res, 500, { error: "Execution failed", details: errMsg });
+      }
+
+    } catch (e: unknown) {
+      const errMsg = e instanceof Error ? e.message : String(e);
+      return jsonResponse(res, 500, { error: errMsg });
+    }
+  }
+
   // POST /api/orchestrator/run (Manually trigger assignment logic)
   if (url === "/api/orchestrator/run" && method === "POST") {
     autoAssign();
