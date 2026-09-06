@@ -2364,6 +2364,41 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
     return task;
   }
 
+  // POST /api/webhooks/github/check
+  if (url === "/api/webhooks/github/check" && method === "POST") {
+    try {
+      const body = await parseBody(req);
+      const action = (body as any)?.action;
+      const check_run = (body as any)?.check_run;
+      const repo = (body as any)?.repository;
+
+      if (action === "completed" && check_run?.conclusion === "failure") {
+        const title = `[Check Auto-fixer] Falha no teste: ${repo?.name || "Desconhecido"}`;
+        const description = `Detectado pelo Webhook de Check Run do GitHub.\n\nDetalhes da Falha:\n${check_run.name}\nURL: ${check_run.html_url}\n\nPor favor, corrija os testes quebrados.`;
+
+        const task = DB.createTask({
+          title,
+          source: "github",
+          category: "bug",
+          priority: "alta",
+          lane: "backlog",
+          assignedTo: null,
+          interrupted: false,
+          logs: [],
+          description
+        });
+
+        addEvent(`[GitHub Check] Novo bug criado para auto-fix: ${task.title}`);
+        return jsonResponse(res, 201, { success: true, task });
+      }
+
+      return jsonResponse(res, 200, { success: true });
+    } catch (e: unknown) {
+      console.error("GitHub check webhook error:", e);
+      return jsonResponse(res, 500, { error: "Failed to process webhook" });
+    }
+  }
+
   // POST /api/webhooks/github
   if (url === "/api/webhooks/github" && method === "POST") {
     try {
