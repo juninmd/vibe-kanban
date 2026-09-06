@@ -260,6 +260,22 @@ describe('Vibe Kanban API', async () => {
     assert.equal(data.task.source, "trufflehog");
   });
 
+  test('POST /api/webhooks/github creates bug task on check run failure', async () => {
+    const res = await fetch(`${API_URL}/api/webhooks/github`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: "completed",
+        check_run: { conclusion: "failure", name: "build-and-test", html_url: "https://github.com/acme/test/runs/1" },
+        repository: { name: "test-repo" }
+      })
+    });
+    assert.equal(res.status, 201);
+    const data = await res.json();
+    assert.equal(data.task.title, "[Check Auto-fixer] Falha no teste: test-repo");
+    assert.equal(data.task.category, "bug");
+  });
+
   test('POST /api/webhooks/github creates task when @vibe-agent is mentioned', async () => {
     const stateRes = await fetch("http://localhost:5174/api/state");
     const state = await stateRes.json();

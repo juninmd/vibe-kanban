@@ -2391,6 +2391,24 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
             return jsonResponse(res, 201, { success: true, task });
           }
         }
+      } else if (action === "completed") {
+        const check_run = (body as any)?.check_run;
+        const repo = (body as any)?.repository;
+        if (check_run?.conclusion === "failure") {
+          const task = DB.createTask({
+            title: `[Check Auto-fixer] Falha no teste: ${repo?.name || "Desconhecido"}`,
+            source: "github",
+            category: "bug",
+            priority: "alta",
+            lane: "backlog",
+            assignedTo: null,
+            interrupted: false,
+            logs: [],
+            description: `Detectado pelo Webhook de Check Run do GitHub.\n\nDetalhes da Falha:\n${check_run.name}\nURL: ${check_run.html_url}\n\nPor favor, corrija os testes quebrados.`
+          });
+          addEvent(`[GitHub Check] Novo bug criado para auto-fix: ${task.title}`);
+          return jsonResponse(res, 201, { success: true, task });
+        }
       }
 
       return jsonResponse(res, 200, { success: true, message: "Ignored or not a mention" });
