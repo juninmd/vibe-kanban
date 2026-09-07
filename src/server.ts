@@ -1,5 +1,6 @@
 import { fetchLinearIssues, addLinearComment } from "./utils/linearUtils.js";
 import { fetchJiraIssues, addJiraComment } from "./utils/jiraUtils.js";
+import { fetchTrelloCards } from "./utils/trelloUtils.js";
 import { fetchClickupTasks } from "./utils/clickupUtils.js";
 import { fetchMondayTasks } from "./utils/mondayUtils.js";
 import { fetchNotionTasks } from "./utils/notionUtils.js";
@@ -2699,6 +2700,50 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
     }
     addEvent(`[ClaudeCode-${body.instanceId}] ${body.log}`);
     return jsonResponse(res, 200, { success: true });
+  }
+
+  // POST /api/integrations/trello/sync
+  if (url === "/api/integrations/trello/sync" && method === "POST") {
+    try {
+      const body = await parseBody(req);
+      const apiKey = body.apiKey || process.env.TRELLO_API_KEY;
+      const apiToken = body.apiToken || process.env.TRELLO_API_TOKEN;
+      const listId = body.listId || process.env.TRELLO_LIST_ID;
+
+      if (!apiKey || typeof apiKey !== 'string' || !apiToken || typeof apiToken !== 'string' || !listId || typeof listId !== 'string') {
+        return jsonResponse(res, 400, { error: "TRELLO_API_KEY, TRELLO_API_TOKEN, and TRELLO_LIST_ID are required" });
+      }
+
+      const cards = await fetchTrelloCards(apiKey, apiToken, listId);
+      let count = 0;
+
+      for (const card of cards) {
+        if (card && card.id && card.name) {
+          DB.createTask({
+            title: `[Trello] ${card.name}`,
+            source: "trello",
+            category: "feature",
+            priority: "media",
+            lane: "backlog",
+            assignedTo: null,
+            interrupted: false,
+            logs: [],
+            description: card.desc ? card.desc + `\n\nTrello URL: ${card.url || ''}\nTrello ID: ${card.id}` : `Trello URL: ${card.url || ''}\nTrello ID: ${card.id}`
+          });
+          count++;
+        }
+      }
+
+      if (count > 0) {
+        addEvent(`Sincronizados ${count} cards do Trello.`);
+        broadcastState();
+      }
+
+      return jsonResponse(res, 200, { syncedTasks: count });
+    } catch (e: unknown) {
+      const errorMessage = e instanceof Error ? e.message : String(e);
+      return jsonResponse(res, 500, { error: errorMessage });
+    }
   }
 
   // POST /api/integrations/linear/sync
