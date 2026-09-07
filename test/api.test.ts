@@ -514,6 +514,17 @@ describe('Vibe Kanban API', async () => {
     assert.equal(data.error, "CLICKUP_LIST_ID and CLICKUP_API_TOKEN are required");
   });
 
+  test('POST /api/integrations/trello/sync fails with 400 if missing credentials', async () => {
+    const res = await fetch(`${API_URL}/api/integrations/trello/sync`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}) // Missing API KEY, token, listId
+    });
+    assert.equal(res.status, 400);
+    const data = await res.json();
+    assert.equal(data.error, "TRELLO_API_KEY, TRELLO_API_TOKEN, and TRELLO_LIST_ID are required");
+  });
+
   test('POST /api/integrations/monday/sync fails with 400 if missing data', async () => {
     const res = await fetch(`${API_URL}/api/integrations/monday/sync`, {
       method: 'POST',
