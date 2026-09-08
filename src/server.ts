@@ -4,6 +4,7 @@ import { fetchTrelloCards } from "./utils/trelloUtils.js";
 import { fetchClickupTasks } from "./utils/clickupUtils.js";
 import { fetchMondayTasks } from "./utils/mondayUtils.js";
 import { fetchNotionTasks } from "./utils/notionUtils.js";
+import { fetchAsanaTasks } from "./utils/asanaUtils.js";
 import { fetchFigmaComments } from "./utils/figmaUtils.js";
 import { detectDependencyCycles, detectFileOverlaps, GeneratedTask, buildPlanValidationPrompt, parsePlanValidationResponse } from "./utils/planValidation.js";
 import { createServer, ServerResponse, IncomingMessage } from "http";
@@ -2736,6 +2737,49 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
 
       if (count > 0) {
         addEvent(`Sincronizados ${count} cards do Trello.`);
+        broadcastState();
+      }
+
+      return jsonResponse(res, 200, { syncedTasks: count });
+    } catch (e: unknown) {
+      const errorMessage = e instanceof Error ? e.message : String(e);
+      return jsonResponse(res, 500, { error: errorMessage });
+    }
+  }
+
+  // POST /api/integrations/asana/sync
+  if (url === "/api/integrations/asana/sync" && method === "POST") {
+    try {
+      const body = await parseBody(req);
+      const projectId = body.projectId || process.env.ASANA_PROJECT_ID;
+      const personalAccessToken = body.personalAccessToken || process.env.ASANA_ACCESS_TOKEN;
+
+      if (!projectId || typeof projectId !== 'string' || !personalAccessToken || typeof personalAccessToken !== 'string') {
+        return jsonResponse(res, 400, { error: "ASANA_PROJECT_ID and ASANA_ACCESS_TOKEN are required" });
+      }
+
+      const tasks = await fetchAsanaTasks(personalAccessToken, projectId);
+      let count = 0;
+
+      for (const task of tasks) {
+        if (task && task.gid && task.name) {
+          DB.createTask({
+            title: `[Asana] ${task.name}`,
+            source: "asana",
+            category: "feature",
+            priority: "media",
+            lane: "backlog",
+            assignedTo: null,
+            interrupted: false,
+            logs: [],
+            description: task.notes ? task.notes + `\n\nAsana URL: ${task.permalink_url || ''}\nAsana ID: ${task.gid}` : `Asana URL: ${task.permalink_url || ''}\nAsana ID: ${task.gid}`
+          });
+          count++;
+        }
+      }
+
+      if (count > 0) {
+        addEvent(`Sincronizados ${count} cards do Asana.`);
         broadcastState();
       }
 

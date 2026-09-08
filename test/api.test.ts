@@ -547,6 +547,17 @@ describe('Vibe Kanban API', async () => {
     assert.equal(data.error, "NOTION_DATABASE_ID and NOTION_API_TOKEN are required");
   });
 
+  test('POST /api/integrations/asana/sync fails with 400 if missing credentials', async () => {
+    const res = await fetch(`${API_URL}/api/integrations/asana/sync`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}) // Missing projectId, token
+    });
+    assert.equal(res.status, 400);
+    const data = await res.json();
+    assert.equal(data.error, "ASANA_PROJECT_ID and ASANA_ACCESS_TOKEN are required");
+  });
+
   test('POST /api/integrations/postgres/sync fails with 400 if missing connectionString', async () => {
     // Override POSTGRES_CONNECTION_STRING in case it's set in the environment
     const prevEnv = process.env.POSTGRES_CONNECTION_STRING;
