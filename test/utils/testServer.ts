@@ -19,7 +19,7 @@ export async function waitForServer() {
 export async function startTestServer(): Promise<ChildProcess> {
   const serverProcess = spawn('node', ['dist/server.js'], { // NOSONAR
     stdio: 'pipe',
-    env: { ...process.env, PORT: '5174' }
+    env: { ...process.env, PORT: '5174', NODE_ENV: 'test' }
   });
 
   const ready = await waitForServer();

@@ -2411,6 +2411,24 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
           addEvent(`[GitHub Check] Novo bug criado para auto-fix: ${task.title}`);
           return jsonResponse(res, 201, { success: true, task });
         }
+      } else if (action === "opened" || action === "synchronize") {
+        const pr = (body as any)?.pull_request;
+        const repo = (body as any)?.repository;
+        if (pr && repo) {
+          const task = DB.createTask({
+            title: `[PR Review] ${pr.title}`,
+            source: "github",
+            category: "feature",
+            priority: "media",
+            lane: "backlog",
+            assignedTo: null,
+            interrupted: false,
+            logs: [],
+            description: `Solicitação de revisão de PR.\n\nRepositório: ${repo.full_name}\nPR: #${pr.number}\nURL: ${pr.html_url}\n\nPor favor, analise as mudanças e forneça feedback.`
+          });
+          addEvent(`[GitHub PR] Nova tarefa de revisão criada: ${task.title}`);
+          return jsonResponse(res, 201, { success: true, task });
+        }
       }
 
       return jsonResponse(res, 200, { success: true, message: "Ignored or not a mention" });
