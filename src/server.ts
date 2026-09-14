@@ -1011,6 +1011,7 @@ async function generateRoadmapTasks() {
       codegenDocs = cleanHtml.replace(/<[^>]*>?/gm, ' ').replace(/\s+/g, ' ').substring(0, 4000);
     }
   } catch (err: unknown) {
+    console.error("PM: Error fetching Codegen documentation for roadmap inspiration", err);
     console.warn("PM: Failed to fetch codegen docs", err);
   }
 
@@ -1020,6 +1021,7 @@ async function generateRoadmapTasks() {
     .slice(0, 10)
     .join(", ");
 
+  console.log("PM: Requesting daily roadmap task generation inspired by Codegen documentation");
   const prompt = `You are a Product Manager for "Vibe Kanban 3D", a 3D Task Orchestrator with AI agents.
 Current agents: ${roles}.
 Categories: "roadmap", "security", "performance", "feature", "test", "bug".
@@ -1089,9 +1091,9 @@ As roadmap of development, the category must be "feature". Return ONLY a JSON ar
   }
 }
 
-// PM loop (every day)
+// PM loop (every day): Automatically generates and implements one new feature task inspired by Codegen documentation
 setTimeout(generateRoadmapTasks, 5000); // initial run after 5s to let DB init
-setInterval(generateRoadmapTasks, 86400000);
+setInterval(generateRoadmapTasks, 86400000); // 86400000 ms = 1 day interval
 
 function sanitizeCloneDir(input: unknown): string {
   if (typeof input !== "string") return "./clones";
