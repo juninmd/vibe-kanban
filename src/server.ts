@@ -991,7 +991,14 @@ setInterval(() => {
 }, 3000);
 
 // --- PM Auto-Create Logic ---
+let lastRoadmapGenDate: number | null = null;
+
 async function generateRoadmapTasks() {
+  const now = Date.now();
+  if (lastRoadmapGenDate && (now - lastRoadmapGenDate) < 86400000) {
+    return; // Enforce strict once-per-day limit
+  }
+
   if (!process.env.OPENAI_API_KEY && !process.env.GEMINI_API_KEY) {
     addEvent("[PM] API key não configurada. Configure OPENAI_API_KEY ou GEMINI_API_KEY nas configurações.");
     return;
@@ -1028,7 +1035,7 @@ Priorities: "alta", "media", "baixa".
 Recently created feature tasks (do NOT duplicate these):
 ${recentFeatures || "None"}
 
-Generate 1 new unique feature task inspired by the following documentation of Codegen:
+Generate 1 new unique feature task inspired by the following documentation of Codegen (https://docs.codegen.com/introduction/overview):
 ${codegenDocs}
 
 Focus on core Codegen capabilities such as:
@@ -1075,7 +1082,10 @@ As roadmap of development, the category must be "feature". Return ONLY a JSON ar
           }
         }
       });
-      if (count > 0) addEvent(`[PM] Adicionou ${count} novas tarefas ao backlog.`);
+      if (count > 0) {
+        addEvent(`[PM] Adicionou ${count} novas tarefas ao backlog.`);
+        lastRoadmapGenDate = Date.now();
+      }
     } catch (e: unknown) {
       console.warn("PM: Failed to parse response JSON", e);
     }
@@ -1083,7 +1093,9 @@ As roadmap of development, the category must be "feature". Return ONLY a JSON ar
 
   try {
     const content = await callLLM(prompt);
-    if (content) processTasks(content);
+    if (content) {
+      processTasks(content);
+    }
   } catch (e: unknown) {
     console.warn("PM Auto-create failed:", e);
   }
