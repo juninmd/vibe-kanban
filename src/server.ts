@@ -991,7 +991,14 @@ setInterval(() => {
 }, 3000);
 
 // --- PM Auto-Create Logic ---
+let lastRoadmapGenDate: number | null = null;
+
 async function generateRoadmapTasks() {
+  if (lastRoadmapGenDate && Date.now() - lastRoadmapGenDate < 86400000) {
+    return;
+  }
+  lastRoadmapGenDate = Date.now();
+
   if (!process.env.OPENAI_API_KEY && !process.env.GEMINI_API_KEY) {
     addEvent("[PM] API key não configurada. Configure OPENAI_API_KEY ou GEMINI_API_KEY nas configurações.");
     return;
