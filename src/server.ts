@@ -1035,7 +1035,7 @@ Priorities: "alta", "media", "baixa".
 Recently created feature tasks (do NOT duplicate these):
 ${recentFeatures || "None"}
 
-Generate 1 new unique feature task inspired by the following documentation of Codegen:
+Generate 1 new unique feature task inspired by the following documentation of Codegen (https://docs.codegen.com/introduction/overview):
 ${codegenDocs}
 
 Focus on core Codegen capabilities such as:
