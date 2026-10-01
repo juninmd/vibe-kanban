@@ -1,4 +1,105 @@
-");
+import { fetchLinearIssues, addLinearComment } from "./utils/linearUtils.js";
+import { fetchJiraIssues, addJiraComment } from "./utils/jiraUtils.js";
+import { fetchTrelloCards } from "./utils/trelloUtils.js";
+import { fetchClickupTasks } from "./utils/clickupUtils.js";
+import { fetchMondayTasks } from "./utils/mondayUtils.js";
+import { fetchNotionTasks } from "./utils/notionUtils.js";
+import { fetchAsanaTasks } from "./utils/asanaUtils.js";
+import { fetchFigmaComments } from "./utils/figmaUtils.js";
+import { detectDependencyCycles, detectFileOverlaps, GeneratedTask, buildPlanValidationPrompt, parsePlanValidationResponse } from "./utils/planValidation.js";
+import { createServer, ServerResponse, IncomingMessage } from "http";
+import * as fs from "fs";
+import * as path from "path";
+import * as crypto from "crypto";
+import { Task, Agent, State, EventLog, LLMDriver } from "./types.js";
+import { GeminiDriver } from "./drivers/GeminiDriver.js";
+import { CopilotDriver } from "./drivers/CopilotDriver.js";
+import { OpenCodeDriver } from "./drivers/OpenCodeDriver.js";
+import { OpenAIDriver } from "./drivers/OpenAIDriver.js";
+import { ClaudeDriver } from "./drivers/ClaudeDriver.js";
+import { CommandDriver } from "./drivers/CommandDriver.js";
+import { CodexDriver } from "./drivers/CodexDriver.js";
+import { DB } from "./db.js";
+import { TerminalManager } from "./terminal/TerminalManager.js";
+import { Memory } from "./memory.js";
+import { createPullRequest, createPullRequestReview } from "./utils/githubUtils.js";
+import { isCommandAvailable } from "./utils/commandUtils.js";
+import { buildProviderChain, isEligibleForProviderFallback } from "./drivers/providerFallback.js";
+import { getAvailableTools } from "./providers.js";
+import { isEligibleForFallback, isCompleteProviderExhaustion, ModelAttempt } from "./utils/fallbackUtils.js";
+import { getToolingLandscape } from "./utils/toolingLandscape.js";
+import { enrichDemand } from "./utils/demandIntake.js";
+import { enrichContext } from "./utils/enrichment.js";
+import { prepareWorktree, cleanupWorktree } from "./utils/worktreeUtils.js";
+import { callLLM } from "./utils/llmUtils.js";
+import { sendSlackNotification } from "./utils/slackUtils.js";
+import { verifySpecCompliance, formatSpecCompliance } from "./utils/specCompliance.js";
+import { buildComplianceRecoveryPrompt } from "./utils/specCompliance.js";
+import { monitorCi, buildCiRecoveryPrompt } from "./utils/ciMonitor.js";
+import { fetchReviewDecision, fetchReviewComments, getPrNumberFromBranch, buildReviewRecoveryPrompt, parseReviewDecision } from "./utils/reviewMonitor.js";
+import { resolveReaction, shouldEscalate } from "./utils/reactions.js";
+import { globalMCPRegistry } from "./utils/mcpUtils.js";
+import "./utils/webSearchUtils.js";
+import { getMaskedSecrets, setSecrets } from "./utils/secretsUtils.js";
+
+function buildValidationRecoveryPrompt(title: string, failures: { name: string; output: string }[]): string {
+    const failureSections = failures
+        .map((f) => {
+            const trimmed = f.output.trim().slice(-3000);
+            return `### ${f.name}\nCommand: \`${f.name}\`\nOutput:\n\`\`\`\n${trimmed}\n\`\`\``;
+        })
+        .join("\n\n");
+
+    return `You are continuing work on issue: "${title}".
+
+Your implementation has code changes but the following validation checks failed. Fix the issues, commit your changes, and push.
+
+${failureSections}
+
+IMPORTANT:
+- Do NOT create a new branch — you are already on the correct branch.
+- Fix ONLY the validation failures above.
+- Commit and push your fixes.
+- Do NOT create a PR — that will be handled separately.`;
+}
+
+// ... existing verifySpecCompliance import
+
+import { execa } from "execa";
+import "dotenv/config";
+import pg from "pg";
+const { Client } = pg;
+
+const PORT = process.env.PORT ? Number(process.env.PORT) : 5174;
+
+const CONFIG_FILE = "vibe_config.json";
+let appConfig = { cloneDir: "./clones" };
+try {
+  if (fs.existsSync(CONFIG_FILE)) {
+    appConfig = JSON.parse(fs.readFileSync(CONFIG_FILE, "utf-8"));
+  }
+} catch (e: unknown) { }
+
+// --- State and Persistence ---
+function formatProofOfWork(results: { name: string; success: boolean; duration: number; output: string }[]): string {
+  const lines: string[] = ["", "---", "## Proof of Work", ""];
+  lines.push("| Check | Status | Duration |");
+  lines.push("|-------|--------|----------|");
+
+  for (const r of results) {
+      const status = r.success ? "Pass" : "Fail";
+      const duration = (r.duration / 1000).toFixed(1) + "s";
+      lines.push(`| ${r.name} | ${status} | ${duration} |`);
+  }
+
+  const failures = results.filter((r) => !r.success);
+  if (failures.length > 0) {
+      lines.push("");
+      for (const f of failures) {
+          const trimmed = f.output.trim().slice(-2000);
+          lines.push(`<details><summary>${f.name} output</summary>`);
+          lines.push("");
+          lines.push("```");
           lines.push(trimmed);
           lines.push("```");
           lines.push("");
@@ -890,11 +991,14 @@ setInterval(() => {
 }, 3000);
 
 // --- PM Auto-Create Logic ---
-let lastRoadmapGenDate = 0;
+let lastRoadmapGenDate: number | null = null;
 
 async function generateRoadmapTasks() {
-  if (lastRoadmapGenDate > 0 && Date.now() - lastRoadmapGenDate < 86400000) return;
+  if (lastRoadmapGenDate && Date.now() - lastRoadmapGenDate < 86400000) {
+    return;
+  }
   lastRoadmapGenDate = Date.now();
+
   if (!process.env.OPENAI_API_KEY && !process.env.GEMINI_API_KEY) {
     addEvent("[PM] API key não configurada. Configure OPENAI_API_KEY ou GEMINI_API_KEY nas configurações.");
     return;
@@ -2312,6 +2416,24 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
             description: `Detectado pelo Webhook de Check Run do GitHub.\n\nDetalhes da Falha:\n${check_run.name}\nURL: ${check_run.html_url}\n\nPor favor, corrija os testes quebrados.`
           });
           addEvent(`[GitHub Check] Novo bug criado para auto-fix: ${task.title}`);
+          return jsonResponse(res, 201, { success: true, task });
+        }
+      } else if (action === "opened" || action === "synchronize") {
+        const pr = (body as any)?.pull_request;
+        const repo = (body as any)?.repository;
+        if (pr && repo) {
+          const task = DB.createTask({
+            title: `[PR Review] ${pr.title}`,
+            source: "github",
+            category: "feature",
+            priority: "media",
+            lane: "backlog",
+            assignedTo: null,
+            interrupted: false,
+            logs: [],
+            description: `Solicitação de revisão de PR.\n\nRepositório: ${repo.full_name}\nPR: #${pr.number}\nURL: ${pr.html_url}\n\nPor favor, analise as mudanças e forneça feedback.`
+          });
+          addEvent(`[GitHub PR] Nova tarefa de revisão criada: ${task.title}`);
           return jsonResponse(res, 201, { success: true, task });
         }
       }
