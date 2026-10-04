@@ -1058,8 +1058,19 @@ As roadmap of development, the category must be "feature". Return ONLY a JSON ar
       const newTasks = JSON.parse(raw.substring(startIdx, endIdx + 1));
       if (!Array.isArray(newTasks)) return;
       let count = 0;
+      // pre-fetch top 10 recent features to avoid doing it inside the loop
+      const recentFeaturesList = DB.getTasks()
+        .filter(task => task.category === "feature")
+        .map(task => task.title)
+        .slice(0, 10);
+
       newTasks.forEach((t: Partial<Task>) => {
         if (t.title && t.category) {
+          if (recentFeaturesList.includes(t.title)) {
+            console.warn(`PM: Task "${t.title}" already exists in the 10 most recent feature tasks.`);
+            return;
+          }
+
           const newTask = DB.createTask({
             title: t.title,
             source: "product_manager",
@@ -1072,6 +1083,7 @@ As roadmap of development, the category must be "feature". Return ONLY a JSON ar
             description: t.description
           });
           count++;
+          recentFeaturesList.push(t.title); // prevent duplicates within the same batch
 
           const freshAgents = DB.getAgents();
           const availableAgent = freshAgents.find(a => a.status === "idle" && a.category === "feature");
