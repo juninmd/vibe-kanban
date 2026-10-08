@@ -39,6 +39,7 @@ import { monitorCi, buildCiRecoveryPrompt } from "./utils/ciMonitor.js";
 import { fetchReviewDecision, fetchReviewComments, getPrNumberFromBranch, buildReviewRecoveryPrompt, parseReviewDecision } from "./utils/reviewMonitor.js";
 import { resolveReaction, shouldEscalate } from "./utils/reactions.js";
 import { globalMCPRegistry } from "./utils/mcpUtils.js";
+import "./utils/codegenDocsTool.js";
 import "./utils/webSearchUtils.js";
 import { getMaskedSecrets, setSecrets } from "./utils/secretsUtils.js";
 
