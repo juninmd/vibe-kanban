@@ -32,3 +32,33 @@ export async function fetchMondayTasks(boardId: string, apiToken: string) {
 
   return data?.data?.boards?.[0]?.items_page?.items || [];
 }
+
+export async function addMondayComment(apiToken: string, itemId: string, comment: string) {
+  const query = `
+    mutation {
+      create_update (item_id: ${itemId}, body: ${JSON.stringify(comment)}) {
+        id
+      }
+    }
+  `;
+
+  const response = await fetch("https://api.monday.com/v2", {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': apiToken
+    },
+    body: JSON.stringify({ query })
+  });
+
+  if (!response.ok) {
+    throw new Error(`Monday.com API error adding comment: ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  if (data.errors) {
+    throw new Error(`Monday.com GraphQL error adding comment: ${data.errors[0].message}`);
+  }
+
+  return data;
+}

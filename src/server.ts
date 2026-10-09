@@ -1,8 +1,8 @@
 import { fetchLinearIssues, addLinearComment } from "./utils/linearUtils.js";
 import { fetchJiraIssues, addJiraComment } from "./utils/jiraUtils.js";
 import { fetchTrelloCards } from "./utils/trelloUtils.js";
-import { fetchClickupTasks } from "./utils/clickupUtils.js";
-import { fetchMondayTasks } from "./utils/mondayUtils.js";
+import { fetchClickupTasks, addClickupComment } from "./utils/clickupUtils.js";
+import { fetchMondayTasks, addMondayComment } from "./utils/mondayUtils.js";
 import { fetchNotionTasks } from "./utils/notionUtils.js";
 import { fetchAsanaTasks } from "./utils/asanaUtils.js";
 import { fetchFigmaComments } from "./utils/figmaUtils.js";
@@ -1950,6 +1950,24 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
           });
         }
       }
+
+      if (task.source === "clickup" && task.description && process.env.CLICKUP_API_TOKEN) {
+        const match = task.description.match(/ClickUp ID:\s*([a-zA-Z0-9]+)/);
+        if (match && match[1]) {
+          addClickupComment(process.env.CLICKUP_API_TOKEN, match[1], "Task completed in Vibe Kanban.").catch(e => {
+            console.error("Failed to add ClickUp comment on task complete:", e);
+          });
+        }
+      }
+
+      if (task.source === "monday" && task.description && process.env.MONDAY_API_TOKEN) {
+        const match = task.description.match(/Monday\.com Item ID:\s*([0-9]+)/);
+        if (match && match[1]) {
+          addMondayComment(process.env.MONDAY_API_TOKEN, match[1], "Task completed in Vibe Kanban.").catch(e => {
+            console.error("Failed to add Monday.com comment on task complete:", e);
+          });
+        }
+      }
     }
 
     return jsonResponse(res, 200, { task: getTask(taskId) });
@@ -2339,7 +2357,7 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
             assignedTo: null,
             interrupted: false,
             logs: [],
-            description: task.description ? task.description + `\n\nClickUp URL: ${task.url || ''}` : `ClickUp URL: ${task.url || ''}`
+            description: task.description ? task.description + `\n\nClickUp URL: ${task.url || ''}\nClickUp ID: ${task.id}` : `ClickUp URL: ${task.url || ''}\nClickUp ID: ${task.id}`
           });
           count++;
         }
