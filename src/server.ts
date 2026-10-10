@@ -1,10 +1,10 @@
 import { fetchLinearIssues, addLinearComment } from "./utils/linearUtils.js";
 import { fetchJiraIssues, addJiraComment } from "./utils/jiraUtils.js";
-import { fetchTrelloCards } from "./utils/trelloUtils.js";
+import { fetchTrelloCards, addTrelloComment } from "./utils/trelloUtils.js";
 import { fetchClickupTasks, addClickupComment } from "./utils/clickupUtils.js";
 import { fetchMondayTasks, addMondayComment } from "./utils/mondayUtils.js";
-import { fetchNotionTasks } from "./utils/notionUtils.js";
-import { fetchAsanaTasks } from "./utils/asanaUtils.js";
+import { fetchNotionTasks, addNotionComment } from "./utils/notionUtils.js";
+import { fetchAsanaTasks, addAsanaComment } from "./utils/asanaUtils.js";
 import { fetchFigmaComments } from "./utils/figmaUtils.js";
 import { detectDependencyCycles, detectFileOverlaps, GeneratedTask, buildPlanValidationPrompt, parsePlanValidationResponse } from "./utils/planValidation.js";
 import { createServer, ServerResponse, IncomingMessage } from "http";
@@ -1965,6 +1965,33 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
         if (match && match[1]) {
           addMondayComment(process.env.MONDAY_API_TOKEN, match[1], "Task completed in Vibe Kanban.").catch(e => {
             console.error("Failed to add Monday.com comment on task complete:", e);
+          });
+        }
+      }
+
+      if (task.source === "trello" && task.description && process.env.TRELLO_API_KEY && process.env.TRELLO_API_TOKEN) {
+        const match = task.description.match(/Trello ID:\s*([a-zA-Z0-9]+)/);
+        if (match && match[1]) {
+          addTrelloComment(process.env.TRELLO_API_KEY, process.env.TRELLO_API_TOKEN, match[1], "Task completed in Vibe Kanban.").catch(e => {
+            console.error("Failed to add Trello comment on task complete:", e);
+          });
+        }
+      }
+
+      if (task.source === "asana" && task.description && process.env.ASANA_ACCESS_TOKEN) {
+        const match = task.description.match(/Asana ID:\s*([a-zA-Z0-9]+)/);
+        if (match && match[1]) {
+          addAsanaComment(process.env.ASANA_ACCESS_TOKEN, match[1], "Task completed in Vibe Kanban.").catch(e => {
+            console.error("Failed to add Asana comment on task complete:", e);
+          });
+        }
+      }
+
+      if (task.source === "notion" && task.description && process.env.NOTION_API_TOKEN) {
+        const match = task.description.match(/Notion Item ID:\s*([a-zA-Z0-9-]+)/);
+        if (match && match[1]) {
+          addNotionComment(process.env.NOTION_API_TOKEN, match[1], "Task completed in Vibe Kanban.").catch(e => {
+            console.error("Failed to add Notion comment on task complete:", e);
           });
         }
       }
