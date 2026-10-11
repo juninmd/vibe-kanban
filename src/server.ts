@@ -2316,6 +2316,15 @@ execa(bin, [task.workDir]).catch(err => console.error(`Failed to open folder: ${
     return jsonResponse(res, 200, { ok: true });
   }
 
+  // POST /api/roadmap/generate (Manually trigger roadmap tasks generation)
+  if (url === "/api/roadmap/generate" && method === "POST") {
+    // Reset the last generation date to allow manual trigger
+    lastRoadmapGenDate = null;
+    generateRoadmapTasks().catch(e => console.error("Manual PM Auto-create failed:", e));
+    addEvent("Geração manual de tarefas de roadmap executada via API.");
+    return jsonResponse(res, 200, { ok: true });
+  }
+
   // POST /api/integrations/monday/sync
   if (url === "/api/integrations/monday/sync" && method === "POST") {
     try {
