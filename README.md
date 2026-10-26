@@ -44,24 +44,24 @@ node dist/cli/vibe.js --help
 Set an explicit OpenCode executable path when the global `opencode` command is not available in your shell. `OPENCODE_PATH` takes priority, then `opencodePath` in `vibe_config.json`, then the normal PATH lookup.
 
 ```powershell
-setx OPENCODE_PATH "c:\Users\jr_ac\AppData\Local\OpenCode\opencode-cli.exe"
+setx OPENCODE_PATH "%LOCALAPPDATA%\OpenCode\opencode-cli.exe"
 ```
 
 ```json
 {
-  "opencodePath": "C:/Users/jr_ac/AppData/Local/OpenCode/opencode-cli.exe"
+  "opencodePath": "C:/Users/<seu-usuario>/AppData/Local/OpenCode/opencode-cli.exe"
 }
 ```
 
-To run the concrete `juninmd/cobaia` build scenario through the API, create a feature task that points at the full GitHub URL:
+To run the concrete `<owner>/<repo>` build scenario through the API, create a feature task that points at the full GitHub URL:
 
 ```powershell
 curl.exe -X POST http://localhost:5174/api/tasks ^
   -H "Content-Type: application/json" ^
-  -d "{\"title\":\"Create hello world file\",\"category\":\"feature\",\"priority\":\"media\",\"githubRepo\":\"https://github.com/juninmd/cobaia\",\"description\":\"Create a JavaScript hello world file named hello.js that logs Hello, world!\"}"
+  -d "{\"title\":\"Create hello world file\",\"category\":\"feature\",\"priority\":\"media\",\"githubRepo\":\"https://github.com/<owner>/<repo>\",\"description\":\"Create a JavaScript hello world file named hello.js that logs Hello, world!\"}"
 ```
 
-Expected artifact: the task worktree for `juninmd/cobaia` should contain `hello.js` with a JavaScript hello-world log statement after OpenCode finishes.
+Expected artifact: the task worktree for `<owner>/<repo>` should contain `hello.js` with a JavaScript hello-world log statement after OpenCode finishes.
 
 ## 🛡️ Antigravity Protocol
 
