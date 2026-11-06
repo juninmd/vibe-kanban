@@ -1,6 +1,6 @@
 {
   "name": "vibe-kanban",
-  "packageManager": "pnpm@9.15.9",
+  "packageManager": "pnpm@10.34.5",
   "version": "0.1.0",
   "type": "module",
   "scripts": {
@@ -46,5 +46,10 @@
     "node-pty": "^1.1.0",
     "pg": "^8.23.0",
     "zod": "^4.6.7"
+  },
+  "pnpm": {
+    "overrides": {
+      "protobufjs@7.5.5": ">=7.6.1 <8.0.0"
+    }
   }
 }
